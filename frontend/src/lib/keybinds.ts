@@ -3,6 +3,7 @@ import { create } from "zustand";
 export type KeybindId =
   | "palette"
   | "home"
+  | "notebooks"
   | "tasks"
   | "quickNotes"
   | "daily"
@@ -31,10 +32,11 @@ export interface KeybindDef {
 export const KEYBIND_DEFS: KeybindDef[] = [
   { id: "palette", label: "Open command palette", always: true },
   { id: "home", label: "Go home" },
+  { id: "notebooks", label: "Go to notebooks" },
   { id: "tasks", label: "Go to tasks" },
   { id: "quickNotes", label: "Go to quick notes" },
+  { id: "graph", label: "Go to links / graph" },
   { id: "daily", label: "Open today's daily note" },
-  { id: "graph", label: "Open graph view" },
   { id: "settings", label: "Open settings" },
   { id: "focus", label: "Toggle focus mode" },
   { id: "theme", label: "Toggle light / dark theme" },
@@ -44,17 +46,19 @@ export const KEYBIND_DEFS: KeybindDef[] = [
 export const DEFAULT_KEYBINDS: Record<KeybindId, KeyCombo> = {
   palette: { key: "k", mod: true },
   home: { key: "1", mod: true },
-  tasks: { key: "2", mod: true },
-  quickNotes: { key: "3", mod: true },
+  notebooks: { key: "2", mod: true },
+  tasks: { key: "3", mod: true },
+  quickNotes: { key: "4", mod: true },
+  graph: { key: "5", mod: true },
   daily: { key: "d", mod: true },
-  graph: { key: "g", mod: true },
   settings: { key: ",", mod: true },
   focus: { key: "\\", mod: true },
   theme: { key: "l", mod: true, shift: true },
   escape: { key: "escape" },
 };
 
-const STORAGE_KEY = "hollow-keybinds";
+// Bumped so remapped nav defaults don't collide with older saved binds.
+const STORAGE_KEY = "hollow-keybinds-v2";
 const isMac = typeof navigator !== "undefined" && /MAC|IPHONE|IPAD/.test(navigator.platform.toUpperCase());
 
 export function normalizeKey(key: string): string {

@@ -2,6 +2,7 @@ import { KeyboardEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Book,
   BookOpenText,
   CalendarDays,
   CheckSquare,
@@ -10,6 +11,8 @@ import {
   NotebookPen,
   Send,
   Square,
+  StickyNote,
+  Waypoints,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -23,6 +26,8 @@ import {
 import type { RecentPage, Task } from "../lib/types";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
+import { useUiStore } from "../stores/ui";
+import { formatCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { Button } from "../components/ui/button";
 
 function greeting() {
@@ -94,8 +99,10 @@ export default function Home() {
 
       <QuickCapture />
 
+      <HomeShortcuts notebooks={notebooks} />
+
       {empty ? (
-        <div className="mt-10 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-14">
+        <div className="mt-10 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border glass py-14">
           <div className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center">
             <NotebookPen size={18} className="text-accent" />
           </div>
@@ -110,6 +117,58 @@ export default function Home() {
           <TodayTasks />
         </div>
       )}
+    </div>
+  );
+}
+
+function HomeShortcuts({ notebooks }: { notebooks?: { id: string }[] }) {
+  const navigate = useNavigate();
+  const binds = useKeybindsStore((s) => s.binds);
+  const activeNotebookId = useUiStore((s) => s.activeNotebookId);
+  const graphId = activeNotebookId ?? notebooks?.[0]?.id;
+
+  const shortcuts: {
+    label: string;
+    icon: typeof Book;
+    bind: KeybindId;
+    onClick: () => void;
+    disabled?: boolean;
+  }[] = [
+    { label: "Notebooks", icon: Book, bind: "notebooks", onClick: () => navigate("/notebooks") },
+    { label: "Notes", icon: StickyNote, bind: "quickNotes", onClick: () => navigate("/quick-notes") },
+    { label: "Tasks", icon: CheckSquare, bind: "tasks", onClick: () => navigate("/tasks") },
+    {
+      label: "Links",
+      icon: Waypoints,
+      bind: "graph",
+      onClick: () => graphId && navigate(`/notebooks/${graphId}/graph`),
+      disabled: !graphId,
+    },
+  ];
+
+  return (
+    <div className="mt-4 flex items-stretch rounded-xl border border-border glass overflow-hidden">
+      {shortcuts.map(({ label, icon: Icon, bind, onClick, disabled }, i) => (
+        <button
+          key={label}
+          type="button"
+          title={`${label} (${formatCombo(binds[bind])})`}
+          disabled={disabled}
+          onClick={onClick}
+          className={clsx(
+            "flex-1 flex flex-col items-center justify-center gap-1 px-2 py-3 min-w-0",
+            "text-secondary transition-colors",
+            i > 0 && "border-l border-border",
+            disabled
+              ? "opacity-40 cursor-not-allowed"
+              : "hover:text-primary hover:bg-surface-2/40"
+          )}
+        >
+          <Icon size={15} strokeWidth={1.75} className="shrink-0" />
+          <span className="text-xs font-medium truncate w-full text-center">{label}</span>
+          <kbd className="text-xs text-secondary tabular-nums">{formatCombo(binds[bind])}</kbd>
+        </button>
+      ))}
     </div>
   );
 }
@@ -137,7 +196,7 @@ function QuickCapture() {
   }
 
   return (
-    <div className="mt-8 rounded-xl border border-border bg-surface-1 px-3.5 py-3 transition-colors focus-within:border-accent">
+    <div className="mt-8 rounded-xl border border-border glass px-3.5 py-3 transition-colors focus-within:border-accent">
       <div className="flex items-center gap-2">
         <textarea
           className="flex-1 bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary leading-6"

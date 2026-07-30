@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Book, ChevronRight, Lock, Plus } from "lucide-react";
-import { createNotebook, fetchNotebooks, unlockNotebook } from "../lib/api";
+import { Book, Lock, Plus, Trash2 } from "lucide-react";
+import { createNotebook, deleteNotebook, fetchNotebooks, unlockNotebook } from "../lib/api";
 import type { Notebook } from "../lib/types";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
@@ -23,6 +23,7 @@ export default function Notebooks() {
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [unlockNb, setUnlockNb] = useState<Notebook | null>(null);
+  const [deleteNb, setDeleteNb] = useState<Notebook | null>(null);
 
   const create = useMutation({
     mutationFn: () => createNotebook(title.trim()),
@@ -32,6 +33,15 @@ export default function Notebooks() {
       setTitle("");
       setActiveNotebook(nb.id);
       navigate(`/notebooks/${nb.id}`);
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteNotebook(id),
+    onSuccess: (_void, id) => {
+      queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+      setDeleteNb(null);
+      if (useUiStore.getState().activeNotebookId === id) setActiveNotebook(null);
     },
   });
 
@@ -63,7 +73,7 @@ export default function Notebooks() {
       {isLoading && <p className="text-sm text-secondary">Loading…</p>}
 
       {!isLoading && (notebooks ?? []).length === 0 && (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border glass py-16 text-center">
           <div className="h-12 w-12 rounded-2xl bg-accent-soft flex items-center justify-center">
             <Book size={20} className="text-accent" />
           </div>
@@ -79,14 +89,25 @@ export default function Notebooks() {
           const sealed = nb.isLocked && !unlockedNotebooks[nb.id];
           const pages = nb.sections.reduce((n, s) => n + s.pages.length, 0);
           return (
-            <button
+            <div
               key={nb.id}
-              type="button"
-              onClick={() => openNotebook(nb)}
-              className="group text-left rounded-2xl border border-border bg-surface-1 p-5
-                         hover:border-accent transition-colors shadow-card"
+              className="group relative rounded-2xl border border-border glass p-5
+                         hover:border-accent transition-colors shadow-card
+                         flex flex-col items-center text-center"
             >
-              <div className="flex items-start justify-between gap-3">
+              <button
+                type="button"
+                title="Delete notebook"
+                className="absolute top-3 right-3 p-1.5 rounded-md text-secondary opacity-0
+                           group-hover:opacity-100 hover:text-danger hover:bg-surface-2 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteNb(nb);
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+              <button type="button" onClick={() => openNotebook(nb)} className="w-full flex flex-col items-center">
                 <div className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center">
                   {sealed ? (
                     <Lock size={16} className="text-secondary" />
@@ -94,18 +115,14 @@ export default function Notebooks() {
                     <Book size={16} className="text-accent" />
                   )}
                 </div>
-                <ChevronRight
-                  size={16}
-                  className="text-secondary opacity-0 group-hover:opacity-100 transition-opacity mt-1"
-                />
-              </div>
-              <h2 className="mt-4 text-sm font-medium truncate">{nb.title}</h2>
-              <p className="mt-1 text-xs text-secondary">
-                {sealed
-                  ? "Sealed · encrypted"
-                  : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pages} ${pages === 1 ? "page" : "pages"}`}
-              </p>
-            </button>
+                <h2 className="mt-4 text-sm font-medium text-primary truncate w-full px-1">{nb.title}</h2>
+                <p className="mt-1 text-xs text-secondary">
+                  {sealed
+                    ? "Sealed · encrypted"
+                    : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pages} ${pages === 1 ? "page" : "pages"}`}
+                </p>
+              </button>
+            </div>
           );
         })}
       </div>
@@ -129,6 +146,28 @@ export default function Notebooks() {
             >
               Create
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteNb !== null} onOpenChange={(o) => !o && setDeleteNb(null)}>
+        <DialogContent title="Delete notebook">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary">
+              Delete “{deleteNb?.title}”? All sections and pages inside will be permanently removed.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setDeleteNb(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={remove.isPending}
+                onClick={() => deleteNb && remove.mutate(deleteNb.id)}
+              >
+                <span className="text-danger">{remove.isPending ? "Deleting…" : "Delete"}</span>
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -158,3 +197,4 @@ export default function Notebooks() {
     </div>
   );
 }
+

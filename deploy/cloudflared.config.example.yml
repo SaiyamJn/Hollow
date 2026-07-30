@@ -1,0 +1,7 @@
+tunnel: TUNNEL_UUID_OR_NAME
+credentials-file: /root/.cloudflared/TUNNEL_UUID.json
+
+ingress:
+  - hostname: notes.example.com
+    service: http://localhost:8080
+  - service: http_status:404

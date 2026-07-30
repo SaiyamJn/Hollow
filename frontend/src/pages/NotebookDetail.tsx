@@ -9,11 +9,13 @@ import {
   Layers,
   Lock,
   Plus,
+  Trash2,
   Waypoints,
 } from "lucide-react";
 import {
   createPage,
   createSection,
+  deleteNotebook,
   fetchNotebooks,
   unlockNotebook,
   unlockSection,
@@ -48,6 +50,7 @@ export default function NotebookDetail() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [draft, setDraft] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (notebookId) setActiveNotebook(notebookId);
@@ -79,6 +82,15 @@ export default function NotebookDetail() {
       setDialog(null);
       setDraft("");
       navigate(`/notebooks/${notebookId}/sections/${vars.section.id}/pages/${page.id}`);
+    },
+  });
+
+  const removeNotebook = useMutation({
+    mutationFn: () => deleteNotebook(notebookId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+      setActiveNotebook(null);
+      navigate("/notebooks");
     },
   });
 
@@ -120,7 +132,7 @@ export default function NotebookDetail() {
   const sealed = notebook.isLocked && !unlockedNotebooks[notebook.id];
 
   return (
-    <div className="max-w-2xl mx-auto px-7 py-8 animate-rise-in">
+    <div className="max-w-2xl mx-auto px-7 py-10 animate-rise-in">
       <Link
         to="/notebooks"
         className="inline-flex items-center gap-1.5 text-xs text-secondary hover:text-accent mb-5"
@@ -145,6 +157,9 @@ export default function NotebookDetail() {
           >
             <Waypoints size={14} />
           </Button>
+          <Button title="Delete notebook" onClick={() => setConfirmDelete(true)}>
+            <Trash2 size={14} />
+          </Button>
           <Button variant="accent" onClick={() => setDialog({ kind: "new-section" })} disabled={sealed}>
             <span className="inline-flex items-center gap-1.5">
               <Plus size={14} /> Section
@@ -154,7 +169,7 @@ export default function NotebookDetail() {
       </div>
 
       {sealed ? (
-        <div className="rounded-2xl border border-border bg-surface-1 py-14 flex flex-col items-center gap-3">
+        <div className="rounded-2xl border border-border glass py-14 flex flex-col items-center gap-3">
           <Lock size={22} className="text-secondary" />
           <p className="text-sm text-secondary">This notebook is sealed.</p>
           <Button variant="accent" onClick={() => setDialog({ kind: "unlock-notebook" })}>
@@ -172,7 +187,7 @@ export default function NotebookDetail() {
             const secSealed = sec.isLocked && !sectionPasswords[sec.id];
             const open = expanded.has(sec.id) && !secSealed;
             return (
-              <div key={sec.id} className="rounded-xl border border-border bg-surface-1 overflow-hidden">
+              <div key={sec.id} className="rounded-xl border border-border glass overflow-hidden">
                 <button
                   type="button"
                   className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-surface-2 transition-colors"
@@ -296,6 +311,28 @@ export default function NotebookDetail() {
             >
               Create
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent title="Delete notebook">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary">
+              Delete “{notebook.title}”? All sections and pages inside will be permanently removed.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={removeNotebook.isPending}
+                onClick={() => removeNotebook.mutate()}
+              >
+                <span className="text-danger">{removeNotebook.isPending ? "Deleting…" : "Delete"}</span>
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

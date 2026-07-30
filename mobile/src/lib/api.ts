@@ -121,6 +121,10 @@ export async function createNotebook(title: string) {
   return data;
 }
 
+export async function deleteNotebook(id: string) {
+  await api.delete(`/notebooks/${id}`);
+}
+
 export async function createSection(notebookId: string, title: string) {
   const { data } = await api.post<Section>(`/notebooks/${notebookId}/sections`, { title });
   return data;
@@ -204,12 +208,27 @@ export async function fetchTasks() {
   return data;
 }
 
-export async function createTask(input: { title: string; dueAt?: string; parentTaskId?: string }) {
+export async function createTask(input: {
+  title: string;
+  description?: string;
+  dueAt?: string;
+  parentTaskId?: string;
+  starred?: boolean;
+}) {
   const { data } = await api.post<Task>("/tasks", input);
   return data;
 }
 
-export async function updateTask(id: string, patch: { title?: string; done?: boolean; dueAt?: string | null }) {
+export async function updateTask(
+  id: string,
+  patch: {
+    title?: string;
+    description?: string;
+    done?: boolean;
+    starred?: boolean;
+    dueAt?: string | null;
+  }
+) {
   const { data } = await api.patch<Task>(`/tasks/${id}`, patch);
   return data;
 }

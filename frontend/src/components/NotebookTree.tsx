@@ -39,7 +39,7 @@ function NewItemInput({ placeholder, onCreate }: { placeholder: string; onCreate
   return (
     <input
       autoFocus
-      className="w-full rounded-md bg-surface-2 border border-border px-2 py-1 text-sm text-primary
+      className="w-full rounded-md glass-input border border-border px-2 py-1 text-sm text-primary
                  placeholder:text-secondary focus:outline-none focus:border-accent"
       placeholder={placeholder}
       value={value}

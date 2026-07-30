@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../contexts/theme";
+import { GlassCard } from "./GlassCard";
 
 export interface FabAction {
   key: string;
@@ -39,16 +40,17 @@ export function Fab({ actions, bottom = 100 }: { actions: FabAction[]; bottom?: 
             {actions.map((action) => (
               <Pressable
                 key={action.key}
-                style={[styles.menuItem, { backgroundColor: colors.surface1, borderColor: colors.border }]}
                 onPress={() => {
                   setOpen(false);
                   action.onPress();
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{action.label}</Text>
-                <View style={[styles.menuIcon, { backgroundColor: colors.accentSoft }]}>
-                  <Feather name={action.icon} size={15} color={colors.accent} />
-                </View>
+                <GlassCard style={{ borderRadius: 999 }} contentStyle={styles.menuItem}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{action.label}</Text>
+                  <View style={[styles.menuIcon, { backgroundColor: colors.accentSoft }]}>
+                    <Feather name={action.icon} size={15} color={colors.accent} />
+                  </View>
+                </GlassCard>
               </Pressable>
             ))}
           </View>
@@ -79,8 +81,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingLeft: 16,
     paddingRight: 6,
     paddingVertical: 6,

@@ -128,7 +128,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
     <Modal visible={visible} animationType="fade" transparent onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <Pressable style={[styles.panel, { borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.panel, { borderColor: colors.glassBorder }]} onPress={(e) => e.stopPropagation()}>
             <BlurView
               intensity={60}
               tint={theme === "dark" ? "dark" : "light"}

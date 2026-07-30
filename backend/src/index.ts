@@ -14,8 +14,20 @@ import adminRoutes from "./routes/admin";
 import { registerCollab } from "./sockets/collab";
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.set("trust proxy", 1);
+
+const corsOrigin = process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean);
+app.use(
+  cors({
+    origin: corsOrigin && corsOrigin.length > 0 ? corsOrigin : true,
+  })
+);
+app.use(express.json({ limit: "2mb" }));
+
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
 app.use("/auth", authRoutes);
 app.use("/notebooks", notebookRoutes);
 app.use("/pages", pageRoutes);
@@ -35,7 +47,11 @@ const server = http.createServer(app);
 // two-way socket. Socket.io handles this (with long-polling fallback) and
 // adds "rooms" — here one room per page, so edits broadcast only to clients
 // currently viewing that page.
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: {
+    origin: corsOrigin && corsOrigin.length > 0 ? corsOrigin : "*",
+  },
+});
 
 // Phase 5: the raw `page:update` relay is replaced by Yjs CRDT sync — see
 // sockets/collab.ts for the room/doc lifecycle and encrypted persistence.

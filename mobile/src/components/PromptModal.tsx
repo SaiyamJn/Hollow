@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../contexts/theme";
+import { GlassCard } from "./GlassCard";
 
 interface PromptModalProps {
   visible: boolean;
@@ -40,10 +41,10 @@ export function PromptModal({ visible, title, placeholder, secure, submitLabel =
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.overlay}>
-        <View style={[styles.card, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+        <GlassCard strong contentStyle={styles.card}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           <TextInput
-            style={[styles.input, { backgroundColor: colors.surface2, borderColor: colors.border, color: colors.textPrimary }]}
+            style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}
             placeholder={placeholder}
             placeholderTextColor={colors.textSecondary}
             secureTextEntry={secure}
@@ -61,15 +62,15 @@ export function PromptModal({ visible, title, placeholder, secure, submitLabel =
               <Text style={{ color: colors.surface0, fontWeight: "500" }}>{busy ? "…" : submitLabel}</Text>
             </Pressable>
           </View>
-        </View>
+        </GlassCard>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 28 },
-  card: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 20 },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 28 },
+  card: { padding: 20 },
   title: { fontSize: 15, fontWeight: "500", marginBottom: 14 },
   input: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
   error: { color: "#f87171", fontSize: 13, marginTop: 8 },

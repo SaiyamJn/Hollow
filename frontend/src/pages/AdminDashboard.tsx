@@ -60,19 +60,23 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto px-7 py-8 animate-rise-in">
-      <h1 className="text-lg font-medium">Admin</h1>
+    <div className="max-w-5xl mx-auto px-7 py-10 animate-rise-in">
+      <h1 className="text-xl font-medium">Admin</h1>
       <p className="text-sm text-secondary mt-1">
         Usage stats per account. Content is never shown here — locked sections stay encrypted on the server.
       </p>
 
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-border bg-surface-1 p-3">
-            <div className="flex items-center gap-1.5 text-secondary text-xs">
-              {c.icon} {c.label}
+          <div
+            key={c.label}
+            className="rounded-xl border border-border glass p-3 flex flex-col items-center justify-center text-center gap-1.5 min-h-[76px]"
+          >
+            <div className="flex items-center justify-center gap-1.5 text-secondary text-xs">
+              {c.icon}
+              <span>{c.label}</span>
             </div>
-            <p className="text-xl font-medium mt-1.5">{c.value}</p>
+            <p className="text-xl font-medium text-primary tabular-nums">{c.value}</p>
           </div>
         ))}
       </div>
@@ -80,7 +84,7 @@ export default function AdminDashboard() {
       <div className="mt-8 rounded-xl border border-border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-xs text-secondary border-b border-border bg-surface-1">
+            <tr className="text-xs text-secondary border-b border-border glass">
               <th className="text-left font-medium px-4 py-2.5">User</th>
               <th className="text-right font-medium px-3 py-2.5">Notebooks</th>
               <th className="text-right font-medium px-3 py-2.5">Sections</th>
@@ -94,7 +98,7 @@ export default function AdminDashboard() {
           </thead>
           <tbody>
             {data.users.map((u: AdminUserStats) => (
-              <tr key={u.id} className="border-b border-border last:border-b-0 hover:bg-surface-1 transition-colors">
+              <tr key={u.id} className="border-b border-border last:border-b-0 hover:glass transition-colors">
                 <td className="px-4 py-2.5">
                   <p className="font-medium">{u.name}</p>
                   <p className="text-xs text-secondary">{u.email}</p>

@@ -87,19 +87,19 @@ export default function Settings() {
   });
 
   return (
-    <div className="max-w-lg mx-auto p-7 space-y-6">
-      <h1 className="text-lg font-medium">Settings</h1>
+    <div className="max-w-lg mx-auto px-7 py-10 space-y-6">
+      <h1 className="text-xl font-medium">Settings</h1>
 
-      <section className="rounded-xl border border-border bg-surface-1 p-5 shadow-card space-y-1">
-        <h2 className="text-sm font-medium mb-2">Account</h2>
-        <p className="text-sm">{user?.name}</p>
+      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-1">
+        <h2 className="text-xs uppercase tracking-wide text-secondary mb-2">Account</h2>
+        <p className="text-sm font-medium text-primary">{user?.name}</p>
         <p className="text-sm text-secondary">{user?.email}</p>
       </section>
 
-      <section className="rounded-xl border border-border bg-surface-1 p-5 shadow-card flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-medium">Theme</h2>
-          <p className="text-sm text-secondary">Currently {theme}</p>
+      <section className="rounded-xl border border-border glass p-5 shadow-card flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-medium text-primary">Theme</h2>
+          <p className="text-sm text-secondary mt-0.5">Currently {theme}</p>
         </div>
         <Button onClick={toggle}>
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
@@ -107,26 +107,24 @@ export default function Settings() {
         </Button>
       </section>
 
-      <section className="rounded-xl border border-border bg-surface-1 p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-medium">Task reminders</h2>
-            <p className="text-sm text-secondary">
-              Notify me when a task is due (while the app is open)
-            </p>
-          </div>
-          <Button onClick={() => void toggleReminders()}>
-            {reminders ? <Bell size={16} /> : <BellOff size={16} />}
-            {reminders ? "On" : "Off"}
-          </Button>
+      <section className="rounded-xl border border-border glass p-5 shadow-card flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-medium text-primary">Task reminders</h2>
+          <p className="text-sm text-secondary mt-0.5">
+            Notify me when a task is due (while the app is open)
+          </p>
+          {reminderError && <p className="text-sm text-danger mt-2">{reminderError}</p>}
         </div>
-        {reminderError && <p className="text-sm text-danger mt-2">{reminderError}</p>}
+        <Button onClick={() => void toggleReminders()}>
+          {reminders ? <Bell size={16} /> : <BellOff size={16} />}
+          {reminders ? "On" : "Off"}
+        </Button>
       </section>
 
-      <section className="rounded-xl border border-border bg-surface-1 p-5 shadow-card space-y-3">
+      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-medium">Keyboard shortcuts</h2>
+          <div className="min-w-0">
+            <h2 className="text-sm font-medium text-primary">Keyboard shortcuts</h2>
             <p className="text-sm text-secondary mt-0.5">
               Click a shortcut to rebind it. Esc cancels. Navigation shortcuts are ignored while typing.
             </p>
@@ -146,8 +144,8 @@ export default function Settings() {
           {KEYBIND_DEFS.map((def) => {
             const active = recording === def.id;
             return (
-              <li key={def.id} className="flex items-center justify-between gap-4 text-sm py-1">
-                <span className="text-secondary">{def.label}</span>
+              <li key={def.id} className="flex items-center justify-between gap-4 text-sm py-1.5">
+                <span className="text-sm text-secondary">{def.label}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -157,7 +155,7 @@ export default function Settings() {
                   className={
                     active
                       ? "shrink-0 rounded-md border border-accent bg-accent-soft px-2.5 py-1 text-xs text-accent font-medium animate-pulse-soft"
-                      : "shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs text-primary font-medium hover:border-accent hover:text-accent transition-colors"
+                      : "shrink-0 rounded-md border border-border glass-input px-2.5 py-1 text-xs text-primary font-medium hover:border-accent hover:text-accent transition-colors"
                   }
                 >
                   {active ? "Press keys…" : formatCombo(binds[def.id])}
@@ -170,9 +168,9 @@ export default function Settings() {
       </section>
 
       {adminStats && (
-        <section className="rounded-xl border border-border bg-surface-1 p-5 shadow-card flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-medium flex items-center gap-1.5">
+        <section className="rounded-xl border border-border glass p-5 shadow-card flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-sm font-medium text-primary flex items-center gap-1.5">
               <ShieldCheck size={14} className="text-accent" /> Admin
             </h2>
             <p className="text-sm text-secondary mt-0.5">
@@ -183,8 +181,8 @@ export default function Settings() {
         </section>
       )}
 
-      <section className="rounded-xl border border-border bg-surface-1 p-5 shadow-card space-y-3">
-        <h2 className="text-sm font-medium">Session</h2>
+      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3">
+        <h2 className="text-sm font-medium text-primary">Session</h2>
         <p className="text-sm text-secondary">
           Your login token is kept in localStorage — acceptable for this self-hosted project, but not suitable
           for a high-security production deployment without hardening.

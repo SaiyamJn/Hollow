@@ -8,7 +8,18 @@ Notes, notebooks, tasks, and quick capture — web + mobile, with a Node/Prisma 
 - **frontend** — React, Vite, Tailwind
 - **mobile** — Expo (SDK 54)
 
-## Setup
+## Production deploy
+
+Full Linux server + internet access guide: **[DEPLOYMENT.md](./DEPLOYMENT.md)**  
+(Docker Compose, Nginx, Cloudflare Tunnel, backups, mobile URL).
+
+```bash
+cp .env.example .env   # set POSTGRES_PASSWORD, JWT_SECRET
+docker compose up -d --build
+# app: http://localhost:8080
+```
+
+## Local development
 
 ### 1. Infrastructure
 
@@ -20,7 +31,10 @@ docker compose -f docker-compose.dev.yml up -d
 
 ```bash
 cd backend
-cp .env.example .env   # set DATABASE_URL, REDIS_URL, JWT_SECRET, optional ADMIN_EMAILS
+cp .env.example .env
+# For local dev, point at exposed ports:
+# DATABASE_URL=postgresql://hollow:changeme@localhost:5433/hollow
+# REDIS_URL=redis://localhost:6380
 npm install
 npx prisma migrate dev
 npm run dev
@@ -34,11 +48,13 @@ npm install
 npm run dev
 ```
 
+Vite proxies `/api` and `/socket.io` to `localhost:4000`.
+
 ### 4. Mobile
 
 ```bash
 cd mobile
-cp .env.example .env   # set EXPO_PUBLIC_API_URL to your machine LAN IP :4000
+cp .env.example .env   # EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:4000
 npm install
 npx expo start
 ```
@@ -48,4 +64,4 @@ Use Expo Go on a device that supports SDK 54.
 ## Notes
 
 - Do not commit `.env` files — only `.env.example` templates are tracked.
-- Admin stats: set `ADMIN_EMAILS` in the backend env to a comma-separated allowlist.
+- Admin stats: set `ADMIN_EMAILS` in the backend / root env to a comma-separated allowlist.

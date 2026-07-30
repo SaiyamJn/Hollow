@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
+import { GlassCard } from "../components/GlassCard";
 
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuth();
@@ -28,11 +29,11 @@ export default function LoginScreen({ navigation }: any) {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.container, { backgroundColor: colors.surface0 }]}
     >
-      <View style={[styles.card, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+      <GlassCard strong contentStyle={styles.card}>
         <Text style={[styles.logo, { color: colors.textPrimary }]}>Hollow</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Sign in to your notes</Text>
         <TextInput
-          style={[styles.input, { backgroundColor: colors.surface2, borderColor: colors.border, color: colors.textPrimary }]}
+          style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}
           placeholder="Email"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="none"
@@ -41,7 +42,7 @@ export default function LoginScreen({ navigation }: any) {
           onChangeText={setEmail}
         />
         <TextInput
-          style={[styles.input, { backgroundColor: colors.surface2, borderColor: colors.border, color: colors.textPrimary }]}
+          style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}
           placeholder="Password"
           placeholderTextColor={colors.textSecondary}
           secureTextEntry
@@ -62,14 +63,14 @@ export default function LoginScreen({ navigation }: any) {
             No account? <Text style={{ color: colors.accent }}>Register</Text>
           </Text>
         </Pressable>
-      </View>
+      </GlassCard>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: 24 },
-  card: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 24 },
+  card: { padding: 24 },
   logo: { fontSize: 20, fontWeight: "500" },
   subtitle: { fontSize: 13, marginTop: 2, marginBottom: 18 },
   input: {

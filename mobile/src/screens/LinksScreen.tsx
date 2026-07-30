@@ -6,6 +6,7 @@ import { fetchBacklinks, fetchNotebooks } from "../lib/api";
 import type { Section } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
+import { GlassCard } from "../components/GlassCard";
 
 // The mobile spec recommends a simplified backlinks list instead of the web's
 // full graph canvas for v1: pick a notebook, expand a page, see what links to it.
@@ -27,16 +28,15 @@ export default function LinksScreen({ navigation }: any) {
         {(notebooks ?? []).map((nb) => {
           const selected = nb.id === active?.id;
           return (
-            <Pressable
+            <GlassCard
               key={nb.id}
-              onPress={() => setActiveNotebookId(nb.id)}
-              style={[
-                styles.chip,
-                { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.surface2 : colors.surface1 },
-              ]}
+              style={{ borderRadius: 999, borderColor: selected ? colors.accent : colors.glassBorder }}
+              contentStyle={styles.chip}
             >
-              <Text style={{ color: selected ? colors.textPrimary : colors.textSecondary, fontSize: 13 }}>{nb.title}</Text>
-            </Pressable>
+              <Pressable onPress={() => setActiveNotebookId(nb.id)}>
+                <Text style={{ color: selected ? colors.textPrimary : colors.textSecondary, fontSize: 13 }}>{nb.title}</Text>
+              </Pressable>
+            </GlassCard>
           );
         })}
       </ScrollView>
@@ -79,7 +79,7 @@ function SectionLinks({
     <View style={{ marginBottom: 16 }}>
       <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>{section.title.toUpperCase()}</Text>
       {section.pages.map((page) => (
-        <View key={page.id} style={[styles.pageCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+        <GlassCard key={page.id} style={{ marginBottom: 8 }} contentStyle={styles.pageCard}>
           <Pressable style={styles.pageRow} onPress={() => onToggle(page.id)}>
             <Feather
               name={expandedPageId === page.id ? "chevron-down" : "chevron-right"}
@@ -94,7 +94,7 @@ function SectionLinks({
             </Pressable>
           </Pressable>
           {expandedPageId === page.id && <BacklinksList pageId={page.id} onOpen={onOpen} />}
-        </View>
+        </GlassCard>
       ))}
     </View>
   );
@@ -126,9 +126,9 @@ function BacklinksList({ pageId, onOpen }: { pageId: string; onOpen: (pageId: st
 }
 
 const styles = StyleSheet.create({
-  chip: { borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 7 },
+  chip: { paddingHorizontal: 14, paddingVertical: 7 },
   sectionHeader: { fontSize: 11, fontWeight: "500", letterSpacing: 0.8, marginBottom: 8 },
-  pageCard: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, marginBottom: 8 },
+  pageCard: { paddingHorizontal: 12 },
   pageRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11 },
   backlinks: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10, gap: 8 },
   backlinkRow: { flexDirection: "row", alignItems: "center", gap: 8 },

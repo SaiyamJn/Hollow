@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, Pin, PinOff, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { createQuickNote, deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
 import type { QuickNote } from "../lib/types";
@@ -73,9 +73,9 @@ export default function QuickNotes() {
   const remove = useMutation({ mutationFn: deleteQuickNote, onSuccess: invalidate });
 
   return (
-    <div className="max-w-5xl mx-auto px-7 py-6">
+    <div className="max-w-5xl mx-auto px-7 py-10">
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-medium">Quick notes</h1>
+        <h1 className="text-xl font-medium">Quick notes</h1>
         <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
           {showArchived ? "Hide archived" : "Show archived"}
         </Button>
@@ -83,7 +83,7 @@ export default function QuickNotes() {
 
       {/* composer */}
       <div
-        className="rounded-xl border border-border bg-surface-1 p-4 mb-6 max-w-xl shadow-card
+        className="rounded-xl border border-border glass p-4 mb-6 max-w-xl shadow-card
                    transition-shadow focus-within:shadow-pop"
         style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
       >
@@ -129,21 +129,21 @@ function NoteCard({
 }) {
   return (
     <div
-      className="group break-inside-avoid rounded-xl border border-border bg-surface-1 p-4 shadow-card
+      className="group break-inside-avoid rounded-xl border border-border glass p-4 shadow-card
                  transition-all duration-200 hover:shadow-pop hover:-translate-y-0.5"
       style={{ background: note.color !== "gray" ? PALETTE[note.color] : undefined }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm whitespace-pre-wrap flex-1">{note.content}</p>
         <button
-          title={note.pinned ? "Unpin" : "Pin"}
+          title={note.pinned ? "Unstar" : "Star"}
           className={clsx(
             "shrink-0",
             note.pinned ? "text-accent" : "text-secondary opacity-0 group-hover:opacity-100 hover:text-primary"
           )}
           onClick={() => onPatch({ pinned: !note.pinned })}
         >
-          {note.pinned ? <Pin size={14} /> : <PinOff size={14} />}
+          <Star size={14} fill={note.pinned ? "currentColor" : "none"} />
         </button>
       </div>
       <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity">

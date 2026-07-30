@@ -93,7 +93,9 @@ model QuickNote {
 model Task {
   id           String    @id @default(uuid())
   title        String
+  description  String    @default("")
   done         Boolean   @default(false)
+  starred      Boolean   @default(false)
   dueAt        DateTime?
   owner        User      @relation(fields: [ownerId], references: [id])
   ownerId      String

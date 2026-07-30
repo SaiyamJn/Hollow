@@ -9,6 +9,7 @@ import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
 import { Fab, FabAction } from "../components/Fab";
+import { GlassCard } from "../components/GlassCard";
 
 type Prompt =
   | { kind: "new-section" }
@@ -125,7 +126,7 @@ export default function NotebookScreen({ route, navigation }: any) {
           const sealed = sec.isLocked && !unlock.sectionPasswords[sec.id];
           const isOpen = expanded.has(sec.id) && !sealed;
           return (
-            <View key={sec.id} style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface1 }]}>
+            <GlassCard key={sec.id} style={{ marginBottom: 10 }} contentStyle={styles.cardInner}>
               <Pressable style={styles.sectionRow} onPress={() => toggleSection(sec)}>
                 <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={16} color={colors.textSecondary} />
                 <Text
@@ -165,7 +166,7 @@ export default function NotebookScreen({ route, navigation }: any) {
                   </Pressable>
                 </View>
               )}
-            </View>
+            </GlassCard>
           );
         })}
 
@@ -200,12 +201,9 @@ export default function NotebookScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+  cardInner: {
     paddingHorizontal: 14,
     paddingVertical: 4,
-    marginBottom: 10,
   },
   sectionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 },
   pages: { marginLeft: 7, paddingLeft: 14, borderLeftWidth: StyleSheet.hairlineWidth, paddingBottom: 8 },

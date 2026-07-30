@@ -77,7 +77,7 @@ export default function PageEditor() {
   if (locked) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 animate-rise-in">
-        <div className="vault-seal h-16 w-16 rounded-2xl border border-border bg-surface-1 flex items-center justify-center">
+        <div className="vault-seal h-16 w-16 rounded-2xl border border-border glass flex items-center justify-center">
           <Lock size={22} className="text-accent" />
         </div>
         <div className="text-center">

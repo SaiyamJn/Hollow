@@ -8,7 +8,13 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    const base = import.meta.env.VITE_API_URL ?? window.location.origin;
+    // REST uses VITE_API_URL (often "/api"). Socket.io must hit the site origin
+    // so Nginx can upgrade /socket.io/ — strip a trailing /api if present.
+    const raw = import.meta.env.VITE_API_URL as string | undefined;
+    const base =
+      !raw || raw.startsWith("/")
+        ? window.location.origin
+        : raw.replace(/\/api\/?$/, "");
     socket = io(base, {
       auth: (cb) => cb({ token: useAuthStore.getState().token }),
     });

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN "description" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Task" ADD COLUMN "starred" BOOLEAN NOT NULL DEFAULT false;

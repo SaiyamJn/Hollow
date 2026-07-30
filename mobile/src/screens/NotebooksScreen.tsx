@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, Alert } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createNotebook, createPage, createSection, fetchNotebooks, unlockNotebook } from "../lib/api";
+import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, unlockNotebook } from "../lib/api";
 import type { Notebook } from "../lib/types";
 import { getNavMemory } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
 import { Fab, FabAction } from "../components/Fab";
+import { GlassCard } from "../components/GlassCard";
 
 type Prompt =
   | { kind: "new-notebook" }
@@ -107,29 +108,42 @@ export default function NotebooksScreen({ navigation }: any) {
           const sealed = nb.isLocked && !unlock.unlockedNotebooks[nb.id];
           const pageCount = nb.sections.reduce((n, s) => n + s.pages.length, 0);
           return (
-            <Pressable
-              key={nb.id}
-              style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface1 }]}
-              onPress={() => openNotebook(nb)}
-            >
-              <View style={[styles.iconBox, { backgroundColor: colors.accentSoft }]}>
-                <Feather name={sealed ? "lock" : "book"} size={17} color={sealed ? colors.textSecondary : colors.accent} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  style={{ color: sealed ? colors.textSecondary : colors.textPrimary, fontSize: 15, fontWeight: "500" }}
-                  numberOfLines={1}
+            <Pressable key={nb.id} onPress={() => openNotebook(nb)} style={{ marginBottom: 10 }}>
+              <GlassCard contentStyle={styles.card}>
+                <View style={[styles.iconBox, { backgroundColor: colors.accentSoft }]}>
+                  <Feather name={sealed ? "lock" : "book"} size={17} color={sealed ? colors.textSecondary : colors.accent} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{ color: sealed ? colors.textSecondary : colors.textPrimary, fontSize: 15, fontWeight: "500" }}
+                    numberOfLines={1}
+                  >
+                    {nb.title}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                    {sealed
+                      ? "Sealed · encrypted"
+                      : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
+                  </Text>
+                </View>
+                {nb.isLocked && !sealed && <Feather name="unlock" size={13} color={colors.accent} />}
+                <Pressable
+                  hitSlop={8}
+                  onPress={() =>
+                    Alert.alert("Delete notebook", `Delete “${nb.title}”? All sections and pages will be removed.`, [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () =>
+                          void deleteNotebook(nb.id).then(() => queryClient.invalidateQueries({ queryKey: ["notebooks"] })),
+                      },
+                    ])
+                  }
                 >
-                  {nb.title}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {sealed
-                    ? "Sealed · encrypted"
-                    : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
-                </Text>
-              </View>
-              {nb.isLocked && !sealed && <Feather name="unlock" size={13} color={colors.accent} />}
-              <Feather name="chevron-right" size={17} color={colors.textSecondary} />
+                  <Feather name="trash-2" size={15} color={colors.textSecondary} />
+                </Pressable>
+              </GlassCard>
             </Pressable>
           );
         })}
@@ -171,10 +185,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
-    marginBottom: 10,
   },
   iconBox: { height: 38, width: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 });

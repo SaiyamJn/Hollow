@@ -11,7 +11,7 @@ export function DialogContent({ title, children }: { title: string; children: Re
       <DialogPrimitive.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-40 animate-fade-in" />
       <DialogPrimitive.Content
         className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2
-                   rounded-2xl border border-border glass p-6 text-primary shadow-pop
+                   rounded-2xl border border-border glass-strong p-6 text-primary shadow-pop
                    focus:outline-none animate-pop-in"
       >
         <div className="flex items-center justify-between mb-4">

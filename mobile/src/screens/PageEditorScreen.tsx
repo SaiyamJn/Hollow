@@ -18,6 +18,7 @@ import { PAGE_TEMPLATES } from "../lib/templates";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
+import { GlassCard } from "../components/GlassCard";
 
 // Slow breathing ring around the lock emblem on sealed content.
 function VaultSeal({ color, background }: { color: string; background: string }) {
@@ -237,11 +238,10 @@ export default function PageEditorScreen({ route, navigation }: any) {
         placeholderTextColor={colors.textSecondary}
       />
       {focus && (
-        <Pressable
-          style={[styles.exitFocus, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-          onPress={() => setFocus(false)}
-        >
-          <Feather name="minimize-2" size={15} color={colors.textSecondary} />
+        <Pressable onPress={() => setFocus(false)} style={styles.exitFocusWrap}>
+          <GlassCard style={{ borderRadius: 999 }} contentStyle={styles.exitFocus}>
+            <Feather name="minimize-2" size={15} color={colors.textSecondary} />
+          </GlassCard>
         </Pressable>
       )}
     </View>
@@ -253,12 +253,12 @@ const styles = StyleSheet.create({
   notice: { fontSize: 11, paddingHorizontal: 20, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   editor: { flex: 1, padding: 20, fontSize: 15, lineHeight: 22 },
   focusEditor: { paddingTop: 64, fontSize: 16, lineHeight: 26, paddingHorizontal: 24 },
-  exitFocus: {
+  exitFocusWrap: {
     position: "absolute",
     bottom: 24,
     right: 20,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
+  },
+  exitFocus: {
     padding: 11,
   },
   templateRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingVertical: 10 },

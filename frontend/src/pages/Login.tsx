@@ -35,7 +35,7 @@ export default function Login() {
     >
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-xl border border-border bg-surface-1 p-8 space-y-4 shadow-pop animate-rise-in"
+        className="w-full max-w-sm rounded-xl border border-border glass-strong p-8 space-y-4 shadow-pop animate-rise-in"
       >
         <div className="pb-1">
           <div className="flex items-center gap-2">

@@ -25,6 +25,7 @@ import { useAuth } from "../contexts/auth";
 import { useUnlock } from "../contexts/unlock";
 import { Fab } from "../components/Fab";
 import { PromptModal } from "../components/PromptModal";
+import { GlassCard } from "../components/GlassCard";
 
 function greeting() {
   const h = new Date().getHours();
@@ -153,7 +154,7 @@ export default function HomeScreen({ navigation }: any) {
       )}
 
       {/* quick capture */}
-      <View style={[styles.capture, { borderColor: colors.border, backgroundColor: colors.surface1 }]}>
+      <GlassCard style={{ marginTop: 16 }} contentStyle={styles.capture}>
         <TextInput
           ref={captureRef}
           style={[styles.captureInput, { color: colors.textPrimary }]}
@@ -170,10 +171,33 @@ export default function HomeScreen({ navigation }: any) {
         >
           <Feather name="send" size={16} color={draft.trim() ? colors.accent : colors.textSecondary} />
         </Pressable>
-      </View>
+      </GlassCard>
       {captured && (
         <Text style={{ color: colors.accent, fontSize: 12, marginTop: 6 }}>Captured to quick notes.</Text>
       )}
+
+      {/* section shortcuts — one bar, not four matching cards */}
+      <GlassCard style={{ marginTop: 12 }} contentStyle={styles.shortcuts}>
+        {(
+          [
+            { label: "Notebooks", icon: "book" as const, tab: "Notebooks" },
+            { label: "Notes", icon: "file-text" as const, tab: "Quick notes" },
+            { label: "Tasks", icon: "check-square" as const, tab: "Tasks" },
+            { label: "Links", icon: "share-2" as const, tab: "Links" },
+          ] as const
+        ).map((item, i) => (
+          <Pressable
+            key={item.tab}
+            style={[styles.shortcut, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}
+            onPress={() => navigation.navigate(item.tab)}
+          >
+            <Feather name={item.icon} size={15} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500", textAlign: "center" }}>
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
+      </GlassCard>
 
       {/* recent pages */}
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CONTINUE WRITING</Text>
@@ -182,28 +206,33 @@ export default function HomeScreen({ navigation }: any) {
       )}
       {(recent ?? []).map((p, i) => {
         const sealed = p.section.isLocked && !unlock.sectionPasswords[p.section.id];
+        if (i === 0) {
+          return (
+            <Pressable key={p.id} onPress={() => openRecent(p)} style={{ marginBottom: 4 }}>
+              <GlassCard contentStyle={styles.recentFeatured}>
+                <View style={styles.recentRow}>
+                  <Feather name={sealed ? "lock" : "file-text"} size={14} color={colors.textSecondary} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }} numberOfLines={1}>
+                      {p.title}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                      {p.section.notebook.title} / {p.section.title}
+                    </Text>
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{relativeTime(p.updatedAt)}</Text>
+                </View>
+              </GlassCard>
+            </Pressable>
+          );
+        }
         return (
-          <Pressable
-            key={p.id}
-            style={[
-              styles.recentRow,
-              i === 0 && [styles.recentFeatured, { borderColor: colors.border, backgroundColor: colors.surface1 }],
-            ]}
-            onPress={() => openRecent(p)}
-          >
+          <Pressable key={p.id} style={styles.recentRow} onPress={() => openRecent(p)}>
             <Feather name={sealed ? "lock" : "file-text"} size={14} color={colors.textSecondary} />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={{ color: colors.textPrimary, fontSize: 14, fontWeight: i === 0 ? "500" : "400" }}
-                numberOfLines={1}
-              >
+              <Text style={{ color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>
                 {p.title}
               </Text>
-              {i === 0 && (
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-                  {p.section.notebook.title} / {p.section.title}
-                </Text>
-              )}
             </View>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{relativeTime(p.updatedAt)}</Text>
           </Pressable>
@@ -279,21 +308,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginTop: 16,
   },
   captureInput: { flex: 1, fontSize: 14, maxHeight: 90, paddingVertical: 4 },
+  shortcuts: { flexDirection: "row", alignItems: "stretch" },
+  shortcut: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
   sectionLabel: { fontSize: 11, letterSpacing: 1, marginTop: 24, marginBottom: 8 },
   recentRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   recentFeatured: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    marginBottom: 4,
   },
   taskRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
 });

@@ -57,7 +57,15 @@ function MainTabs({ navigation }: any) {
     <>
       <Tabs.Navigator
         screenOptions={({ route, navigation: tabNav }) => ({
-          headerStyle: { backgroundColor: colors.surface1 },
+          headerStyle: { backgroundColor: "transparent" },
+          headerBackground: () => (
+            <BlurView
+              intensity={50}
+              tint={theme === "dark" ? "dark" : "light"}
+              experimentalBlurMethod="dimezisBlurView"
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.glassBorder }]}
+            />
+          ),
           headerTitleStyle: { color: colors.textPrimary, fontWeight: "500", fontSize: 16 },
           headerShadowVisible: false,
           // Home isn't in the tab bar — every other tab gets a back arrow to it.
@@ -88,7 +96,7 @@ function MainTabs({ navigation }: any) {
             borderRadius: 25,
             borderTopWidth: 0,
             borderWidth: StyleSheet.hairlineWidth,
-            borderColor: colors.border,
+            borderColor: colors.glassBorder,
             backgroundColor: "transparent",
             overflow: "hidden",
             elevation: 0,
@@ -165,7 +173,15 @@ function Root() {
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface1 },
+          headerStyle: { backgroundColor: "transparent" },
+          headerBackground: () => (
+            <BlurView
+              intensity={50}
+              tint={theme === "dark" ? "dark" : "light"}
+              experimentalBlurMethod="dimezisBlurView"
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.glassBorder }]}
+            />
+          ),
           headerTitleStyle: { color: colors.textPrimary, fontWeight: "500", fontSize: 16 },
           headerTintColor: colors.accent,
           headerShadowVisible: false,

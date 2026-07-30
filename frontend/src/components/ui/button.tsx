@@ -8,7 +8,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const styles: Record<Variant, string> = {
-  default: "border border-border bg-surface-2 hover:bg-surface-1 text-primary shadow-card",
+  default: "border border-border glass hover:bg-surface-2/50 text-primary shadow-card",
   accent: "bg-accent text-surface-0 hover:brightness-110 shadow-card",
   ghost: "text-secondary hover:bg-surface-2 hover:text-primary",
 };

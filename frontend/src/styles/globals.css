@@ -14,7 +14,7 @@
   --danger: #dc2626;
   --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.05);
   --shadow-pop: 0 4px 24px rgba(20, 20, 20, 0.12);
-  --glow: radial-gradient(ellipse 60% 45% at 50% -5%, rgba(13, 138, 104, 0.07), transparent);
+  --glow: radial-gradient(ellipse 55% 40% at 50% -8%, rgba(13, 138, 104, 0.028), transparent);
 }
 .dark {
   --surface-0: #0f1012;
@@ -28,11 +28,13 @@
   --danger: #f87171;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.45);
-  --glow: radial-gradient(ellipse 60% 45% at 50% -5%, rgba(98, 217, 174, 0.06), transparent);
+  --glow: radial-gradient(ellipse 55% 40% at 50% -8%, rgba(98, 217, 174, 0.022), transparent);
 }
 
 body {
-  background: var(--surface-0);
+  background-color: var(--surface-0);
+  background-image: var(--glow);
+  background-attachment: fixed;
   color: var(--text-primary);
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -71,12 +73,27 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   padding-inline: 0 !important;
 }
 
-/* Glass chrome: translucent surface + backdrop blur for elements that float
-   over content (header, command palette, dialogs). */
+/* Glass chrome — translucent + blur. Use on floating UI and panel cards. */
 .glass {
+  background: color-mix(in srgb, var(--surface-1) 58%, transparent);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
+    var(--shadow-card);
+}
+.glass-strong {
   background: color-mix(in srgb, var(--surface-1) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+    var(--shadow-pop);
+}
+.glass-input {
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* Vault seal: a slow breathing ring around the lock on sealed content. */

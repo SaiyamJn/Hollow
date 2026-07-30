@@ -112,6 +112,7 @@ export function CommandPalette() {
       {
         id: "notebooks",
         label: "Go to notebooks",
+        hint: formatCombo(binds.notebooks),
         icon: <Book size={15} />,
         keywords: "shelf library",
         run: () => {
@@ -265,7 +266,7 @@ export function CommandPalette() {
     >
       <div
         className="absolute left-1/2 top-[16%] w-full max-w-lg -translate-x-1/2 rounded-2xl border border-border
-                   glass shadow-pop overflow-hidden animate-palette-in"
+                   glass-strong shadow-pop overflow-hidden animate-palette-in"
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-2 px-3.5 border-b border-border">

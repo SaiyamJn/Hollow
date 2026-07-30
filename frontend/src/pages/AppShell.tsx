@@ -67,6 +67,7 @@ export default function AppShell() {
     const actions: Record<KeybindId, () => void> = {
       palette: () => setPaletteOpen(!useUiStore.getState().paletteOpen),
       home: () => navigate("/"),
+      notebooks: () => navigate("/notebooks"),
       tasks: () => navigate("/tasks"),
       quickNotes: () => navigate("/quick-notes"),
       daily: () => void openDaily(),
@@ -93,10 +94,11 @@ export default function AppShell() {
         "escape",
         "palette",
         "home",
+        "notebooks",
         "tasks",
         "quickNotes",
-        "daily",
         "graph",
+        "daily",
         "settings",
         "focus",
         "theme",
@@ -133,7 +135,7 @@ export default function AppShell() {
     <div className="h-screen flex flex-col bg-surface-0 text-primary">
       <div className="flex-1 flex flex-col min-w-0 relative">
         {!focusMode && (
-          <header className="absolute inset-x-0 top-0 z-20 h-12 glass border-b border-border flex items-center justify-between px-3">
+          <header className="absolute inset-x-0 top-0 z-20 h-12 glass-strong border-b border-border flex items-center justify-between px-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -141,7 +143,7 @@ export default function AppShell() {
                 onClick={() => navigate("/")}
                 className="flex items-center gap-2 pl-1"
               >
-                <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />
+                <span className="h-2 w-2 rounded-full bg-accent" />
                 <span className="text-sm font-medium tracking-tight">Hollow</span>
               </button>
               <button

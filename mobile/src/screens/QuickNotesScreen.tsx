@@ -6,6 +6,7 @@ import { createQuickNote, deleteQuickNote, fetchQuickNotes, updateQuickNote } fr
 import type { QuickNote } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
+import { GlassCard } from "../components/GlassCard";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -67,7 +68,7 @@ export default function QuickNotesScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-            <View style={[styles.composer, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+            <GlassCard contentStyle={styles.composer}>
               <TextInput
                 ref={composerRef}
                 style={{ color: colors.textPrimary, fontSize: 14, minHeight: 40 }}
@@ -98,7 +99,7 @@ export default function QuickNotesScreen() {
                   <Text style={{ color: colors.surface0, fontWeight: "500", fontSize: 13 }}>Add</Text>
                 </Pressable>
               </View>
-            </View>
+            </GlassCard>
             <Pressable onPress={() => setShowArchived((v) => !v)} style={{ marginTop: 10, alignSelf: "flex-end" }}>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                 {showArchived ? "Hide archived" : "Show archived"}
@@ -148,19 +149,17 @@ function NoteCard({
 }) {
   const { colors } = useTheme();
   return (
-    <View
-      style={[
+    <GlassCard
+      style={{ flex: 1 }}
+      contentStyle={[
         styles.card,
-        {
-          borderColor: colors.border,
-          backgroundColor: note.color !== "gray" ? PALETTE[note.color] : colors.surface1,
-        },
+        note.color !== "gray" ? { backgroundColor: PALETTE[note.color] } : null,
       ]}
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
         <Text style={{ color: colors.textPrimary, fontSize: 13, flex: 1 }}>{note.content}</Text>
         <Pressable onPress={() => onPatch({ pinned: !note.pinned })}>
-          <Feather name="bookmark" size={14} color={note.pinned ? colors.accent : colors.textSecondary} />
+          <Feather name="star" size={14} color={note.pinned ? colors.accent : colors.textSecondary} />
         </Pressable>
       </View>
       <View style={styles.cardActions}>
@@ -171,15 +170,15 @@ function NoteCard({
           <Feather name="trash-2" size={14} color={colors.textSecondary} />
         </Pressable>
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
 const styles = StyleSheet.create({
-  composer: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12 },
-  composerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1 },
-  addButton: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 6 },
-  card: { flex: 1, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12 },
-  cardActions: { flexDirection: "row", justifyContent: "flex-end", gap: 14, marginTop: 10 },
+  composer: { padding: 12 },
+  composerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
+  dot: { height: 16, width: 16, borderRadius: 8, borderWidth: 2 },
+  addButton: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  card: { padding: 12, minHeight: 88, justifyContent: "space-between", gap: 10 },
+  cardActions: { flexDirection: "row", justifyContent: "flex-end", gap: 12 },
 });

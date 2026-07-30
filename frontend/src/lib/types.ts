@@ -64,7 +64,9 @@ export interface QuickNote {
 export interface Task {
   id: string;
   title: string;
+  description: string;
   done: boolean;
+  starred: boolean;
   dueAt: string | null;
   parentTaskId: string | null;
   subtasks?: Task[];
