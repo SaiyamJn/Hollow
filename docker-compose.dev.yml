@@ -1,0 +1,25 @@
+# Local development only: Postgres + Redis with ports exposed to the host,
+# so `npm run dev` in backend/ can reach them at localhost.
+# Production deployment uses the full docker-compose.yml (phase 7).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hollow
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: hollow
+    ports:
+      # 5433/6380 on the host to avoid clashing with other local projects
+      - "5433:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    restart: unless-stopped
+
+volumes:
+  pgdata_dev:

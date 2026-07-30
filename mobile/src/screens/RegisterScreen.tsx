@@ -1,0 +1,93 @@
+import { useState } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAuth } from "../contexts/auth";
+import { useTheme } from "../contexts/theme";
+
+export default function RegisterScreen({ navigation }: any) {
+  const { register } = useAuth();
+  const { colors } = useTheme();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit() {
+    setError(null);
+    setBusy(true);
+    try {
+      await register(email.trim(), password, name.trim());
+    } catch (err: any) {
+      setError(err.response?.data?.error ?? "Couldn't reach the server");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={[styles.container, { backgroundColor: colors.surface0 }]}
+    >
+      <View style={[styles.card, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+        <Text style={[styles.logo, { color: colors.textPrimary }]}>Hollow</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Create an account</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface2, borderColor: colors.border, color: colors.textPrimary }]}
+          placeholder="Name"
+          placeholderTextColor={colors.textSecondary}
+          value={name}
+          onChangeText={setName}
+        />
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface2, borderColor: colors.border, color: colors.textPrimary }]}
+          placeholder="Email"
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface2, borderColor: colors.border, color: colors.textPrimary }]}
+          placeholder="Password (min 8 characters)"
+          placeholderTextColor={colors.textSecondary}
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          onSubmitEditing={onSubmit}
+        />
+        {error && <Text style={styles.error}>{error}</Text>}
+        <Pressable
+          style={[styles.button, { backgroundColor: colors.accent, opacity: busy ? 0.6 : 1 }]}
+          onPress={onSubmit}
+          disabled={busy}
+        >
+          <Text style={{ color: colors.surface0, fontWeight: "500" }}>{busy ? "Creating…" : "Create account"}</Text>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate("Login")} style={{ marginTop: 14 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            Have an account? <Text style={{ color: colors.accent }}>Sign in</Text>
+          </Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24 },
+  card: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 24 },
+  logo: { fontSize: 20, fontWeight: "500" },
+  subtitle: { fontSize: 13, marginTop: 2, marginBottom: 18 },
+  input: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  error: { color: "#f87171", fontSize: 13, marginBottom: 10 },
+  button: { borderRadius: 12, alignItems: "center", paddingVertical: 11, marginTop: 4 },
+});
