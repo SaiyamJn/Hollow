@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Minimize2, Moon, Search, Settings as SettingsIcon, Sun, LogOut } from "lucide-react";
@@ -22,9 +22,31 @@ function isTypingTarget(target: EventTarget | null) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
+/** True while a modal/dialog is on screen (checked in capture, before Radix dismisses it). */
+function hasOpenDialog() {
+  return !!(
+    document.querySelector("[data-hollow-dialog]") ||
+    document.querySelector('[role="dialog"][data-state="open"]') ||
+    document.querySelector('[role="alertdialog"][data-state="open"]') ||
+    document.querySelector('[aria-modal="true"]')
+  );
+}
+
+/** Notebook hierarchy: page/graph → notebook → list. (List does not jump to home.) */
+function notebookBackPath(pathname: string): string | null {
+  const page = pathname.match(/^\/notebooks\/([^/]+)\/sections\/[^/]+\/pages\/[^/]+/);
+  if (page) return `/notebooks/${page[1]}`;
+  const graph = pathname.match(/^\/notebooks\/([^/]+)\/graph\/?$/);
+  if (graph) return `/notebooks/${graph[1]}`;
+  const notebook = pathname.match(/^\/notebooks\/([^/]+)\/?$/);
+  if (notebook) return "/notebooks";
+  return null;
+}
+
 export default function AppShell() {
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const logout = useAuthStore((s) => s.logout);
   const clearUnlocks = useUnlockStore((s) => s.clearAll);
@@ -76,8 +98,20 @@ export default function AppShell() {
       focus: () => setFocusMode(!useUiStore.getState().focusMode),
       theme: () => toggle(),
       escape: () => {
-        if (useUiStore.getState().paletteOpen) setPaletteOpen(false);
-        else if (useUiStore.getState().focusMode) setFocusMode(false);
+        // Close the active overlay/action first (everywhere).
+        if (useUiStore.getState().paletteOpen) {
+          setPaletteOpen(false);
+          return;
+        }
+        if (useUiStore.getState().focusMode) {
+          setFocusMode(false);
+          return;
+        }
+        // Never navigate while a dialog is still mounted.
+        if (hasOpenDialog()) return;
+        // Notebooks only: walk back up the hierarchy.
+        const back = notebookBackPath(location.pathname);
+        if (back) navigate(back);
       },
     };
 
@@ -111,8 +145,17 @@ export default function AppShell() {
         // Palette / escape always fire; others skip while typing or when palette is open.
         const always = id === "palette" || id === "escape";
         if (!always && (typing || paletteOpen)) continue;
-        // Escape only does something useful when palette/focus is active
-        if (id === "escape" && !paletteOpen && !useUiStore.getState().focusMode) continue;
+
+        if (id === "escape") {
+          // Capture-phase: dialog is still open here. Bail so Radix can close it —
+          // do NOT navigate (bubble-phase used to run after dismiss and jump home).
+          if (hasOpenDialog()) return;
+
+          const inNotebooks = location.pathname.startsWith("/notebooks");
+          const canCloseAction = paletteOpen || useUiStore.getState().focusMode;
+          // Outside notebooks: only close palette / focus mode.
+          if (!canCloseAction && !inNotebooks) return;
+        }
 
         e.preventDefault();
         actions[id]();
@@ -120,9 +163,10 @@ export default function AppShell() {
       }
     }
 
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, queryClient, setFocusMode, setPaletteOpen, toggle, binds]);
+    // Capture so we see dialogs before Radix unmounts them on Esc.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [navigate, location.pathname, queryClient, setFocusMode, setPaletteOpen, toggle, binds]);
 
   function onLogout() {
     clearUnlocks();

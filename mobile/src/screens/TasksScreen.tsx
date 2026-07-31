@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -11,7 +12,6 @@ import {
   View,
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import { syncTaskReminders } from "../lib/notifications";
@@ -19,6 +19,7 @@ import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
+import { GlassDateTimePicker, formatDueLabel } from "../components/GlassDateTimePicker";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
@@ -54,13 +55,6 @@ function groupTasks(tasks: Task[]) {
   return sections;
 }
 
-function formatDue(dueAt: string) {
-  const due = new Date(dueAt);
-  const date = due.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const hasTime = due.getHours() !== 0 || due.getMinutes() !== 0;
-  return hasTime ? `${date} · ${due.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : date;
-}
-
 function defaultDue() {
   const d = new Date();
   d.setMinutes(0, 0, 0);
@@ -68,18 +62,17 @@ function defaultDue() {
   return d;
 }
 
-type Picking = { taskId: string; stage: "date" | "time"; value: Date };
-type Draft = { title: string; description: string; due: Date };
+type Draft = { title: string; description: string; due: Date | null };
+type EditDraft = Draft & { id: string };
 
 export default function TasksScreen() {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [editing, setEditing] = useState<EditDraft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
-  const [picking, setPicking] = useState<Picking | null>(null);
-  const [draftPicking, setDraftPicking] = useState(false);
   const quickAddRef = useRef<TextInput>(null);
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
@@ -103,9 +96,28 @@ export default function TasksScreen() {
       patch,
     }: {
       id: string;
-      patch: { done?: boolean; starred?: boolean; dueAt?: string | null; description?: string };
+      patch: {
+        title?: string;
+        done?: boolean;
+        starred?: boolean;
+        dueAt?: string | null;
+        description?: string;
+      };
     }) => updateTask(id, patch),
     onSuccess: invalidate,
+  });
+  const saveEdit = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { title: string; description: string; dueAt: string | null };
+    }) => updateTask(id, patch),
+    onSuccess: () => {
+      invalidate();
+      setEditing(null);
+    },
   });
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
 
@@ -113,31 +125,13 @@ export default function TasksScreen() {
     setDraft({ title: title.trim(), description: "", due: defaultDue() });
   }
 
-  function openPicker(task: Task) {
-    const start = task.dueAt ? new Date(task.dueAt) : new Date();
-    setPicking({ taskId: task.id, stage: Platform.OS === "android" ? "date" : "time", value: start });
-  }
-
-  function commitDue(taskId: string, value: Date) {
-    setPicking(null);
-    update.mutate({ id: taskId, patch: { dueAt: value.toISOString() } });
-  }
-
-  function onAndroidPick(event: DateTimePickerEvent, date?: Date) {
-    if (!picking) return;
-    if (event.type === "dismissed" || !date) {
-      setPicking(null);
-      return;
-    }
-    if (picking.stage === "date") {
-      const next = new Date(picking.value);
-      next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-      setPicking({ ...picking, stage: "time", value: next });
-    } else {
-      const next = new Date(picking.value);
-      next.setHours(date.getHours(), date.getMinutes(), 0, 0);
-      commitDue(picking.taskId, next);
-    }
+  function openEdit(task: Task) {
+    setEditing({
+      id: task.id,
+      title: task.title,
+      description: task.description ?? "",
+      due: task.dueAt ? new Date(task.dueAt) : null,
+    });
   }
 
   const groupColor = (name: string) =>
@@ -155,22 +149,32 @@ export default function TasksScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 170 }}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
-          <GlassCard style={{ marginBottom: 16 }} contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}>
-            <TextInput
-              ref={quickAddRef}
-              style={[styles.quickAdd, { color: colors.textPrimary }]}
-              placeholder="Add a task, press return"
-              placeholderTextColor={colors.textSecondary}
-              value={quickAdd}
-              onChangeText={setQuickAdd}
-              onSubmitEditing={() => {
-                if (quickAdd.trim()) openCreate(quickAdd);
-              }}
-            />
-          </GlassCard>
+          <View style={{ marginBottom: 16, alignItems: "center" }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
+              Tasks
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}>
+              Plan the day — star what matters.
+            </Text>
+            <GlassCard style={{ alignSelf: "stretch" }} contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}>
+              <TextInput
+                ref={quickAddRef}
+                style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "center" }]}
+                placeholder="Add a task, press return"
+                placeholderTextColor={colors.textSecondary}
+                value={quickAdd}
+                onChangeText={setQuickAdd}
+                onSubmitEditing={() => {
+                  if (quickAdd.trim()) openCreate(quickAdd);
+                }}
+              />
+            </GlassCard>
+          </View>
         }
         renderSectionHeader={({ section }) => (
-          <Text style={[styles.groupHeader, { color: groupColor(section.title) }]}>{section.title.toUpperCase()}</Text>
+          <Text style={[styles.groupHeader, { color: groupColor(section.title) }]}>
+            {section.title.toUpperCase()}
+          </Text>
         )}
         renderItem={({ item: task }) => {
           const isOpen = expanded.has(task.id);
@@ -196,7 +200,7 @@ export default function TasksScreen() {
                     color={task.done ? colors.accent : colors.textSecondary}
                   />
                 </Pressable>
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <Pressable style={{ flex: 1, minWidth: 0 }} onPress={() => openEdit(task)}>
                   <Text
                     style={[
                       styles.taskTitle,
@@ -212,13 +216,14 @@ export default function TasksScreen() {
                       {task.description}
                     </Text>
                   )}
-                </View>
-                <Pressable onPress={() => openPicker(task)} hitSlop={6}>
-                  {task.dueAt ? (
-                    <Text style={{ color: colors.accent, fontSize: 11 }}>{formatDue(task.dueAt)}</Text>
-                  ) : (
-                    <Feather name="calendar" size={14} color={colors.textSecondary} />
+                  {!!task.dueAt && (
+                    <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }}>
+                      {formatDueLabel(task.dueAt)}
+                    </Text>
                   )}
+                </Pressable>
+                <Pressable onPress={() => openEdit(task)} hitSlop={6}>
+                  <Feather name="edit-2" size={14} color={colors.textSecondary} />
                 </Pressable>
                 <Pressable onPress={() => update.mutate({ id: task.id, patch: { starred: !task.starred } })}>
                   <Feather name="star" size={14} color={task.starred ? colors.accent : colors.textSecondary} />
@@ -230,14 +235,6 @@ export default function TasksScreen() {
 
               {isOpen && (
                 <View style={styles.subtasks}>
-                  {task.dueAt && (
-                    <Pressable
-                      onPress={() => update.mutate({ id: task.id, patch: { dueAt: null } })}
-                      style={{ paddingVertical: 4 }}
-                    >
-                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Clear due date</Text>
-                    </Pressable>
-                  )}
                   {subtasks.map((sub) => (
                     <View key={sub.id} style={styles.taskRow}>
                       <Pressable onPress={() => update.mutate({ id: sub.id, patch: { done: !sub.done } })}>
@@ -250,7 +247,7 @@ export default function TasksScreen() {
                       <Text
                         style={[
                           styles.taskTitle,
-                          { color: sub.done ? colors.textSecondary : colors.textPrimary, fontSize: 13 },
+                          { color: sub.done ? colors.textSecondary : colors.textPrimary, fontSize: 13, flex: 1 },
                           sub.done && styles.strike,
                         ]}
                         numberOfLines={1}
@@ -263,7 +260,7 @@ export default function TasksScreen() {
                     </View>
                   ))}
                   <TextInput
-                    style={{ color: colors.textPrimary, fontSize: 13, paddingVertical: 6 }}
+                    style={{ color: colors.textPrimary, fontSize: 13, paddingVertical: 6, textAlign: "center" }}
                     placeholder="+ Add subtask"
                     placeholderTextColor={colors.textSecondary}
                     value={subtaskDrafts[task.id] ?? ""}
@@ -294,143 +291,150 @@ export default function TasksScreen() {
         ]}
       />
 
-      <Modal visible={draft !== null} transparent animationType="fade" onRequestClose={() => setDraft(null)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.draftOverlay}>
-          {draft && (
-            <GlassCard strong contentStyle={styles.draftCard}>
-              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "500", marginBottom: 12 }}>New task</Text>
-              <TextInput
-                style={[styles.draftInput, { color: colors.textPrimary, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
-                placeholder="Title"
-                placeholderTextColor={colors.textSecondary}
-                value={draft.title}
-                onChangeText={(title) => setDraft({ ...draft, title })}
-                autoFocus
-              />
-              <TextInput
-                style={[
-                  styles.draftInput,
-                  styles.draftDesc,
-                  { color: colors.textPrimary, borderColor: colors.glassBorder, backgroundColor: colors.glass },
-                ]}
-                placeholder="Description (optional)"
-                placeholderTextColor={colors.textSecondary}
-                value={draft.description}
-                onChangeText={(description) => setDraft({ ...draft, description })}
-                multiline
-              />
-              <Pressable
-                style={[styles.draftInput, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
-                onPress={() => setDraftPicking(true)}
-              >
-                <Text style={{ color: colors.textPrimary, fontSize: 14 }}>
-                  Due · {formatDue(draft.due.toISOString())}
-                </Text>
-              </Pressable>
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 16, marginTop: 8 }}>
-                <Pressable onPress={() => setDraft(null)}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  disabled={!draft.title.trim() || create.isPending}
-                  onPress={() =>
-                    create.mutate({
-                      title: draft.title.trim(),
-                      description: draft.description.trim() || undefined,
-                      dueAt: draft.due.toISOString(),
-                    })
-                  }
-                >
-                  <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>
-                    {create.isPending ? "Adding…" : "Add task"}
-                  </Text>
-                </Pressable>
-              </View>
-            </GlassCard>
-          )}
-        </KeyboardAvoidingView>
-      </Modal>
+      <TaskFormModal
+        visible={draft !== null}
+        title="New task"
+        submitLabel={create.isPending ? "Adding…" : "Add task"}
+        draft={draft}
+        busy={create.isPending}
+        onClose={() => setDraft(null)}
+        onChange={setDraft}
+        onSubmit={() => {
+          if (!draft?.title.trim() || create.isPending) return;
+          create.mutate({
+            title: draft.title.trim(),
+            description: draft.description.trim() || undefined,
+            dueAt: draft.due ? draft.due.toISOString() : undefined,
+          });
+        }}
+      />
 
-      {draft && draftPicking && Platform.OS === "android" && (
-        <DateTimePicker
-          value={draft.due}
-          mode="date"
-          onChange={(e, date) => {
-            if (e.type === "dismissed" || !date) {
-              setDraftPicking(false);
-              return;
-            }
-            const next = new Date(draft.due);
-            next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-            setDraft({ ...draft, due: next });
-            setDraftPicking(false);
-          }}
-        />
-      )}
-
-      {draft && draftPicking && Platform.OS !== "android" && (
-        <Modal transparent animationType="fade" onRequestClose={() => setDraftPicking(false)}>
-          <Pressable style={styles.pickerBackdrop} onPress={() => setDraftPicking(false)}>
-            <GlassCard strong style={{ borderRadius: 20 }} contentStyle={{ padding: 16, paddingBottom: 32 }}>
-              <DateTimePicker
-                value={draft.due}
-                mode="datetime"
-                display="spinner"
-                onChange={(_e, date) => date && setDraft({ ...draft, due: date })}
-              />
-              <Pressable onPress={() => setDraftPicking(false)} style={{ alignSelf: "flex-end", paddingTop: 8 }}>
-                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
-              </Pressable>
-            </GlassCard>
-          </Pressable>
-        </Modal>
-      )}
-
-      {picking && Platform.OS === "android" && (
-        <DateTimePicker value={picking.value} mode={picking.stage} is24Hour={false} onChange={onAndroidPick} />
-      )}
-
-      {picking && Platform.OS !== "android" && (
-        <Modal transparent animationType="fade" onRequestClose={() => setPicking(null)}>
-          <Pressable style={styles.pickerBackdrop} onPress={() => setPicking(null)}>
-            <GlassCard
-              strong
-              style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderRadius: 20 }}
-              contentStyle={{ padding: 16, paddingBottom: 32 }}
-            >
-              <Pressable onPress={() => undefined}>
-                <DateTimePicker
-                  value={picking.value}
-                  mode="datetime"
-                  display="spinner"
-                  onChange={(_e, date) => date && setPicking({ ...picking, value: date })}
-                />
-                <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 18, paddingTop: 6 }}>
-                  <Pressable onPress={() => setPicking(null)}>
-                    <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
-                  </Pressable>
-                  <Pressable onPress={() => commitDue(picking.taskId, picking.value)}>
-                    <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Set due</Text>
-                  </Pressable>
-                </View>
-              </Pressable>
-            </GlassCard>
-          </Pressable>
-        </Modal>
-      )}
+      <TaskFormModal
+        visible={editing !== null}
+        title="Edit task"
+        submitLabel={saveEdit.isPending ? "Saving…" : "Save"}
+        draft={editing}
+        busy={saveEdit.isPending}
+        onClose={() => setEditing(null)}
+        onChange={(next) => next && setEditing({ ...editing!, ...next })}
+        onSubmit={() => {
+          if (!editing?.title.trim() || saveEdit.isPending) return;
+          saveEdit.mutate({
+            id: editing.id,
+            patch: {
+              title: editing.title.trim(),
+              description: editing.description.trim(),
+              dueAt: editing.due ? editing.due.toISOString() : null,
+            },
+          });
+        }}
+      />
     </View>
+  );
+}
+
+function TaskFormModal({
+  visible,
+  title,
+  submitLabel,
+  draft,
+  busy,
+  onClose,
+  onChange,
+  onSubmit,
+}: {
+  visible: boolean;
+  title: string;
+  submitLabel: string;
+  draft: Draft | null;
+  busy: boolean;
+  onClose: () => void;
+  onChange: (next: Draft | null) => void;
+  onSubmit: () => void;
+}) {
+  const { colors } = useTheme();
+  if (!draft) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.draftOverlay}>
+        <GlassCard strong style={{ maxHeight: "90%" }} contentStyle={styles.draftCard}>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 15,
+                fontWeight: "500",
+                marginBottom: 12,
+                textAlign: "center",
+              }}
+            >
+              {title}
+            </Text>
+            <TextInput
+              style={[
+                styles.draftInput,
+                {
+                  color: colors.textPrimary,
+                  borderColor: colors.glassBorder,
+                  backgroundColor: colors.glass,
+                  textAlign: "center",
+                },
+              ]}
+              placeholder="Title"
+              placeholderTextColor={colors.textSecondary}
+              value={draft.title}
+              onChangeText={(nextTitle) => onChange({ ...draft, title: nextTitle })}
+              autoFocus
+            />
+            <TextInput
+              style={[
+                styles.draftInput,
+                styles.draftDesc,
+                {
+                  color: colors.textPrimary,
+                  borderColor: colors.glassBorder,
+                  backgroundColor: colors.glass,
+                  textAlign: "center",
+                },
+              ]}
+              placeholder="Description (optional)"
+              placeholderTextColor={colors.textSecondary}
+              value={draft.description}
+              onChangeText={(description) => onChange({ ...draft, description })}
+              multiline
+            />
+            <GlassDateTimePicker value={draft.due} onChange={(due) => onChange({ ...draft, due })} />
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 24, marginTop: 14 }}>
+              <Pressable onPress={onClose}>
+                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
+              </Pressable>
+              <Pressable disabled={!draft.title.trim() || busy} onPress={onSubmit}>
+                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>{submitLabel}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </GlassCard>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   quickAdd: { paddingVertical: 10, fontSize: 14 },
-  groupHeader: { fontSize: 11, fontWeight: "500", letterSpacing: 0.8, marginBottom: 8, marginTop: 8 },
+  groupHeader: {
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 8,
+    textAlign: "center",
+  },
   taskCard: { paddingHorizontal: 12, paddingVertical: 4 },
   taskRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   taskTitle: { fontSize: 14 },
   strike: { textDecorationLine: "line-through" },
   subtasks: { marginLeft: 26, paddingBottom: 6 },
-  pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   draftOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 24 },
   draftCard: { padding: 20 },
   draftInput: {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, Alert } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, unlockNotebook } from "../lib/api";
+import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, renameNotebook, unlockNotebook } from "../lib/api";
 import type { Notebook } from "../lib/types";
 import { getNavMemory } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
@@ -16,6 +16,7 @@ type Prompt =
   | { kind: "new-section"; notebookId: string; notebookTitle: string }
   | { kind: "new-page"; sectionId: string; notebookId: string }
   | { kind: "unlock-notebook"; notebook: Notebook }
+  | { kind: "rename-notebook"; notebook: Notebook }
   | null;
 
 export default function NotebooksScreen({ navigation }: any) {
@@ -54,6 +55,9 @@ export default function NotebooksScreen({ navigation }: any) {
           notebookId: prompt.notebookId,
           title: value,
         });
+      } else if (prompt.kind === "rename-notebook") {
+        await renameNotebook(prompt.notebook.id, value);
+        invalidate();
       } else {
         await unlockNotebook(prompt.notebook.id, value);
         unlock.unlockNotebook(
@@ -104,6 +108,14 @@ export default function NotebooksScreen({ navigation }: any) {
         contentContainerStyle={{ padding: 16, paddingBottom: 170 }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
       >
+        <View style={{ marginBottom: 16, alignItems: "center" }}>
+          <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
+            Notebooks
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4 }}>
+            Organize pages — rename anytime.
+          </Text>
+        </View>
         {(notebooks ?? []).map((nb) => {
           const sealed = nb.isLocked && !unlock.unlockedNotebooks[nb.id];
           const pageCount = nb.sections.reduce((n, s) => n + s.pages.length, 0);
@@ -127,6 +139,9 @@ export default function NotebooksScreen({ navigation }: any) {
                   </Text>
                 </View>
                 {nb.isLocked && !sealed && <Feather name="unlock" size={13} color={colors.accent} />}
+                <Pressable hitSlop={8} onPress={() => setPrompt({ kind: "rename-notebook", notebook: nb })}>
+                  <Feather name="edit-2" size={15} color={colors.textSecondary} />
+                </Pressable>
                 <Pressable
                   hitSlop={8}
                   onPress={() =>
@@ -166,13 +181,18 @@ export default function NotebooksScreen({ navigation }: any) {
               ? "New section"
               : prompt?.kind === "new-page"
                 ? "New page"
-                : prompt?.kind === "unlock-notebook"
-                  ? `Unlock "${prompt.notebook.title}"`
-                  : ""
+                : prompt?.kind === "rename-notebook"
+                  ? "Rename notebook"
+                  : prompt?.kind === "unlock-notebook"
+                    ? `Unlock "${prompt.notebook.title}"`
+                    : ""
         }
         placeholder={prompt?.kind === "unlock-notebook" ? "Password" : "Title"}
         secure={prompt?.kind === "unlock-notebook"}
-        submitLabel={prompt?.kind === "unlock-notebook" ? "Unlock" : "Create"}
+        submitLabel={
+          prompt?.kind === "unlock-notebook" ? "Unlock" : prompt?.kind === "rename-notebook" ? "Save" : "Create"
+        }
+        initialValue={prompt?.kind === "rename-notebook" ? prompt.notebook.title : ""}
         onClose={() => setPrompt(null)}
         onSubmit={onPromptSubmit}
       />

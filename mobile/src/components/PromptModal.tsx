@@ -9,6 +9,8 @@ interface PromptModalProps {
   placeholder: string;
   secure?: boolean;
   submitLabel?: string;
+  /** Prefill when opening (e.g. rename / edit). */
+  initialValue?: string;
   onClose: () => void;
   /** Return null on success (closes the modal) or an error message to show. */
   onSubmit: (value: string) => Promise<string | null>;
@@ -16,7 +18,16 @@ interface PromptModalProps {
 
 // Cross-platform replacement for iOS-only Alert.prompt: used for new
 // notebook/section/page titles and lock/unlock passwords.
-export function PromptModal({ visible, title, placeholder, secure, submitLabel = "OK", onClose, onSubmit }: PromptModalProps) {
+export function PromptModal({
+  visible,
+  title,
+  placeholder,
+  secure,
+  submitLabel = "OK",
+  initialValue = "",
+  onClose,
+  onSubmit,
+}: PromptModalProps) {
   const { colors } = useTheme();
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,10 +35,10 @@ export function PromptModal({ visible, title, placeholder, secure, submitLabel =
 
   useEffect(() => {
     if (visible) {
-      setValue("");
+      setValue(initialValue);
       setError(null);
     }
-  }, [visible]);
+  }, [visible, initialValue]);
 
   async function handleSubmit() {
     if (!value.trim() || busy) return;

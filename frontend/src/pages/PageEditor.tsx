@@ -1,5 +1,5 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -13,6 +13,7 @@ import {
   addTagToPage,
   fetchBacklinks,
   fetchNotebooks,
+  fetchOutlinks,
   fetchPage,
   removeTagFromPage,
   renamePage,
@@ -25,6 +26,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { formatCombo, useKeybindsStore } from "../lib/keybinds";
+import { hollowEditorSchema, newBlockOnShiftEnter } from "../lib/editorSchema";
 import { usePageCollab, CollabSession } from "../hooks/usePageCollab";
 import { PasswordDialog } from "../components/PasswordDialog";
 import { Button } from "../components/ui/button";
@@ -134,6 +136,7 @@ function Editor({
   session: CollabSession;
 }) {
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const focusMode = useUiStore((s) => s.focusMode);
@@ -146,9 +149,13 @@ function Editor({
   const [showTemplates, setShowTemplates] = useState(session.seed && !page.content);
   const saveTimer = useRef<number | null>(null);
   const latestContent = useRef<string | null>(null);
+  const editorShellRef = useRef<HTMLDivElement>(null);
 
   const editor = useCreateBlockNote(
     withCollaboration({
+      schema: hollowEditorSchema,
+      extensions: [newBlockOnShiftEnter],
+      autofocus: true,
       collaboration: {
         provider: { awareness: session.awareness },
         fragment: session.doc.getXmlFragment("document-store"),
@@ -168,19 +175,57 @@ function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
+  // Ready to type as soon as the page opens — no extra click needed.
+  useEffect(() => {
+    const focus = () => {
+      try {
+        editor.focus();
+      } catch {
+        // Editor surface may not be mounted yet.
+      }
+    };
+    const t0 = window.setTimeout(focus, 0);
+    const t1 = window.setTimeout(focus, 120);
+    return () => {
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+    };
+  }, [editor, page.id]);
+
+  // SPA navigation for in-editor wiki links (BlockNote renders plain <a>).
+  useEffect(() => {
+    const root = editorShellRef.current;
+    if (!root) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.("a");
+      if (!a) return;
+      const href = a.getAttribute("href");
+      if (!href || !href.startsWith("/notebooks/")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      navigate(href);
+    };
+    root.addEventListener("click", onClick);
+    return () => root.removeEventListener("click", onClick);
+  }, [navigate, editor]);
+
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebookPages = useMemo(
     () =>
       (notebooks ?? [])
         .filter((nb) => nb.id === notebookId)
         .flatMap((nb) => nb.sections)
-        .flatMap((sec) => sec.pages),
+        .flatMap((sec) => sec.pages.map((p) => ({ ...p, sectionId: sec.id }))),
     [notebooks, notebookId]
   );
 
   const { data: backlinks } = useQuery({
     queryKey: ["backlinks", page.id],
     queryFn: () => fetchBacklinks(page.id),
+  });
+  const { data: outlinks } = useQuery({
+    queryKey: ["outlinks", page.id],
+    queryFn: () => fetchOutlinks(page.id),
   });
 
   async function saveNow() {
@@ -191,7 +236,9 @@ function Editor({
     try {
       await savePageContent(page.id, content, password);
       setSaveState("saved");
-      queryClient.invalidateQueries({ queryKey: ["backlinks", page.id] });
+      queryClient.invalidateQueries({ queryKey: ["backlinks"] });
+      queryClient.invalidateQueries({ queryKey: ["outlinks", page.id] });
+      queryClient.invalidateQueries({ queryKey: ["graph", notebookId] });
     } catch {
       setSaveState("error");
     }
@@ -230,6 +277,9 @@ function Editor({
     await renamePage(page.id, next);
     queryClient.invalidateQueries({ queryKey: ["notebooks"] });
     queryClient.invalidateQueries({ queryKey: ["page", page.id] });
+    queryClient.invalidateQueries({ queryKey: ["graph", notebookId] });
+    queryClient.invalidateQueries({ queryKey: ["backlinks"] });
+    queryClient.invalidateQueries({ queryKey: ["outlinks"] });
   }
 
   function applyTemplate(blocks: typeof PAGE_TEMPLATES[number]["blocks"]) {
@@ -307,40 +357,77 @@ function Editor({
         </div>
       )}
 
-      <div className="mt-5">
+      <div className="mt-5" ref={editorShellRef}>
         <BlockNoteView editor={editor} theme={theme}>
-          {/* Wiki-link autocomplete: `[` opens a page search scoped to this
-              notebook; picking an entry inserts `[[Page Title]]`. */}
+          {/* Wiki-link autocomplete: type `[[` to search pages in this notebook.
+              Picking one inserts a clickable `[[Title]]` link. */}
           <SuggestionMenuController
             triggerCharacter="["
             getItems={async (query) => {
-              const q = query.replace(/^\[/, "").toLowerCase();
+              // Require the second `[` so a single bracket doesn't open the menu.
+              if (!query.startsWith("[")) return [];
+              const q = query.slice(1).toLowerCase();
               return notebookPages
                 .filter((p) => p.id !== page.id && p.title.toLowerCase().includes(q))
                 .slice(0, 8)
                 .map((p) => ({
                   title: p.title,
-                  onItemClick: () => editor.insertInlineContent(`[[${p.title}]] `),
+                  onItemClick: () =>
+                    editor.insertInlineContent([
+                      {
+                        type: "link",
+                        href: `/notebooks/${notebookId}/sections/${p.sectionId}/pages/${p.id}`,
+                        content: `[[${p.title}]]`,
+                      },
+                      " ",
+                    ]),
                 }));
             }}
           />
         </BlockNoteView>
+        {!focusMode && (
+          <p className="mt-3 text-xs text-secondary text-center">
+            Enter for a new line · Shift+Enter for a new block ·{" "}
+            <span className="text-primary">/</span> for headings & lists ·{" "}
+            <span className="text-primary">[[</span> to link pages
+          </p>
+        )}
       </div>
 
-      {backlinks && backlinks.length > 0 && (
-        <div className="mt-8 pt-4 border-t border-border">
-          <p className="text-xs text-secondary mb-2">Linked from</p>
-          <div className="flex flex-wrap gap-2">
-            {backlinks.map((bl) => (
-              <Link
-                key={bl.id}
-                to={`/notebooks/${notebookId}/sections/${bl.sectionId}/pages/${bl.id}`}
-                className="text-sm text-accent hover:underline"
-              >
-                {bl.title}
-              </Link>
-            ))}
-          </div>
+      {!focusMode && ((outlinks && outlinks.length > 0) || (backlinks && backlinks.length > 0)) && (
+        <div className="mt-8 pt-4 border-t border-border space-y-4 text-center">
+          {outlinks && outlinks.length > 0 && (
+            <div>
+              <p className="text-xs text-secondary mb-2">Links to</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {outlinks.map((ol) => (
+                  <Link
+                    key={ol.id}
+                    to={`/notebooks/${notebookId}/sections/${ol.sectionId}/pages/${ol.id}`}
+                    className="text-sm text-accent hover:underline"
+                  >
+                    {ol.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {backlinks && backlinks.length > 0 && (
+            <div>
+              <p className="text-xs text-secondary mb-2">Linked from</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {backlinks.map((bl) => (
+                  <Link
+                    key={bl.id}
+                    to={`/notebooks/${notebookId}/sections/${bl.sectionId}/pages/${bl.id}`}
+                    className="text-sm text-accent hover:underline"
+                  >
+                    {bl.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

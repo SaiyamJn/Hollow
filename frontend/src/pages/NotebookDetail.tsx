@@ -8,6 +8,7 @@ import {
   FileText,
   Layers,
   Lock,
+  Pencil,
   Plus,
   Trash2,
   Waypoints,
@@ -17,6 +18,7 @@ import {
   createSection,
   deleteNotebook,
   fetchNotebooks,
+  renameNotebook,
   unlockNotebook,
   unlockSection,
 } from "../lib/api";
@@ -51,6 +53,8 @@ export default function NotebookDetail() {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [draft, setDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState("");
 
   useEffect(() => {
     if (notebookId) setActiveNotebook(notebookId);
@@ -91,6 +95,14 @@ export default function NotebookDetail() {
       queryClient.invalidateQueries({ queryKey: ["notebooks"] });
       setActiveNotebook(null);
       navigate("/notebooks");
+    },
+  });
+
+  const rename = useMutation({
+    mutationFn: (title: string) => renameNotebook(notebookId!, title),
+    onSuccess: () => {
+      invalidate();
+      setRenameOpen(false);
     },
   });
 
@@ -140,8 +152,8 @@ export default function NotebookDetail() {
         <ArrowLeft size={12} /> All notebooks
       </Link>
 
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div className="min-w-0">
+      <div className="flex flex-col items-center text-center gap-4 mb-6">
+        <div className="min-w-0 w-full">
           <h1 className="text-xl font-medium truncate">{notebook.title}</h1>
           <p className="text-sm text-secondary mt-1">
             {sealed
@@ -149,7 +161,16 @@ export default function NotebookDetail() {
               : `${notebook.sections.length} sections · ${notebook.sections.reduce((n, s) => n + s.pages.length, 0)} pages`}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <Button
+            title="Rename"
+            onClick={() => {
+              setRenameTitle(notebook.title);
+              setRenameOpen(true);
+            }}
+          >
+            <Pencil size={14} />
+          </Button>
           <Button
             title="Graph"
             onClick={() => navigate(`/notebooks/${notebook.id}/graph`)}
@@ -311,6 +332,36 @@ export default function NotebookDetail() {
             >
               Create
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent title="Rename notebook">
+          <div className="space-y-3">
+            <Input
+              autoFocus
+              placeholder="Title"
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              className="text-center"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameTitle.trim()) rename.mutate(renameTitle.trim());
+              }}
+            />
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                variant="accent"
+                disabled={!renameTitle.trim() || rename.isPending}
+                onClick={() => rename.mutate(renameTitle.trim())}
+              >
+                {rename.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -87,8 +87,11 @@ export default function Settings() {
   });
 
   return (
-    <div className="max-w-lg mx-auto px-7 py-10 space-y-6">
-      <h1 className="text-xl font-medium">Settings</h1>
+    <div className="max-w-lg mx-auto px-7 py-10 space-y-4">
+      <div className="text-center mb-2">
+        <h1 className="text-xl font-medium">Settings</h1>
+        <p className="text-sm text-secondary mt-1">Account, appearance, and shortcuts.</p>
+      </div>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-1">
         <h2 className="text-xs uppercase tracking-wide text-secondary mb-2">Account</h2>
@@ -96,8 +99,8 @@ export default function Settings() {
         <p className="text-sm text-secondary">{user?.email}</p>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card flex items-center justify-between gap-4">
-        <div className="min-w-0">
+      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+        <div>
           <h2 className="text-sm font-medium text-primary">Theme</h2>
           <p className="text-sm text-secondary mt-0.5">Currently {theme}</p>
         </div>
@@ -107,8 +110,8 @@ export default function Settings() {
         </Button>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card flex items-center justify-between gap-4">
-        <div className="min-w-0">
+      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+        <div>
           <h2 className="text-sm font-medium text-primary">Task reminders</h2>
           <p className="text-sm text-secondary mt-0.5">
             Notify me when a task is due (while the app is open)
@@ -121,15 +124,14 @@ export default function Settings() {
         </Button>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-medium text-primary">Keyboard shortcuts</h2>
-            <p className="text-sm text-secondary mt-0.5">
-              Click a shortcut to rebind it. Esc cancels. Navigation shortcuts are ignored while typing.
-            </p>
-          </div>
+      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3 text-center">
+        <div>
+          <h2 className="text-sm font-medium text-primary">Keyboard shortcuts</h2>
+          <p className="text-sm text-secondary mt-0.5">
+            Click a shortcut to rebind it. Esc cancels.
+          </p>
           <Button
+            className="mt-2"
             onClick={() => {
               resetDefaults();
               setRecording(null);
@@ -140,7 +142,7 @@ export default function Settings() {
           </Button>
         </div>
 
-        <ul className="space-y-1">
+        <ul className="space-y-1 text-left">
           {KEYBIND_DEFS.map((def) => {
             const active = recording === def.id;
             return (
@@ -168,9 +170,9 @@ export default function Settings() {
       </section>
 
       {adminStats && (
-        <section className="rounded-xl border border-border glass p-5 shadow-card flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="text-sm font-medium text-primary flex items-center gap-1.5">
+        <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+          <div>
+            <h2 className="text-sm font-medium text-primary inline-flex items-center gap-1.5">
               <ShieldCheck size={14} className="text-accent" /> Admin
             </h2>
             <p className="text-sm text-secondary mt-0.5">
@@ -181,7 +183,7 @@ export default function Settings() {
         </section>
       )}
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3">
+      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3 text-center">
         <h2 className="text-sm font-medium text-primary">Session</h2>
         <p className="text-sm text-secondary">
           Your login token is kept in localStorage — acceptable for this self-hosted project, but not suitable

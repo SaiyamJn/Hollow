@@ -1,12 +1,13 @@
 import { KeyboardEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, Plus, Star, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import type { Task } from "../lib/types";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
+import { DateTimePicker, formatDueLabel } from "../components/DateTimePicker";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
@@ -43,25 +44,11 @@ function groupTasks(tasks: Task[]): [GroupName, Task[]][] {
   return ordered;
 }
 
-// Local-time value for <input type="datetime-local"> (ISO strings are UTC).
-function toLocalInput(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function defaultDueLocal() {
+function defaultDue() {
   const d = new Date();
   d.setMinutes(0, 0, 0);
   d.setHours(d.getHours() + 1);
-  return toLocalInput(d.toISOString());
-}
-
-function formatDue(iso: string) {
-  const due = new Date(iso);
-  const date = due.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const hasTime = due.getHours() !== 0 || due.getMinutes() !== 0;
-  return hasTime ? `${date}, ${due.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : date;
+  return d;
 }
 
 function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
@@ -78,12 +65,14 @@ function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => voi
   );
 }
 
-type Draft = { title: string; description: string; dueLocal: string };
+type Draft = { title: string; description: string; due: Date | null };
+type EditDraft = Draft & { id: string };
 
 export default function Tasks() {
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [editing, setEditing] = useState<EditDraft | null>(null);
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -112,10 +101,23 @@ export default function Tasks() {
     }) => updateTask(id, patch),
     onSuccess: invalidate,
   });
+  const saveEdit = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { title: string; description: string; dueAt: string | null };
+    }) => updateTask(id, patch),
+    onSuccess: () => {
+      invalidate();
+      setEditing(null);
+    },
+  });
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", dueLocal: defaultDueLocal() });
+    setDraft({ title: title.trim(), description: "", due: defaultDue() });
   }
 
   function onQuickAdd(e: KeyboardEvent<HTMLInputElement>) {
@@ -127,29 +129,46 @@ export default function Tasks() {
     create.mutate({
       title: draft.title.trim(),
       description: draft.description.trim() || undefined,
-      dueAt: draft.dueLocal ? new Date(draft.dueLocal).toISOString() : undefined,
+      dueAt: draft.due ? draft.due.toISOString() : undefined,
+    });
+  }
+
+  function submitEdit() {
+    if (!editing?.title.trim() || saveEdit.isPending) return;
+    saveEdit.mutate({
+      id: editing.id,
+      patch: {
+        title: editing.title.trim(),
+        description: editing.description.trim(),
+        dueAt: editing.due ? editing.due.toISOString() : null,
+      },
     });
   }
 
   return (
     <div className="max-w-2xl mx-auto px-7 py-10">
-      <h1 className="text-xl font-medium mb-5">Tasks</h1>
+      <div className="text-center mb-6">
+        <h1 className="text-xl font-medium">Tasks</h1>
+        <p className="text-sm text-secondary mt-1">Star what matters — due dates keep you honest.</p>
+      </div>
 
       <Input
         placeholder="Add a task, press Enter"
         value={quickAdd}
         onChange={(e) => setQuickAdd(e.target.value)}
         onKeyDown={onQuickAdd}
-        className="mb-6"
+        className="mb-6 text-center"
       />
 
-      {tasks && tasks.length === 0 && <p className="text-sm text-secondary">No tasks yet.</p>}
+      {tasks && tasks.length === 0 && (
+        <p className="text-sm text-secondary text-center">No tasks yet.</p>
+      )}
 
       <div className="space-y-6">
         {groupTasks(tasks ?? []).map(([name, list]) => (
           <section key={name}>
             <h2
-              className={clsx("text-xs font-medium uppercase tracking-wide mb-2", {
+              className={clsx("text-xs font-medium uppercase tracking-wide mb-2 text-center", {
                 "text-accent": name === "Starred" || name === "Today",
                 "text-danger": name === "Overdue",
                 "text-secondary": name === "Upcoming" || name === "No date",
@@ -164,6 +183,14 @@ export default function Tasks() {
                   task={task}
                   onPatch={(id, patch) => update.mutate({ id, patch })}
                   onDelete={(id) => remove.mutate(id)}
+                  onEdit={() =>
+                    setEditing({
+                      id: task.id,
+                      title: task.title,
+                      description: task.description ?? "",
+                      due: task.dueAt ? new Date(task.dueAt) : null,
+                    })
+                  }
                   onAddSubtask={(title) => create.mutate({ title, parentTaskId: task.id })}
                 />
               ))}
@@ -173,7 +200,7 @@ export default function Tasks() {
       </div>
 
       <Dialog open={draft !== null} onOpenChange={(o) => !o && setDraft(null)}>
-        <DialogContent title="New task">
+        <DialogContent title="New task" className="max-w-md">
           {draft && (
             <div className="space-y-3">
               <Input
@@ -181,24 +208,16 @@ export default function Tasks() {
                 placeholder="Title"
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                className="text-center"
               />
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
-                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px]"
+                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] text-center"
                 placeholder="Description (optional)"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
-              <div className="space-y-1.5">
-                <label className="text-xs text-secondary">Due date & time</label>
-                <input
-                  type="datetime-local"
-                  className="w-full rounded-lg border border-border glass-input px-3 py-1.5 text-sm text-primary
-                             focus:outline-none focus:border-accent"
-                  value={draft.dueLocal}
-                  onChange={(e) => setDraft({ ...draft, dueLocal: e.target.value })}
-                />
-              </div>
+              <DateTimePicker value={draft.due} onChange={(due) => setDraft({ ...draft, due })} />
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
                   Cancel
@@ -216,6 +235,43 @@ export default function Tasks() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent title="Edit task" className="max-w-md">
+          {editing && (
+            <div className="space-y-3">
+              <Input
+                autoFocus
+                placeholder="Title"
+                value={editing.title}
+                onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                className="text-center"
+              />
+              <textarea
+                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
+                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] text-center"
+                placeholder="Description (optional)"
+                value={editing.description}
+                onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+              />
+              <DateTimePicker value={editing.due} onChange={(due) => setEditing({ ...editing, due })} />
+              <div className="flex gap-2 pt-1">
+                <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="accent"
+                  disabled={!editing.title.trim() || saveEdit.isPending}
+                  onClick={submitEdit}
+                >
+                  {saveEdit.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -224,6 +280,7 @@ function TaskRow({
   task,
   onPatch,
   onDelete,
+  onEdit,
   onAddSubtask,
 }: {
   task: Task;
@@ -238,11 +295,11 @@ function TaskRow({
     }
   ) => void;
   onDelete: (id: string) => void;
+  onEdit: () => void;
   onAddSubtask: (title: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [subtaskDraft, setSubtaskDraft] = useState("");
-  const [descDraft, setDescDraft] = useState(task.description ?? "");
   const subtasks = task.subtasks ?? [];
 
   function onSubtaskKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -253,21 +310,23 @@ function TaskRow({
   }
 
   return (
-    <div className="px-3 py-2">
+    <div className="px-3.5 py-2.5">
       <div className="group flex items-center gap-2.5">
         <button className="text-secondary hover:text-primary" onClick={() => setExpanded((v) => !v)}>
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Checkbox checked={task.done} onToggle={() => onPatch(task.id, { done: !task.done })} />
-        <div className="flex-1 min-w-0">
+        <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
           <span className={clsx("block text-sm truncate", task.done && "line-through text-secondary")}>
             {task.title}
           </span>
           {task.description ? (
             <span className="block text-xs text-secondary truncate mt-0.5">{task.description}</span>
           ) : null}
-        </div>
-        {task.dueAt && <span className="text-xs text-secondary shrink-0">{formatDue(task.dueAt)}</span>}
+          {task.dueAt ? (
+            <span className="block text-xs text-secondary mt-0.5">{formatDueLabel(task.dueAt)}</span>
+          ) : null}
+        </button>
         {subtasks.length > 0 && (
           <span className="text-xs text-secondary shrink-0">
             {subtasks.filter((s) => s.done).length}/{subtasks.length}
@@ -282,6 +341,13 @@ function TaskRow({
           onClick={() => onPatch(task.id, { starred: !task.starred })}
         >
           <Star size={14} fill={task.starred ? "currentColor" : "none"} />
+        </button>
+        <button
+          title="Edit"
+          className="text-secondary opacity-0 group-hover:opacity-100 hover:text-primary"
+          onClick={onEdit}
+        >
+          <Pencil size={14} />
         </button>
         <button
           title="Delete"
@@ -319,31 +385,6 @@ function TaskRow({
               onKeyDown={onSubtaskKey}
             />
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            <label className="text-xs text-secondary">Due</label>
-            <input
-              type="datetime-local"
-              className="bg-transparent glass-input border border-border rounded-md px-2 py-0.5 text-xs text-primary focus:outline-none focus:border-accent"
-              value={task.dueAt ? toLocalInput(task.dueAt) : ""}
-              onChange={(e) =>
-                onPatch(task.id, { dueAt: e.target.value ? new Date(e.target.value).toISOString() : null })
-              }
-            />
-            {task.dueAt && (
-              <button className="text-xs text-secondary hover:text-primary" onClick={() => onPatch(task.id, { dueAt: null })}>
-                Clear
-              </button>
-            )}
-          </div>
-          <textarea
-            className="w-full bg-transparent text-xs text-primary placeholder:text-secondary focus:outline-none resize-none min-h-[48px] border border-border rounded-md px-2 py-1.5 glass-input"
-            placeholder="Description"
-            value={descDraft}
-            onChange={(e) => setDescDraft(e.target.value)}
-            onBlur={() => {
-              if (descDraft !== (task.description ?? "")) onPatch(task.id, { description: descDraft });
-            }}
-          />
         </div>
       )}
     </div>

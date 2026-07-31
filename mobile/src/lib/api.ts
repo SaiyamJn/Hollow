@@ -125,6 +125,11 @@ export async function deleteNotebook(id: string) {
   await api.delete(`/notebooks/${id}`);
 }
 
+export async function renameNotebook(id: string, title: string) {
+  const { data } = await api.patch<Notebook>(`/notebooks/${id}`, { title });
+  return data;
+}
+
 export async function createSection(notebookId: string, title: string) {
   const { data } = await api.post<Section>(`/notebooks/${notebookId}/sections`, { title });
   return data;
@@ -159,6 +164,19 @@ export async function savePageContent(pageId: string, content: string, sectionPa
 
 export async function fetchBacklinks(pageId: string) {
   const { data } = await api.get<Backlink[]>(`/pages/${pageId}/backlinks`);
+  return data;
+}
+
+export async function fetchOutlinks(pageId: string) {
+  const { data } = await api.get<Backlink[]>(`/pages/${pageId}/outlinks`);
+  return data;
+}
+
+export async function fetchGraph(notebookId: string) {
+  const { data } = await api.get<{
+    nodes: { id: string; title: string }[];
+    edges: { source: string; target: string }[];
+  }>(`/notebooks/${notebookId}/graph`);
   return data;
 }
 

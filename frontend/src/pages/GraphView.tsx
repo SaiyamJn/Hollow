@@ -5,6 +5,7 @@ import { ReactFlow, Background, Controls, Panel, type Node, type Edge } from "@x
 import "@xyflow/react/dist/style.css";
 import { fetchGraph, fetchNotebooks } from "../lib/api";
 import { useTheme } from "../theme/ThemeProvider";
+import { useUiStore } from "../stores/ui";
 
 // One hue per section so clusters read at a glance; works on light and dark.
 const SECTION_COLORS = ["#62d9ae", "#60a5fa", "#c084fc", "#f59e0b", "#f472b6", "#34d399", "#f87171", "#a3e635"];
@@ -13,6 +14,7 @@ export default function GraphView() {
   const { notebookId } = useParams() as { notebookId: string };
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const setActiveNotebook = useUiStore((s) => s.setActiveNotebook);
 
   const { data: graph, isLoading } = useQuery({
     queryKey: ["graph", notebookId],
@@ -83,13 +85,28 @@ export default function GraphView() {
     [graph]
   );
 
+  const edgeCount = graph?.edges.length ?? 0;
   const orphanCount = (graph?.nodes ?? []).filter((n) => (degree.get(n.id) ?? 0) === 0).length;
 
-  if (isLoading) return <div className="p-7 text-sm text-secondary">Loading…</div>;
+  if (isLoading) return <div className="p-7 text-sm text-secondary text-center">Loading…</div>;
   if (!graph || graph.nodes.length === 0)
     return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-secondary">No pages in this notebook yet.</p>
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm font-medium">No pages in this notebook yet.</p>
+        <p className="text-xs text-secondary max-w-sm">
+          Create pages, then type <span className="text-primary">[[</span> in the editor to link them. Linked pages
+          appear here as a graph.
+        </p>
+        {(notebooks ?? []).length > 1 && (
+          <NotebookSwitcher
+            notebooks={notebooks ?? []}
+            activeId={notebookId}
+            onPick={(id) => {
+              setActiveNotebook(id);
+              navigate(`/notebooks/${id}/graph`);
+            }}
+          />
+        )}
       </div>
     );
 
@@ -110,9 +127,17 @@ export default function GraphView() {
         <Controls showInteractive={false} />
         <Panel
           position="top-left"
-          className="rounded-xl border border-border glass px-3 py-2.5 text-xs space-y-1.5 shadow-card"
+          className="rounded-xl border border-border glass px-3 py-2.5 text-xs space-y-1.5 shadow-card max-w-[220px]"
         >
-          <p className="font-medium text-primary">{notebook?.title ?? "Notebook"}</p>
+          <p className="font-medium text-primary text-center">{notebook?.title ?? "Notebook"}</p>
+          <NotebookSwitcher
+            notebooks={notebooks ?? []}
+            activeId={notebookId}
+            onPick={(id) => {
+              setActiveNotebook(id);
+              navigate(`/notebooks/${id}/graph`);
+            }}
+          />
           {(notebook?.sections ?? []).map((sec, i) => (
             <div key={sec.id} className="flex items-center gap-1.5 text-secondary">
               <span
@@ -122,13 +147,43 @@ export default function GraphView() {
               {sec.title}
             </div>
           ))}
-          {orphanCount > 0 && (
-            <p className="text-secondary pt-1 border-t border-border">
-              {orphanCount} unlinked {orphanCount === 1 ? "page" : "pages"} (dashed) — link with [[…]]
+          <p className="text-secondary pt-1 border-t border-border">
+            {edgeCount} {edgeCount === 1 ? "link" : "links"}
+            {orphanCount > 0 ? ` · ${orphanCount} unlinked` : ""}
+          </p>
+          {edgeCount === 0 && (
+            <p className="text-secondary">
+              Open a page and type <span className="text-primary">[[</span> to link another page.
             </p>
           )}
         </Panel>
       </ReactFlow>
     </div>
+  );
+}
+
+function NotebookSwitcher({
+  notebooks,
+  activeId,
+  onPick,
+}: {
+  notebooks: { id: string; title: string }[];
+  activeId: string;
+  onPick: (id: string) => void;
+}) {
+  if (notebooks.length <= 1) return null;
+  return (
+    <select
+      className="w-full rounded-lg border border-border glass-input px-2 py-1 text-xs text-primary focus:outline-none focus:border-accent"
+      value={activeId}
+      onChange={(e) => onPick(e.target.value)}
+      aria-label="Notebook"
+    >
+      {notebooks.map((nb) => (
+        <option key={nb.id} value={nb.id}>
+          {nb.title}
+        </option>
+      ))}
+    </select>
   );
 }

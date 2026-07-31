@@ -80,10 +80,45 @@ router.get("/:id", async (req: AuthedRequest, res) => {
   res.json(page);
 });
 
+/** Collect target page ids from `[[Title]]` text and /pages/:id hrefs in content. */
+function resolveWikiTargets(
+  content: string,
+  sourcePageId: string,
+  notebookPages: { id: string; title: string }[]
+) {
+  const byTitle = new Set(
+    [...content.matchAll(/\[\[([^[\]]+)\]\]/g)].map((m) => m[1].trim().toLowerCase()).filter(Boolean)
+  );
+  const byId = new Set<string>();
+  for (const m of content.matchAll(/\/pages\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi)) {
+    byId.add(m[1].toLowerCase());
+  }
+  return notebookPages
+    .filter(
+      (p) =>
+        p.id !== sourcePageId &&
+        (byId.has(p.id.toLowerCase()) || byTitle.has(p.title.trim().toLowerCase()))
+    )
+    .map((p) => p.id);
+}
+
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Rewrite `[[Old Title]]` → `[[New Title]]` inside stored page content (JSON or plain). */
+function rewriteWikiTitle(content: string, oldTitle: string, newTitle: string) {
+  const re = new RegExp(`\\[\\[${escapeRegExp(oldTitle)}\\]\\]`, "gi");
+  return content.replace(re, `[[${newTitle}]]`);
+}
+
 router.put("/:id", async (req: AuthedRequest, res) => {
   const { content } = z.object({ content: z.string() }).parse(req.body);
-  const page = await prisma.page.findUnique({ where: { id: req.params.id }, include: { section: true } });
-  if (!page) return res.status(404).json({ error: "Not found" });
+  const page = await prisma.page.findUnique({
+    where: { id: req.params.id },
+    include: { section: { include: { notebook: true } } },
+  });
+  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
   let storedContent = content;
   if (page.section.isLocked) {
@@ -93,19 +128,13 @@ router.put("/:id", async (req: AuthedRequest, res) => {
     storedContent = encrypt(content, key);
   }
 
-  // Parse `[[Page Title]]` occurrences out of the plaintext `content`,
-  // resolve each to a Page in the same notebook (case-insensitive title
-  // match), and replace this page's PageLink rows.
-  const linkedTitles = new Set(
-    [...content.matchAll(/\[\[([^[\]]+)\]\]/g)].map((m) => m[1].trim().toLowerCase()).filter(Boolean)
-  );
+  // Parse `[[Page Title]]` (+ clickable /pages/:id hrefs) from plaintext
+  // content, resolve within this notebook, replace outgoing PageLink rows.
   const notebookPages = await prisma.page.findMany({
     where: { section: { notebookId: page.section.notebookId } },
     select: { id: true, title: true },
   });
-  const targetIds = notebookPages
-    .filter((p) => p.id !== page.id && linkedTitles.has(p.title.trim().toLowerCase()))
-    .map((p) => p.id);
+  const targetIds = resolveWikiTargets(content, page.id, notebookPages);
 
   const [, , updated] = await prisma.$transaction([
     prisma.pageLink.deleteMany({ where: { sourcePageId: page.id } }),
@@ -139,6 +168,20 @@ router.get("/:id/backlinks", async (req: AuthedRequest, res) => {
   res.json(links.map((l) => l.sourcePage));
 });
 
+// Outgoing wiki-links from this page (what it points to).
+router.get("/:id/outlinks", async (req: AuthedRequest, res) => {
+  const page = await prisma.page.findUnique({
+    where: { id: req.params.id },
+    include: { section: { include: { notebook: true } } },
+  });
+  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  const links = await prisma.pageLink.findMany({
+    where: { sourcePageId: page.id },
+    include: { targetPage: { select: { id: true, title: true, sectionId: true, updatedAt: true } } },
+  });
+  res.json(links.map((l) => l.targetPage));
+});
+
 router.patch("/:id", async (req: AuthedRequest, res) => {
   const parsed = z.object({ title: z.string().min(1) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
@@ -147,12 +190,37 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
     include: { section: { include: { notebook: true } } },
   });
   if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+
+  const oldTitle = page.title;
+  const newTitle = parsed.data.title.trim();
+
   // Titles are never encrypted (only content is), so renaming works while locked.
   const updated = await prisma.page.update({
     where: { id: page.id },
-    data: { title: parsed.data.title },
+    data: { title: newTitle },
     select: { id: true, title: true, sectionId: true, updatedAt: true },
   });
+
+  // Keep [[links]] resolving after rename: rewrite wiki titles in other pages'
+  // plaintext content. Locked pages stay encrypted — PageLink rows already use
+  // ids so edges survive; text updates when those pages are next unlocked/saved.
+  if (oldTitle !== newTitle) {
+    const siblings = await prisma.page.findMany({
+      where: {
+        id: { not: page.id },
+        section: { notebookId: page.section.notebookId, isLocked: false },
+      },
+      select: { id: true, content: true },
+    });
+    for (const sib of siblings) {
+      if (!sib.content || !/\[\[/i.test(sib.content)) continue;
+      const next = rewriteWikiTitle(sib.content, oldTitle, newTitle);
+      if (next !== sib.content) {
+        await prisma.page.update({ where: { id: sib.id }, data: { content: next } });
+      }
+    }
+  }
+
   res.json(updated);
 });
 

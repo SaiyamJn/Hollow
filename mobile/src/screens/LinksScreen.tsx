@@ -2,14 +2,15 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { fetchBacklinks, fetchNotebooks } from "../lib/api";
+import { fetchBacklinks, fetchNotebooks, fetchOutlinks } from "../lib/api";
 import type { Section } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { GlassCard } from "../components/GlassCard";
 
-// The mobile spec recommends a simplified backlinks list instead of the web's
-// full graph canvas for v1: pick a notebook, expand a page, see what links to it.
+// Simplified backlinks list (vs web graph): pick a notebook, expand a page,
+// see what it links to and what links here. Create links by typing [[Title]]
+// in a page editor — they resolve on save within the same notebook.
 export default function LinksScreen({ navigation }: any) {
   const { colors } = useTheme();
   const unlock = useUnlock();
@@ -22,9 +23,35 @@ export default function LinksScreen({ navigation }: any) {
     (sec) => !sec.isLocked || unlock.sectionPasswords[sec.id]
   );
 
+  function openPage(pageId: string, sectionId: string, title: string) {
+    if (!active) return;
+    navigation.navigate("Page", {
+      pageId,
+      sectionId,
+      notebookId: active.id,
+      title,
+    });
+  }
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.surface0 }} contentContainerStyle={{ padding: 16, paddingBottom: 110 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 14 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.surface0 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 110 }}
+    >
+      <View style={{ marginBottom: 14, alignItems: "center" }}>
+        <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
+          Links
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4 }}>
+          Type [[Page Title]] in a note to connect pages.
+        </Text>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 8, paddingBottom: 14, justifyContent: "center" }}
+      >
         {(notebooks ?? []).map((nb) => {
           const selected = nb.id === active?.id;
           return (
@@ -33,8 +60,15 @@ export default function LinksScreen({ navigation }: any) {
               style={{ borderRadius: 999, borderColor: selected ? colors.accent : colors.glassBorder }}
               contentStyle={styles.chip}
             >
-              <Pressable onPress={() => setActiveNotebookId(nb.id)}>
-                <Text style={{ color: selected ? colors.textPrimary : colors.textSecondary, fontSize: 13 }}>{nb.title}</Text>
+              <Pressable
+                onPress={() => {
+                  setActiveNotebookId(nb.id);
+                  setExpandedPageId(null);
+                }}
+              >
+                <Text style={{ color: selected ? colors.textPrimary : colors.textSecondary, fontSize: 13 }}>
+                  {nb.title}
+                </Text>
               </Pressable>
             </GlassCard>
           );
@@ -47,15 +81,14 @@ export default function LinksScreen({ navigation }: any) {
           section={section}
           expandedPageId={expandedPageId}
           onToggle={(id) => setExpandedPageId((cur) => (cur === id ? null : id))}
-          onOpen={(pageId, title) =>
-            navigation.navigate("Page", { pageId, sectionId: section.id, notebookId: section.notebookId, title })
-          }
+          onOpenPage={(pageId, title) => openPage(pageId, section.id, title)}
+          onOpenLinked={(pageId, sectionId, title) => openPage(pageId, sectionId, title)}
         />
       ))}
 
       {visibleSections.every((s) => s.pages.length === 0) && (
         <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 24 }}>
-          No pages to link yet.
+          No pages to link yet — create a page, then type [[Another Page]].
         </Text>
       )}
     </ScrollView>
@@ -66,12 +99,14 @@ function SectionLinks({
   section,
   expandedPageId,
   onToggle,
-  onOpen,
+  onOpenPage,
+  onOpenLinked,
 }: {
   section: Section;
   expandedPageId: string | null;
   onToggle: (pageId: string) => void;
-  onOpen: (pageId: string, title: string) => void;
+  onOpenPage: (pageId: string, title: string) => void;
+  onOpenLinked: (pageId: string, sectionId: string, title: string) => void;
 }) {
   const { colors } = useTheme();
   if (section.pages.length === 0) return null;
@@ -86,40 +121,82 @@ function SectionLinks({
               size={15}
               color={colors.textSecondary}
             />
-            <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1 }} numberOfLines={1}>
+            <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1, textAlign: "center" }} numberOfLines={1}>
               {page.title}
             </Text>
-            <Pressable onPress={() => onOpen(page.id, page.title)} hitSlop={8}>
+            <Pressable onPress={() => onOpenPage(page.id, page.title)} hitSlop={8}>
               <Feather name="arrow-up-right" size={15} color={colors.accent} />
             </Pressable>
           </Pressable>
-          {expandedPageId === page.id && <BacklinksList pageId={page.id} onOpen={onOpen} />}
+          {expandedPageId === page.id && (
+            <PageConnections pageId={page.id} onOpen={onOpenLinked} />
+          )}
         </GlassCard>
       ))}
     </View>
   );
 }
 
-function BacklinksList({ pageId, onOpen }: { pageId: string; onOpen: (pageId: string, title: string) => void }) {
+function PageConnections({
+  pageId,
+  onOpen,
+}: {
+  pageId: string;
+  onOpen: (pageId: string, sectionId: string, title: string) => void;
+}) {
   const { colors } = useTheme();
-  const { data: backlinks, isLoading } = useQuery({
+  const { data: backlinks, isLoading: loadingIn } = useQuery({
     queryKey: ["backlinks", pageId],
     queryFn: () => fetchBacklinks(pageId),
   });
+  const { data: outlinks, isLoading: loadingOut } = useQuery({
+    queryKey: ["outlinks", pageId],
+    queryFn: () => fetchOutlinks(pageId),
+  });
+
+  const loading = loadingIn || loadingOut;
 
   return (
     <View style={[styles.backlinks, { borderTopColor: colors.border }]}>
-      {isLoading ? (
-        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Loading…</Text>
-      ) : (backlinks ?? []).length === 0 ? (
-        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>No pages link here.</Text>
+      {loading ? (
+        <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>Loading…</Text>
       ) : (
-        (backlinks ?? []).map((bl) => (
-          <Pressable key={bl.id} style={styles.backlinkRow} onPress={() => onOpen(bl.id, bl.title)}>
-            <Feather name="corner-down-right" size={12} color={colors.textSecondary} />
-            <Text style={{ color: colors.accent, fontSize: 13 }}>{bl.title}</Text>
-          </Pressable>
-        ))
+        <>
+          <Text style={[styles.connLabel, { color: colors.textSecondary }]}>LINKS TO</Text>
+          {(outlinks ?? []).length === 0 ? (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
+              None yet — type [[Title]] in this page.
+            </Text>
+          ) : (
+            (outlinks ?? []).map((ol) => (
+              <Pressable
+                key={ol.id}
+                style={styles.backlinkRow}
+                onPress={() => onOpen(ol.id, ol.sectionId, ol.title)}
+              >
+                <Feather name="arrow-right" size={12} color={colors.textSecondary} />
+                <Text style={{ color: colors.accent, fontSize: 13 }}>{ol.title}</Text>
+              </Pressable>
+            ))
+          )}
+          <Text style={[styles.connLabel, { color: colors.textSecondary, marginTop: 10 }]}>LINKED FROM</Text>
+          {(backlinks ?? []).length === 0 ? (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
+              No pages link here.
+            </Text>
+          ) : (
+            (backlinks ?? []).map((bl) => (
+              <Pressable
+                key={bl.id}
+                style={styles.backlinkRow}
+                onPress={() => onOpen(bl.id, bl.sectionId, bl.title)}
+              >
+                <Feather name="corner-down-right" size={12} color={colors.textSecondary} />
+                <Text style={{ color: colors.accent, fontSize: 13 }}>{bl.title}</Text>
+              </Pressable>
+            ))
+          )}
+        </>
       )}
     </View>
   );
@@ -127,9 +204,10 @@ function BacklinksList({ pageId, onOpen }: { pageId: string; onOpen: (pageId: st
 
 const styles = StyleSheet.create({
   chip: { paddingHorizontal: 14, paddingVertical: 7 },
-  sectionHeader: { fontSize: 11, fontWeight: "500", letterSpacing: 0.8, marginBottom: 8 },
+  sectionHeader: { fontSize: 11, fontWeight: "500", letterSpacing: 0.8, marginBottom: 8, textAlign: "center" },
   pageCard: { paddingHorizontal: 12 },
   pageRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11 },
   backlinks: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10, gap: 8 },
-  backlinkRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  backlinkRow: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  connLabel: { fontSize: 10, fontWeight: "500", letterSpacing: 0.7, textAlign: "center" },
 });

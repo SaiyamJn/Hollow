@@ -40,7 +40,7 @@ export const KEYBIND_DEFS: KeybindDef[] = [
   { id: "settings", label: "Open settings" },
   { id: "focus", label: "Toggle focus mode" },
   { id: "theme", label: "Toggle light / dark theme" },
-  { id: "escape", label: "Close palette / exit focus mode", always: true },
+  { id: "escape", label: "Close action / go back in notebooks", always: true },
 ];
 
 export const DEFAULT_KEYBINDS: Record<KeybindId, KeyCombo> = {

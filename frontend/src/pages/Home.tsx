@@ -76,17 +76,20 @@ export default function Home() {
   return (
     <div className="max-w-2xl mx-auto px-7 py-10 animate-rise-in">
       {/* Header — one purpose */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl font-medium truncate">
-            {greeting()}
-            {user?.name ? `, ${user.name.split(" ")[0]}` : ""}
-          </h1>
-          <p className="text-sm text-secondary mt-1">
-            {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-          </p>
-        </div>
-        <Button variant="accent" onClick={() => daily.mutate()} disabled={daily.isPending} className="shrink-0">
+      <div className="text-center">
+        <h1 className="text-xl font-medium">
+          {greeting()}
+          {user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+        </h1>
+        <p className="text-sm text-secondary mt-1">
+          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+        </p>
+        <Button
+          variant="accent"
+          onClick={() => daily.mutate()}
+          disabled={daily.isPending}
+          className="mt-4"
+        >
           <CalendarDays size={14} />
           Today's note
         </Button>

@@ -73,6 +73,17 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   padding-inline: 0 !important;
 }
 
+/* Soft-enter paragraphs should read as continuous prose, not stacked cards. */
+.bn-editor .bn-block-content[data-content-type="paragraph"] {
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+}
+.bn-editor .bn-block-content[data-content-type="paragraph"] br {
+  display: block;
+  content: "";
+  margin-top: 0.15em;
+}
+
 /* Glass chrome — translucent + blur. Use on floating UI and panel cards. */
 .glass {
   background: color-mix(in srgb, var(--surface-1) 58%, transparent);
@@ -94,6 +105,16 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   background: color-mix(in srgb, var(--surface-2) 55%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* Apple-style rolling time wheels — hide scrollbar chrome. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Vault seal: a slow breathing ring around the lock on sealed content. */

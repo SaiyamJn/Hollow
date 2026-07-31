@@ -21,6 +21,7 @@ import NotebooksScreen from "./src/screens/NotebooksScreen";
 import NotebookScreen from "./src/screens/NotebookScreen";
 import PageEditorScreen from "./src/screens/PageEditorScreen";
 import QuickNotesScreen from "./src/screens/QuickNotesScreen";
+import QuickNoteDetailScreen from "./src/screens/QuickNoteDetailScreen";
 import TasksScreen from "./src/screens/TasksScreen";
 import LinksScreen from "./src/screens/LinksScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
@@ -29,6 +30,7 @@ export type RootStackParamList = {
   Tabs: undefined;
   Notebook: { notebookId: string; title: string };
   Page: { pageId: string; sectionId: string; notebookId: string; title: string };
+  QuickNote: { noteId: string; content?: string; color?: string };
   Settings: undefined;
   Login: undefined;
   Register: undefined;
@@ -192,6 +194,7 @@ function Root() {
             <Stack.Screen name="Tabs" component={MainTabs} options={{ headerShown: false }} />
             <Stack.Screen name="Notebook" component={NotebookScreen} options={({ route }: any) => ({ title: route.params.title })} />
             <Stack.Screen name="Page" component={PageEditorScreen} options={({ route }: any) => ({ title: route.params.title })} />
+            <Stack.Screen name="QuickNote" component={QuickNoteDetailScreen} options={{ title: "Note" }} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
           </>
         ) : (

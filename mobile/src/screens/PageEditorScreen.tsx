@@ -9,9 +9,9 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { fetchPage, savePageContent, unlockSection } from "../lib/api";
+import { fetchNotebooks, fetchPage, savePageContent, unlockSection } from "../lib/api";
 import { contentToText, isRichContent } from "../lib/content";
 import { rememberSection } from "../lib/navMemory";
 import { PAGE_TEMPLATES } from "../lib/templates";
@@ -57,9 +57,14 @@ function VaultSeal({ color, background }: { color: string; background: string })
 // simple editor instead of a native block editor for v1). Saving from mobile
 // stores plain text; the web app renders it as paragraphs.
 export default function PageEditorScreen({ route, navigation }: any) {
-  const { pageId, sectionId } = route.params as { pageId: string; sectionId: string };
+  const { pageId, sectionId, notebookId: routeNotebookId } = route.params as {
+    pageId: string;
+    sectionId: string;
+    notebookId?: string;
+  };
   const { colors } = useTheme();
   const unlock = useUnlock();
+  const queryClient = useQueryClient();
   const password = unlock.sectionPasswords[sectionId];
 
   const [text, setText] = useState<string | null>(null);
@@ -75,6 +80,8 @@ export default function PageEditorScreen({ route, navigation }: any) {
     queryKey: ["page", pageId, password ?? null],
     queryFn: () => fetchPage(pageId, password),
   });
+  const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
+  const notebookId = routeNotebookId ?? page?.section.notebookId;
 
   useEffect(() => {
     if (page && text === null) {
@@ -96,16 +103,42 @@ export default function PageEditorScreen({ route, navigation }: any) {
     try {
       await savePageContent(pageId, content, password);
       setSaveState("saved");
+      void queryClient.invalidateQueries({ queryKey: ["backlinks"] });
+      void queryClient.invalidateQueries({ queryKey: ["outlinks"] });
+      if (notebookId) void queryClient.invalidateQueries({ queryKey: ["graph", notebookId] });
     } catch (err: any) {
       setSaveState(err.queued ? "queued" : "error");
     }
-  }, [pageId, password]);
+  }, [pageId, password, queryClient, notebookId]);
 
   function onChangeText(next: string) {
     setText(next);
     pendingText.current = next;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(saveNow, 800);
+  }
+
+  const wikiQuery = (() => {
+    if (text == null) return null;
+    const match = text.match(/\[\[([^\]\n]*)$/);
+    if (!match) return null;
+    return match[1].toLowerCase();
+  })();
+
+  const wikiSuggestions =
+    wikiQuery === null
+      ? []
+      : (notebooks ?? [])
+          .filter((nb) => nb.id === notebookId)
+          .flatMap((nb) => nb.sections)
+          .flatMap((sec) => sec.pages)
+          .filter((p) => p.id !== pageId && p.title.toLowerCase().includes(wikiQuery))
+          .slice(0, 6);
+
+  function insertWikiLink(title: string) {
+    if (text == null) return;
+    const next = text.replace(/\[\[[^\]\n]*$/, `[[${title}]] `);
+    onChangeText(next);
   }
 
   // Flush pending edits when leaving the screen.
@@ -232,11 +265,22 @@ export default function PageEditorScreen({ route, navigation }: any) {
         style={[styles.editor, { color: colors.textPrimary }, focus && styles.focusEditor]}
         multiline
         textAlignVertical="top"
+        autoFocus
         value={text}
         onChangeText={onChangeText}
-        placeholder="Start writing…"
+        placeholder="Start writing…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
       />
+      {wikiSuggestions.length > 0 && (
+        <GlassCard style={styles.wikiMenu} contentStyle={{ paddingVertical: 6 }}>
+          {wikiSuggestions.map((p) => (
+            <Pressable key={p.id} style={styles.wikiItem} onPress={() => insertWikiLink(p.title)}>
+              <Feather name="link" size={13} color={colors.accent} />
+              <Text style={{ color: colors.textPrimary, fontSize: 13 }}>{p.title}</Text>
+            </Pressable>
+          ))}
+        </GlassCard>
+      )}
       {focus && (
         <Pressable onPress={() => setFocus(false)} style={styles.exitFocusWrap}>
           <GlassCard style={{ borderRadius: 999 }} contentStyle={styles.exitFocus}>
@@ -260,6 +304,19 @@ const styles = StyleSheet.create({
   },
   exitFocus: {
     padding: 11,
+  },
+  wikiMenu: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 24,
+  },
+  wikiItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   templateRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingVertical: 10 },
   templateChip: {

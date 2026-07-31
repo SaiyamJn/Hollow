@@ -26,7 +26,7 @@ const DOT_COLORS: Record<string, string> = {
   purple: "rgb(192, 132, 252)",
 };
 
-export default function QuickNotesScreen() {
+export default function QuickNotesScreen({ navigation }: any) {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
@@ -56,6 +56,14 @@ export default function QuickNotesScreen() {
   });
   const remove = useMutation({ mutationFn: deleteQuickNote, onSuccess: invalidate });
 
+  function openNote(note: QuickNote) {
+    navigation.navigate("QuickNote", {
+      noteId: note.id,
+      content: note.content,
+      color: note.color,
+    });
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       <FlatList
@@ -67,18 +75,24 @@ export default function QuickNotesScreen() {
         contentContainerStyle={{ paddingTop: 16, paddingBottom: 170, gap: 10 }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-            <GlassCard contentStyle={styles.composer}>
+          <View style={{ paddingHorizontal: 16, marginBottom: 12, alignItems: "center" }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
+              Quick notes
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}>
+              Capture thoughts — star the keepers.
+            </Text>
+            <GlassCard style={{ alignSelf: "stretch" }} contentStyle={styles.composer}>
               <TextInput
                 ref={composerRef}
-                style={{ color: colors.textPrimary, fontSize: 14, minHeight: 40 }}
+                style={{ color: colors.textPrimary, fontSize: 14, minHeight: 40, textAlign: "center" }}
                 placeholder="Take a note…"
                 placeholderTextColor={colors.textSecondary}
                 multiline
                 value={draft}
                 onChangeText={setDraft}
               />
-              <View style={styles.composerRow}>
+              <View style={[styles.composerRow, { justifyContent: "center" }]}>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {Object.keys(PALETTE).map((color) => (
                     <Pressable
@@ -100,8 +114,8 @@ export default function QuickNotesScreen() {
                 </Pressable>
               </View>
             </GlassCard>
-            <Pressable onPress={() => setShowArchived((v) => !v)} style={{ marginTop: 10, alignSelf: "flex-end" }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            <Pressable onPress={() => setShowArchived((v) => !v)} style={{ marginTop: 10 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
                 {showArchived ? "Hide archived" : "Show archived"}
               </Text>
             </Pressable>
@@ -110,6 +124,7 @@ export default function QuickNotesScreen() {
         renderItem={({ item }) => (
           <NoteCard
             note={item}
+            onOpen={() => openNote(item)}
             onPatch={(patch) => update.mutate({ id: item.id, patch })}
             onDelete={() => remove.mutate(item.id)}
           />
@@ -140,11 +155,13 @@ export default function QuickNotesScreen() {
 
 function NoteCard({
   note,
+  onOpen,
   onPatch,
   onDelete,
 }: {
   note: QuickNote;
-  onPatch: (patch: Partial<Pick<QuickNote, "color" | "pinned" | "archived">>) => void;
+  onOpen: () => void;
+  onPatch: (patch: Partial<Pick<QuickNote, "content" | "color" | "pinned" | "archived">>) => void;
   onDelete: () => void;
 }) {
   const { colors } = useTheme();
@@ -156,13 +173,18 @@ function NoteCard({
         note.color !== "gray" ? { backgroundColor: PALETTE[note.color] } : null,
       ]}
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 13, flex: 1 }}>{note.content}</Text>
+      <Pressable onPress={onOpen} style={{ flex: 1, alignSelf: "stretch" }}>
+        <Text style={{ color: colors.textPrimary, fontSize: 13, textAlign: "center" }} numberOfLines={6}>
+          {note.content}
+        </Text>
+      </Pressable>
+      <View style={styles.cardActions}>
         <Pressable onPress={() => onPatch({ pinned: !note.pinned })}>
           <Feather name="star" size={14} color={note.pinned ? colors.accent : colors.textSecondary} />
         </Pressable>
-      </View>
-      <View style={styles.cardActions}>
+        <Pressable onPress={onOpen}>
+          <Feather name="edit-2" size={14} color={colors.textSecondary} />
+        </Pressable>
         <Pressable onPress={() => onPatch({ archived: !note.archived })}>
           <Feather name={note.archived ? "rotate-ccw" : "archive"} size={14} color={colors.textSecondary} />
         </Pressable>
@@ -179,6 +201,6 @@ const styles = StyleSheet.create({
   composerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
   dot: { height: 16, width: 16, borderRadius: 8, borderWidth: 2 },
   addButton: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
-  card: { padding: 12, minHeight: 88, justifyContent: "space-between", gap: 10 },
-  cardActions: { flexDirection: "row", justifyContent: "flex-end", gap: 12 },
+  card: { padding: 12, minHeight: 88, justifyContent: "space-between", gap: 10, alignItems: "center" },
+  cardActions: { flexDirection: "row", justifyContent: "center", gap: 14 },
 });
