@@ -1,10 +1,11 @@
 import { create } from "zustand";
 
-// Section passwords live in memory ONLY (never persisted): they are needed to
-// derive the decryption key server-side on each request, and writing them to
-// localStorage would defeat the point of encryption at rest.
+// Section / notebook passwords live in memory ONLY (never persisted): they are
+// needed to derive the decryption key server-side on each request, and writing
+// them to localStorage would defeat encryption at rest.
 interface UnlockState {
   sectionPasswords: Record<string, string>;
+  notebookPasswords: Record<string, string>;
   unlockedNotebooks: Record<string, boolean>;
   setSectionPassword: (sectionId: string, password: string) => void;
   unlockNotebook: (notebookId: string, sectionIds: string[], password: string) => void;
@@ -15,12 +16,14 @@ interface UnlockState {
 
 export const useUnlockStore = create<UnlockState>()((set) => ({
   sectionPasswords: {},
+  notebookPasswords: {},
   unlockedNotebooks: {},
   setSectionPassword: (sectionId, password) =>
     set((s) => ({ sectionPasswords: { ...s.sectionPasswords, [sectionId]: password } })),
   unlockNotebook: (notebookId, sectionIds, password) =>
     set((s) => ({
       unlockedNotebooks: { ...s.unlockedNotebooks, [notebookId]: true },
+      notebookPasswords: { ...s.notebookPasswords, [notebookId]: password },
       sectionPasswords: {
         ...s.sectionPasswords,
         ...Object.fromEntries(sectionIds.map((id) => [id, password])),
@@ -38,7 +41,9 @@ export const useUnlockStore = create<UnlockState>()((set) => ({
       for (const id of sectionIds) delete passwords[id];
       const notebooks = { ...s.unlockedNotebooks };
       delete notebooks[notebookId];
-      return { sectionPasswords: passwords, unlockedNotebooks: notebooks };
+      const nbPasswords = { ...s.notebookPasswords };
+      delete nbPasswords[notebookId];
+      return { sectionPasswords: passwords, unlockedNotebooks: notebooks, notebookPasswords: nbPasswords };
     }),
-  clearAll: () => set({ sectionPasswords: {}, unlockedNotebooks: {} }),
+  clearAll: () => set({ sectionPasswords: {}, notebookPasswords: {}, unlockedNotebooks: {} }),
 }));

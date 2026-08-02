@@ -56,37 +56,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [user, setUser] = useState<User | null>(null);
 
-  // On launch: token comes from SecureStore on native (Keychain/Keystore) or
-  // AsyncStorage on web, then is validated with a cheap authenticated call
-  // before we show the main app.
+  // Cold start: restore session from storage immediately (don't block the UI
+  // on a heavy /notebooks tree). Validate the token in the background.
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const token = await getSecureItem(TOKEN_KEY);
-        const storedUser = await getSecureItem(USER_KEY);
+        const [token, storedUser] = await Promise.all([getSecureItem(TOKEN_KEY), getSecureItem(USER_KEY)]);
+        if (cancelled) return;
         if (!token || jwtExpired(token)) {
           setStatus("signedOut");
           return;
         }
         setApiToken(token);
-        try {
-          await api.get("/notebooks");
-          if (storedUser) setUser(JSON.parse(storedUser));
-          setStatus("signedIn");
-        } catch (err: any) {
-          if (err.response?.status === 401) {
-            setApiToken(null);
-            setStatus("signedOut");
-          } else {
-            // offline — trust the stored, unexpired token
-            if (storedUser) setUser(JSON.parse(storedUser));
-            setStatus("signedIn");
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch {
+            // ignore corrupt cache
           }
         }
+        setStatus("signedIn");
+
+        // Cheap session ping — kicks out only on 401; offline keeps the session.
+        void api
+          .get("/auth/me")
+          .then((res) => {
+            if (cancelled) return;
+            if (res.data?.user) {
+              setUser(res.data.user);
+              void setSecureItem(USER_KEY, JSON.stringify(res.data.user));
+            }
+          })
+          .catch(async (err: any) => {
+            if (cancelled) return;
+            if (err.response?.status === 401) {
+              setApiToken(null);
+              await deleteSecureItem(TOKEN_KEY);
+              await deleteSecureItem(USER_KEY);
+              setUser(null);
+              setStatus("signedOut");
+            }
+          });
       } catch {
-        setStatus("signedOut");
+        if (!cancelled) setStatus("signedOut");
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // On return to foreground, check token expiry and prompt re-login instead
@@ -106,8 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function persistSession(token: string, nextUser: User) {
-    await setSecureItem(TOKEN_KEY, token);
-    await setSecureItem(USER_KEY, JSON.stringify(nextUser));
+    await Promise.all([setSecureItem(TOKEN_KEY, token), setSecureItem(USER_KEY, JSON.stringify(nextUser))]);
     setApiToken(token);
     setUser(nextUser);
     setStatus("signedIn");
@@ -124,8 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    await deleteSecureItem(TOKEN_KEY);
-    await deleteSecureItem(USER_KEY);
+    await Promise.all([deleteSecureItem(TOKEN_KEY), deleteSecureItem(USER_KEY)]);
     setApiToken(null);
     setUser(null);
     setStatus("signedOut");

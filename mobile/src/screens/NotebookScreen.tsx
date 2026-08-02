@@ -59,7 +59,11 @@ export default function NotebookScreen({ route, navigation }: any) {
     if (!prompt) return null;
     try {
       if (prompt.kind === "new-section") {
-        const sec = await createSection(notebookId, value);
+        const pw =
+          unlock.notebookPasswords[notebookId] ??
+          notebook?.sections.map((s) => unlock.sectionPasswords[s.id]).find(Boolean);
+        const sec = await createSection(notebookId, value, pw);
+        if (pw && sec.isLocked) unlock.setSectionPassword(sec.id, pw);
         rememberSection(sec.id, value, notebookId, title);
         setExpanded((s) => new Set(s).add(sec.id));
         invalidate();

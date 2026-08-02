@@ -2,6 +2,7 @@ import { createContext, ReactNode, useContext, useState } from "react";
 
 interface UnlockContextValue {
   sectionPasswords: Record<string, string>;
+  notebookPasswords: Record<string, string>;
   unlockedNotebooks: Record<string, boolean>;
   setSectionPassword: (sectionId: string, password: string) => void;
   unlockNotebook: (notebookId: string, sectionIds: string[], password: string) => void;
@@ -14,15 +15,18 @@ const UnlockContext = createContext<UnlockContextValue | null>(null);
 // AsyncStorage — matching the web client's in-memory-only handling.
 export function UnlockProvider({ children }: { children: ReactNode }) {
   const [sectionPasswords, setSectionPasswords] = useState<Record<string, string>>({});
+  const [notebookPasswords, setNotebookPasswords] = useState<Record<string, string>>({});
   const [unlockedNotebooks, setUnlockedNotebooks] = useState<Record<string, boolean>>({});
 
   const value: UnlockContextValue = {
     sectionPasswords,
+    notebookPasswords,
     unlockedNotebooks,
     setSectionPassword: (sectionId, password) =>
       setSectionPasswords((prev) => ({ ...prev, [sectionId]: password })),
     unlockNotebook: (notebookId, sectionIds, password) => {
       setUnlockedNotebooks((prev) => ({ ...prev, [notebookId]: true }));
+      setNotebookPasswords((prev) => ({ ...prev, [notebookId]: password }));
       setSectionPasswords((prev) => ({
         ...prev,
         ...Object.fromEntries(sectionIds.map((id) => [id, password])),
@@ -30,6 +34,7 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
     },
     clearAll: () => {
       setSectionPasswords({});
+      setNotebookPasswords({});
       setUnlockedNotebooks({});
     },
   };

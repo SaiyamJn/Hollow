@@ -1,6 +1,7 @@
 {
   "name": "mobile",
   "version": "1.0.0",
+  "description": "Hollow mobile client",
   "main": "index.ts",
   "dependencies": {
     "@expo/ngrok": "^4.1.3",

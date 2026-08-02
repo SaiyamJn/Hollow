@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { requireAuth, AuthedRequest } from "../middleware/auth";
 
 const router = Router();
 
@@ -50,6 +51,16 @@ router.post("/login", async (req, res) => {
   if (!ok) return res.status(401).json({ error: "Invalid email or password" });
 
   res.json({ token: signToken(user.id), user: publicUser(user) });
+});
+
+/** Cheap session check for clients — avoids loading the full notebooks tree. */
+router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { id: true, email: true, name: true },
+  });
+  if (!user) return res.status(401).json({ error: "Invalid or expired token" });
+  res.json({ user: publicUser(user) });
 });
 
 export default router;

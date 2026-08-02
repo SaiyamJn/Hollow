@@ -99,6 +99,19 @@ function sectionHeaders(password?: string) {
   return password ? { "x-section-password": password } : {};
 }
 
+export interface HealthInfo {
+  ok: boolean;
+  name?: string;
+  version?: string;
+  service?: string;
+  time?: string;
+}
+
+export async function fetchHealth() {
+  const { data } = await api.get<HealthInfo>("/health");
+  return data;
+}
+
 // ---- auth ----
 export async function login(email: string, password: string) {
   const { data } = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
@@ -130,8 +143,12 @@ export async function renameNotebook(id: string, title: string) {
   return data;
 }
 
-export async function createSection(notebookId: string, title: string) {
-  const { data } = await api.post<Section>(`/notebooks/${notebookId}/sections`, { title });
+export async function createSection(notebookId: string, title: string, notebookPassword?: string) {
+  const { data } = await api.post<Section>(
+    `/notebooks/${notebookId}/sections`,
+    { title },
+    { headers: sectionHeaders(notebookPassword) }
+  );
   return data;
 }
 

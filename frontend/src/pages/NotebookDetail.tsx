@@ -43,8 +43,8 @@ export default function NotebookDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setActiveNotebook = useUiStore((s) => s.setActiveNotebook);
-  const { sectionPasswords, unlockedNotebooks } = useUnlockStore();
   const unlockStore = useUnlockStore();
+  const { sectionPasswords, notebookPasswords, unlockedNotebooks } = unlockStore;
 
   const { data: notebooks, isLoading } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebook = notebooks?.find((nb) => nb.id === notebookId);
@@ -69,9 +69,20 @@ export default function NotebookDetail() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notebooks"] });
 
   const createSec = useMutation({
-    mutationFn: (title: string) => createSection(notebookId!, title),
+    mutationFn: (title: string) =>
+      createSection(
+        notebookId!,
+        title,
+        notebookPasswords[notebookId!] ??
+          notebook?.sections.map((s) => sectionPasswords[s.id]).find(Boolean)
+      ),
     onSuccess: (sec) => {
       invalidate();
+      // New section under a locked notebook is created already locked — keep the password.
+      const pw =
+        notebookPasswords[notebookId!] ??
+        notebook?.sections.map((s) => sectionPasswords[s.id]).find(Boolean);
+      if (pw && sec.isLocked) unlockStore.setSectionPassword(sec.id, pw);
       setExpanded((s) => new Set(s).add(sec.id));
       setDialog(null);
       setDraft("");

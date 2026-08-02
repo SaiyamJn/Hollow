@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createQuickNote, deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
@@ -18,7 +18,7 @@ const PALETTE: Record<string, string> = {
 };
 
 const DOT_COLORS: Record<string, string> = {
-  gray: "rgba(128, 128, 128, 0.6)",
+  gray: "#8a8d93",
   yellow: "rgb(234, 179, 8)",
   green: "rgb(93, 202, 165)",
   blue: "rgb(96, 165, 250)",
@@ -82,7 +82,13 @@ export default function QuickNotesScreen({ navigation }: any) {
             <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}>
               Capture thoughts — star the keepers.
             </Text>
-            <GlassCard style={{ alignSelf: "stretch" }} contentStyle={styles.composer}>
+            {/* Solid panel (no BlurView) — glass blur was casting a halo around the dots/Add. */}
+            <View
+              style={[
+                styles.composer,
+                { backgroundColor: colors.surface1, borderColor: colors.border },
+              ]}
+            >
               <TextInput
                 ref={composerRef}
                 style={{ color: colors.textPrimary, fontSize: 14, minHeight: 40, textAlign: "center" }}
@@ -92,28 +98,40 @@ export default function QuickNotesScreen({ navigation }: any) {
                 value={draft}
                 onChangeText={setDraft}
               />
-              <View style={[styles.composerRow, { justifyContent: "center" }]}>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {Object.keys(PALETTE).map((color) => (
-                    <Pressable
-                      key={color}
-                      onPress={() => setDraftColor(color)}
-                      style={[
-                        styles.dot,
-                        { backgroundColor: DOT_COLORS[color], borderColor: draftColor === color ? colors.accent : colors.border },
-                      ]}
-                    />
-                  ))}
+              <View style={styles.composerRow}>
+                <View style={styles.dots}>
+                  {Object.keys(PALETTE).map((color) => {
+                    const selected = draftColor === color;
+                    return (
+                      <TouchableOpacity
+                        key={color}
+                        onPress={() => setDraftColor(color)}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        hitSlop={6}
+                        style={[
+                          styles.dot,
+                          {
+                            backgroundColor: DOT_COLORS[color],
+                            opacity: selected ? 1 : 0.4,
+                            transform: [{ scale: selected ? 1.12 : 1 }],
+                          },
+                        ]}
+                      />
+                    );
+                  })}
                 </View>
-                <Pressable
+                <TouchableOpacity
                   disabled={!draft.trim() || create.isPending}
                   onPress={() => create.mutate()}
+                  activeOpacity={0.75}
                   style={[styles.addButton, { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.5 }]}
                 >
                   <Text style={{ color: colors.surface0, fontWeight: "500", fontSize: 13 }}>Add</Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
-            </GlassCard>
+            </View>
             <Pressable onPress={() => setShowArchived((v) => !v)} style={{ marginTop: 10 }}>
               <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
                 {showArchived ? "Hide archived" : "Show archived"}
@@ -197,10 +215,34 @@ function NoteCard({
 }
 
 const styles = StyleSheet.create({
-  composer: { padding: 12 },
-  composerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
-  dot: { height: 16, width: 16, borderRadius: 8, borderWidth: 2 },
-  addButton: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  composer: {
+    alignSelf: "stretch",
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    marginTop: 12,
+    gap: 16,
+  },
+  dots: { flexDirection: "row", alignItems: "center", gap: 10 },
+  dot: {
+    height: 24,
+    width: 24,
+    borderRadius: 12,
+  },
+  addButton: {
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    // Kill Android elevation / material halo on the filled button.
+    elevation: 0,
+    shadowOpacity: 0,
+  },
   card: { padding: 12, minHeight: 88, justifyContent: "space-between", gap: 10, alignItems: "center" },
   cardActions: { flexDirection: "row", justifyContent: "center", gap: 14 },
 });

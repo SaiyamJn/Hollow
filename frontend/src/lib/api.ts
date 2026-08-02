@@ -74,8 +74,12 @@ export async function deleteNotebook(id: string) {
   await api.delete(`/notebooks/${id}`);
 }
 
-export async function createSection(notebookId: string, title: string) {
-  const { data } = await api.post<Section>(`/notebooks/${notebookId}/sections`, { title });
+export async function createSection(notebookId: string, title: string, notebookPassword?: string) {
+  const { data } = await api.post<Section>(
+    `/notebooks/${notebookId}/sections`,
+    { title },
+    { headers: sectionHeaders(notebookPassword) }
+  );
   return data;
 }
 
@@ -213,6 +217,19 @@ export async function updateTask(
 
 export async function deleteTask(id: string) {
   await api.delete(`/tasks/${id}`);
+}
+
+export interface HealthInfo {
+  ok: boolean;
+  name?: string;
+  version?: string;
+  service?: string;
+  time?: string;
+}
+
+export async function fetchHealth() {
+  const { data } = await api.get<HealthInfo>("/health");
+  return data;
 }
 
 // ---- admin ----

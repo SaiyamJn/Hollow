@@ -5,7 +5,15 @@ import { useTheme } from "../theme/ThemeProvider";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { disconnectSocket } from "../lib/socket";
-import { fetchAdminStats } from "../lib/api";
+import { fetchAdminStats, fetchHealth } from "../lib/api";
+import {
+  APP_BUILD,
+  APP_COPYRIGHT,
+  APP_NAME,
+  APP_PLATFORM,
+  APP_TAGLINE,
+  APP_VERSION,
+} from "../lib/appInfo";
 import { remindersPref, setRemindersEnabled } from "../lib/notify";
 import {
   KEYBIND_DEFS,
@@ -84,6 +92,13 @@ export default function Settings() {
     queryKey: ["admin-stats"],
     queryFn: fetchAdminStats,
     retry: false,
+  });
+
+  const { data: health } = useQuery({
+    queryKey: ["health"],
+    queryFn: fetchHealth,
+    retry: false,
+    staleTime: 60_000,
   });
 
   return (
@@ -199,6 +214,45 @@ export default function Settings() {
         >
           Log out
         </Button>
+      </section>
+
+      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-4">
+        <div className="flex flex-col items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+          <h2 className="text-base font-medium tracking-tight text-primary">{APP_NAME}</h2>
+          <p className="text-sm text-secondary max-w-xs">{APP_TAGLINE}</p>
+        </div>
+
+        <dl className="text-left text-sm space-y-2 border-t border-border pt-4">
+          <div className="flex justify-between gap-4">
+            <dt className="text-secondary">Version</dt>
+            <dd className="text-primary font-medium tabular-nums">{APP_VERSION}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-secondary">Build</dt>
+            <dd className="text-primary tabular-nums">{APP_BUILD}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-secondary">Client</dt>
+            <dd className="text-primary">{APP_PLATFORM}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-secondary">Server</dt>
+            <dd className="text-primary tabular-nums">
+              {health?.ok
+                ? `${health.name ?? "Hollow"} ${health.version ?? "—"}`
+                : health === undefined
+                  ? "Checking…"
+                  : "Unavailable"}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-secondary">Encryption</dt>
+            <dd className="text-primary">AES-256-GCM at rest</dd>
+          </div>
+        </dl>
+
+        <p className="text-xs text-secondary border-t border-border pt-3">{APP_COPYRIGHT}</p>
       </section>
     </div>
   );

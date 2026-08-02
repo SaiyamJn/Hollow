@@ -43,7 +43,14 @@ export default function NotebooksScreen({ navigation }: any) {
         await createNotebook(value);
         invalidate();
       } else if (prompt.kind === "new-section") {
-        await createSection(prompt.notebookId, value);
+        const pw =
+          unlock.notebookPasswords[prompt.notebookId] ??
+          notebooks
+            ?.find((nb) => nb.id === prompt.notebookId)
+            ?.sections.map((s) => unlock.sectionPasswords[s.id])
+            .find(Boolean);
+        const sec = await createSection(prompt.notebookId, value, pw);
+        if (pw && sec.isLocked) unlock.setSectionPassword(sec.id, pw);
         invalidate();
         navigation.navigate("Notebook", { notebookId: prompt.notebookId, title: prompt.notebookTitle });
       } else if (prompt.kind === "new-page") {

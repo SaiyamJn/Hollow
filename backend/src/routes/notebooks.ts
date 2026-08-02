@@ -4,13 +4,14 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
 import { generateSalt } from "../lib/encryption";
+import { publicNotebook } from "../lib/sanitize";
 import { lockSectionWithPassword } from "./sections";
 
 const router = Router();
 router.use(requireAuth);
 
 const titleSchema = z.object({ title: z.string().min(1) });
-const lockSchema = z.object({ password: z.string().min(4, "Password must be at least 4 characters") });
+const lockSchema = z.object({ password: z.string().min(8, "Password must be at least 8 characters") });
 const unlockSchema = z.object({ password: z.string() });
 
 async function getOwnedNotebook(notebookId: string, userId: string) {
@@ -20,17 +21,33 @@ async function getOwnedNotebook(notebookId: string, userId: string) {
 }
 
 router.get("/", async (req: AuthedRequest, res) => {
+  // Select only fields clients need — skip passwordHash/salt I/O entirely.
   const notebooks = await prisma.notebook.findMany({
     where: { ownerId: req.userId },
-    include: {
+    select: {
+      id: true,
+      title: true,
+      ownerId: true,
+      isLocked: true,
+      createdAt: true,
       sections: {
-        include: { pages: { select: { id: true, title: true, updatedAt: true }, orderBy: { createdAt: "asc" } } },
+        select: {
+          id: true,
+          title: true,
+          notebookId: true,
+          isLocked: true,
+          createdAt: true,
+          pages: {
+            select: { id: true, title: true, updatedAt: true },
+            orderBy: { createdAt: "asc" },
+          },
+        },
         orderBy: { createdAt: "asc" },
       },
     },
     orderBy: { createdAt: "asc" },
   });
-  res.json(notebooks);
+  res.json(notebooks.map((nb) => publicNotebook(nb)));
 });
 
 router.post("/", async (req: AuthedRequest, res) => {
@@ -39,7 +56,7 @@ router.post("/", async (req: AuthedRequest, res) => {
   const notebook = await prisma.notebook.create({
     data: { title: parsed.data.title, ownerId: req.userId! },
   });
-  res.status(201).json(notebook);
+  res.status(201).json(publicNotebook(notebook));
 });
 
 router.patch("/:id", async (req: AuthedRequest, res) => {
@@ -51,7 +68,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
     where: { id: notebook.id },
     data: { title: parsed.data.title },
   });
-  res.json(updated);
+  res.json(publicNotebook(updated));
 });
 
 router.delete("/:id", async (req: AuthedRequest, res) => {

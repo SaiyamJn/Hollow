@@ -28,6 +28,8 @@ model Notebook {
   salt         String?
   sections     Section[]
   createdAt    DateTime  @default(now())
+
+  @@index([ownerId])
 }
 
 model Section {
@@ -40,6 +42,8 @@ model Section {
   salt         String?
   pages        Page[]
   createdAt    DateTime @default(now())
+
+  @@index([notebookId])
 }
 
 // content is plain markdown/JSON blocks when the section is unlocked,
@@ -56,6 +60,9 @@ model Page {
   docState      PageDocState?
   updatedAt     DateTime      @updatedAt
   createdAt     DateTime      @default(now())
+
+  @@index([sectionId])
+  @@index([updatedAt])
 }
 
 // Snapshot of the Yjs CRDT state for realtime collaboration, encoded as
@@ -75,6 +82,9 @@ model PageLink {
   sourcePageId String
   targetPage   Page   @relation("TargetPage", fields: [targetPageId], references: [id])
   targetPageId String
+
+  @@index([sourcePageId])
+  @@index([targetPageId])
 }
 
 // Google Keep-style quick notes, separate from the notebook hierarchy
@@ -87,6 +97,8 @@ model QuickNote {
   owner     User     @relation(fields: [ownerId], references: [id])
   ownerId   String
   createdAt DateTime @default(now())
+
+  @@index([ownerId])
 }
 
 // Google Tasks-style tasks, with subtasks and optional due dates
@@ -103,6 +115,8 @@ model Task {
   parentTaskId String?
   subtasks     Task[]    @relation("SubTasks")
   createdAt    DateTime  @default(now())
+
+  @@index([ownerId, parentTaskId])
 }
 
 model Tag {

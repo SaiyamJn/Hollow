@@ -17,15 +17,27 @@ interface GlassCardProps {
 export function GlassCard({ children, style, contentStyle, intensity, strong }: GlassCardProps) {
   const { theme, colors } = useTheme();
   const blur = intensity ?? (strong ? 55 : 40);
+  // Android BlurView is costly during scroll/first paint — solid tint is enough.
+  const useBlur = Platform.OS === "ios";
 
   return (
     <View style={[styles.shell, { borderColor: colors.glassBorder }, style]}>
-      <BlurView
-        intensity={blur}
-        tint={theme === "dark" ? "dark" : "light"}
-        experimentalBlurMethod={Platform.OS === "android" ? "dimezisBlurView" : undefined}
-        style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
-      />
+      {useBlur ? (
+        <BlurView
+          intensity={blur}
+          tint={theme === "dark" ? "dark" : "light"}
+          style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
+        />
+      ) : (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: theme === "dark" ? "rgba(22, 24, 27, 0.92)" : "rgba(255, 255, 255, 0.92)",
+            },
+          ]}
+        />
+      )}
       <View style={[styles.content, contentStyle]}>{children}</View>
     </View>
   );

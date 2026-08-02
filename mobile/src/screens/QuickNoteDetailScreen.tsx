@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
@@ -16,7 +25,7 @@ const PALETTE: Record<string, string> = {
 };
 
 const DOT_COLORS: Record<string, string> = {
-  gray: "rgba(128, 128, 128, 0.6)",
+  gray: "#8a8d93",
   yellow: "rgb(234, 179, 8)",
   green: "rgb(93, 202, 165)",
   blue: "rgb(96, 165, 250)",
@@ -155,22 +164,28 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
 
         <View style={styles.toolbar}>
           <View style={styles.dots}>
-            {Object.keys(PALETTE).map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => {
-                  setColor(c);
-                  scheduleSave(content, c);
-                }}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: DOT_COLORS[c],
-                    borderColor: color === c ? colors.accent : colors.border,
-                  },
-                ]}
-              />
-            ))}
+            {Object.keys(PALETTE).map((c) => {
+              const selected = color === c;
+              return (
+                <TouchableOpacity
+                  key={c}
+                  activeOpacity={0.7}
+                  hitSlop={6}
+                  onPress={() => {
+                    setColor(c);
+                    scheduleSave(content, c);
+                  }}
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor: DOT_COLORS[c],
+                      opacity: selected ? 1 : 0.4,
+                      transform: [{ scale: selected ? 1.12 : 1 }],
+                    },
+                  ]}
+                />
+              );
+            })}
           </View>
           <View style={styles.actions}>
             <Pressable onPress={() => togglePin.mutate()} hitSlop={8}>
@@ -199,7 +214,11 @@ const styles = StyleSheet.create({
   editorCard: { flex: 1, padding: 16 },
   editor: { flex: 1, fontSize: 16, lineHeight: 24, minHeight: 280 },
   toolbar: { gap: 12, alignItems: "center" },
-  dots: { flexDirection: "row", justifyContent: "center", gap: 10 },
-  dot: { height: 18, width: 18, borderRadius: 9, borderWidth: 2 },
+  dots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12 },
+  dot: {
+    height: 24,
+    width: 24,
+    borderRadius: 12,
+  },
   actions: { flexDirection: "row", justifyContent: "center", gap: 28, paddingVertical: 4 },
 });

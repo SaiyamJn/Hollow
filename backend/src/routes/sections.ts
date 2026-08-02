@@ -3,13 +3,16 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
-import { generateSalt, deriveKey, encrypt } from "../lib/encryption";
+import { generateSalt, deriveKey, encrypt, plaintextForLocking, sealAtRest } from "../lib/encryption";
+import { publicSection } from "../lib/sanitize";
 
 const router = Router();
 router.use(requireAuth);
 
 const titleSchema = z.object({ title: z.string().min(1) });
-const lockSchema = z.object({ password: z.string().min(4, "Password must be at least 4 characters") });
+const lockSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
 const unlockSchema = z.object({ password: z.string() });
 
 // Locks one section: fresh salt, bcrypt hash for unlock verification, and
@@ -26,10 +29,17 @@ export async function lockSectionWithPassword(sectionId: string, password: strin
   const docStates = await prisma.pageDocState.findMany({ where: { page: { sectionId } } });
   await prisma.$transaction([
     ...pages.map((p) =>
-      prisma.page.update({ where: { id: p.id }, data: { content: encrypt(p.content, key) } })
+      prisma.page.update({
+        where: { id: p.id },
+        // Unseal server-at-rest ciphertext first so we vault-encrypt plaintext.
+        data: { content: encrypt(plaintextForLocking(p.content), key) },
+      })
     ),
     ...docStates.map((ds) =>
-      prisma.pageDocState.update({ where: { pageId: ds.pageId }, data: { state: encrypt(ds.state, key) } })
+      prisma.pageDocState.update({
+        where: { pageId: ds.pageId },
+        data: { state: encrypt(plaintextForLocking(ds.state), key) },
+      })
     ),
     prisma.section.update({
       where: { id: sectionId },
@@ -55,7 +65,7 @@ router.get("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =>
     include: { pages: { select: { id: true, title: true, updatedAt: true }, orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
-  res.json(sections);
+  res.json(sections.map((s) => publicSection(s)));
 });
 
 router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) => {
@@ -63,10 +73,30 @@ router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
   const notebook = await prisma.notebook.findUnique({ where: { id: req.params.notebookId } });
   if (!notebook || notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+
+  // Locked notebooks: new sections must be vault-encrypted with the same password.
+  if (notebook.isLocked) {
+    const password = req.header("x-section-password") || req.header("x-notebook-password");
+    if (!password || !notebook.passwordHash)
+      return res.status(423).json({ error: "Notebook is locked — password required to add a section" });
+    const ok = await bcrypt.compare(password, notebook.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Incorrect notebook password" });
+
+    const section = await prisma.section.create({
+      data: { title: parsed.data.title, notebookId: notebook.id },
+    });
+    await lockSectionWithPassword(section.id, password);
+    const locked = await prisma.section.findUnique({
+      where: { id: section.id },
+      include: { pages: { select: { id: true, title: true, updatedAt: true } } },
+    });
+    return res.status(201).json(publicSection(locked!));
+  }
+
   const section = await prisma.section.create({
     data: { title: parsed.data.title, notebookId: notebook.id },
   });
-  res.status(201).json(section);
+  res.status(201).json(publicSection(section));
 });
 
 router.patch("/sections/:id", async (req: AuthedRequest, res) => {
@@ -78,7 +108,7 @@ router.patch("/sections/:id", async (req: AuthedRequest, res) => {
     where: { id: section.id },
     data: { title: parsed.data.title },
   });
-  res.json(updated);
+  res.json(publicSection(updated));
 });
 
 router.delete("/sections/:id", async (req: AuthedRequest, res) => {
@@ -124,7 +154,7 @@ router.post("/sections/:id/pages", async (req: AuthedRequest, res) => {
   const section = await getOwnedSection(req.params.id, req.userId!);
   if (!section) return res.status(404).json({ error: "Not found" });
 
-  let content = "";
+  let content = sealAtRest("");
   if (section.isLocked) {
     const password = req.header("x-section-password");
     if (!password || !section.salt || !section.passwordHash)
@@ -137,7 +167,7 @@ router.post("/sections/:id/pages", async (req: AuthedRequest, res) => {
   const page = await prisma.page.create({
     data: { title: parsed.data.title, sectionId: section.id, content },
   });
-  res.status(201).json({ ...page, content: "" });
+  res.status(201).json({ id: page.id, title: page.title, sectionId: page.sectionId, updatedAt: page.updatedAt, content: "" });
 });
 
 export default router;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, InteractionManager, Platform, Pressable, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { BlurView } from "expo-blur";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,8 +40,68 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator();
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+  },
 });
+
+/** Blur is expensive on Android first paint — use a solid glass tint instead. */
+function GlassChrome({ intensity = 50 }: { intensity?: number }) {
+  const { theme, colors } = useTheme();
+  if (Platform.OS === "android") {
+    return (
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: theme === "dark" ? "rgba(22, 24, 27, 0.94)" : "rgba(255, 255, 255, 0.94)",
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.glassBorder,
+          },
+        ]}
+      />
+    );
+  }
+  return (
+    <BlurView
+      intensity={intensity}
+      tint={theme === "dark" ? "dark" : "light"}
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: colors.glass,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.glassBorder,
+        },
+      ]}
+    />
+  );
+}
+
+function TabBarChrome() {
+  const { theme, colors } = useTheme();
+  if (Platform.OS === "android") {
+    return (
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: theme === "dark" ? "rgba(22, 24, 27, 0.96)" : "rgba(255, 255, 255, 0.96)" },
+        ]}
+      />
+    );
+  }
+  return (
+    <BlurView
+      intensity={45}
+      tint={theme === "dark" ? "dark" : "light"}
+      style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
+    />
+  );
+}
 
 const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Home: "home",
@@ -60,14 +120,7 @@ function MainTabs({ navigation }: any) {
       <Tabs.Navigator
         screenOptions={({ route, navigation: tabNav }) => ({
           headerStyle: { backgroundColor: "transparent" },
-          headerBackground: () => (
-            <BlurView
-              intensity={50}
-              tint={theme === "dark" ? "dark" : "light"}
-              experimentalBlurMethod="dimezisBlurView"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.glassBorder }]}
-            />
-          ),
+          headerBackground: () => <GlassChrome />,
           headerTitleStyle: { color: colors.textPrimary, fontWeight: "500", fontSize: 16 },
           headerShadowVisible: false,
           // Home isn't in the tab bar — every other tab gets a back arrow to it.
@@ -106,14 +159,8 @@ function MainTabs({ navigation }: any) {
             paddingTop: 0,
             paddingBottom: 0,
           },
-          tabBarBackground: () => (
-            <BlurView
-              intensity={45}
-              tint={theme === "dark" ? "dark" : "light"}
-              experimentalBlurMethod="dimezisBlurView"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
-            />
-          ),
+          tabBarBackground: () => <TabBarChrome />,
+          lazy: true,
           tabBarShowLabel: false,
           tabBarItemStyle: {
             height: 50,
@@ -176,14 +223,7 @@ function Root() {
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: "transparent" },
-          headerBackground: () => (
-            <BlurView
-              intensity={50}
-              tint={theme === "dark" ? "dark" : "light"}
-              experimentalBlurMethod="dimezisBlurView"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.glassBorder }]}
-            />
-          ),
+          headerBackground: () => <GlassChrome />,
           headerTitleStyle: { color: colors.textPrimary, fontWeight: "500", fontSize: 16 },
           headerTintColor: colors.accent,
           headerShadowVisible: false,
@@ -209,9 +249,15 @@ function Root() {
 }
 
 export default function App() {
-  // Offline write queue: replay pending mutations when connectivity returns.
-  useEffect(() => initOfflineSync(), []);
-  useEffect(() => initNotifications(), []);
+  // Defer offline replay + notifications until after first interactions so
+  // they don't compete with auth restore / Home queries on cold start.
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      initOfflineSync();
+      void initNotifications();
+    });
+    return () => handle.cancel();
+  }, []);
 
   return (
     <SafeAreaProvider>

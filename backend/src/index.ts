@@ -12,6 +12,7 @@ import taskRoutes from "./routes/tasks";
 import tagRoutes from "./routes/tags";
 import adminRoutes from "./routes/admin";
 import { registerCollab } from "./sockets/collab";
+import { APP_NAME, APP_SERVICE, APP_VERSION } from "./lib/appInfo";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -25,7 +26,13 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    name: APP_NAME,
+    version: APP_VERSION,
+    service: APP_SERVICE,
+    time: new Date().toISOString(),
+  });
 });
 
 app.use("/auth", authRoutes);

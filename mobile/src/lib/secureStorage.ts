@@ -5,8 +5,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // getValueWithKeyAsync is not a function). On native we use the Keychain /
 // Keystore-backed SecureStore; on web we fall back to AsyncStorage so Expo
 // web / browser preview still works.
-async function getSecureStore() {
-  return await import("expo-secure-store");
+type SecureStoreModule = typeof import("expo-secure-store");
+let secureStorePromise: Promise<SecureStoreModule> | null = null;
+
+function getSecureStore() {
+  if (!secureStorePromise) secureStorePromise = import("expo-secure-store");
+  return secureStorePromise;
 }
 
 export async function getSecureItem(key: string): Promise<string | null> {

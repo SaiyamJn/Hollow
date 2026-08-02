@@ -31,6 +31,11 @@ import { usePageCollab, CollabSession } from "../hooks/usePageCollab";
 import { PasswordDialog } from "../components/PasswordDialog";
 import { Button } from "../components/ui/button";
 import { PAGE_TEMPLATES } from "../lib/templates";
+import {
+  findEditorScrollParent,
+  loadPagePosition,
+  savePagePosition,
+} from "../lib/pagePosition";
 
 // Deterministic per-user cursor color for collaborative editing.
 const CURSOR_COLORS = ["#62d9ae", "#60a5fa", "#c084fc", "#f87171", "#eab308", "#f472b6"];
@@ -150,12 +155,14 @@ function Editor({
   const saveTimer = useRef<number | null>(null);
   const latestContent = useRef<string | null>(null);
   const editorShellRef = useRef<HTMLDivElement>(null);
+  const restoredRef = useRef(false);
 
   const editor = useCreateBlockNote(
     withCollaboration({
       schema: hollowEditorSchema,
       extensions: [newBlockOnShiftEnter],
-      autofocus: true,
+      // Focus after we restore the last caret/scroll — autofocus would jump to top.
+      autofocus: false,
       collaboration: {
         provider: { awareness: session.awareness },
         fragment: session.doc.getXmlFragment("document-store"),
@@ -175,21 +182,81 @@ function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
-  // Ready to type as soon as the page opens — no extra click needed.
+  function persistPosition() {
+    const scrollParent = findEditorScrollParent(editorShellRef.current);
+    let blockId: string | undefined;
+    try {
+      blockId = editor.getTextCursorPosition().block.id;
+    } catch {
+      // No cursor yet
+    }
+    savePagePosition(page.id, {
+      scrollTop: scrollParent?.scrollTop ?? 0,
+      blockId,
+      placement: "end",
+    });
+  }
+
+  // Remember scroll + caret while editing; flush on leave.
   useEffect(() => {
-    const focus = () => {
+    const scrollParent = findEditorScrollParent(editorShellRef.current);
+    let scrollTimer: number | null = null;
+    const onScroll = () => {
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(persistPosition, 200);
+    };
+    scrollParent?.addEventListener("scroll", onScroll, { passive: true });
+
+    const unsubSel = editor.onSelectionChange(() => {
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(persistPosition, 250);
+    });
+
+    return () => {
+      scrollParent?.removeEventListener("scroll", onScroll);
+      unsubSel();
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      persistPosition();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, page.id]);
+
+  // Open at the last spot in this page (scroll + caret), then focus.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const saved = loadPagePosition(page.id);
+
+    const restore = () => {
+      const scrollParent = findEditorScrollParent(editorShellRef.current);
+      if (saved && scrollParent) {
+        scrollParent.scrollTop = saved.scrollTop;
+      }
       try {
+        if (saved?.blockId && editor.document.some((b) => b.id === saved.blockId)) {
+          editor.setTextCursorPosition(saved.blockId, saved.placement ?? "end");
+        }
         editor.focus();
       } catch {
-        // Editor surface may not be mounted yet.
+        try {
+          editor.focus();
+        } catch {
+          // Editor surface may not be mounted yet.
+        }
+      }
+      // Re-apply scroll after focus (focus can nudge the viewport).
+      if (saved && scrollParent) {
+        scrollParent.scrollTop = saved.scrollTop;
       }
     };
-    const t0 = window.setTimeout(focus, 0);
-    const t1 = window.setTimeout(focus, 120);
+
+    const t0 = window.setTimeout(restore, 0);
+    const t1 = window.setTimeout(restore, 150);
     return () => {
       window.clearTimeout(t0);
       window.clearTimeout(t1);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, page.id]);
 
   // SPA navigation for in-editor wiki links (BlockNote renders plain <a>).

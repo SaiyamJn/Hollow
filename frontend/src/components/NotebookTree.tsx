@@ -129,7 +129,14 @@ export function NotebookTree({ search }: { search: string }) {
     if (state.type === "notebook") {
       await createNotebook(title);
     } else if (state.type === "section") {
-      const sec = await createSection(state.notebookId, title);
+      const pw =
+        unlockStore.notebookPasswords[state.notebookId] ??
+        notebooks
+          ?.find((nb) => nb.id === state.notebookId)
+          ?.sections.map((s) => sectionPasswords[s.id])
+          .find(Boolean);
+      const sec = await createSection(state.notebookId, title, pw);
+      if (pw && sec.isLocked) unlockStore.setSectionPassword(sec.id, pw);
       setExpandedSections((s) => new Set(s).add(sec.id));
     } else {
       const page = await createPage(state.sectionId, title, sectionPasswords[state.sectionId]);
@@ -349,7 +356,7 @@ export function NotebookTree({ search }: { search: string }) {
                   : ""
         }
         submitLabel={dialog?.kind.startsWith("lock") ? "Lock" : "Unlock"}
-        minLength={dialog?.kind.startsWith("lock") ? 4 : undefined}
+        minLength={dialog?.kind.startsWith("lock") ? 8 : undefined}
         onSubmit={onDialogSubmit}
       />
     </div>

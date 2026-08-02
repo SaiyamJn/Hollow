@@ -13,7 +13,7 @@ import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protoc
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
-import { decrypt, deriveKey, encrypt } from "../lib/encryption";
+import { decrypt, deriveKey, encrypt, sealAtRest, unsealAtRest } from "../lib/encryption";
 
 const PERSIST_DEBOUNCE_MS = 2000;
 
@@ -39,7 +39,9 @@ export function hasActiveDoc(pageId: string): boolean {
 
 async function persist(pageId: string, entry: DocEntry) {
   let state = Buffer.from(Y.encodeStateAsUpdate(entry.doc)).toString("base64");
+  // Vault key when locked; otherwise server at-rest seal so DB dumps aren't plaintext.
   if (entry.key) state = encrypt(state, entry.key);
+  else state = sealAtRest(state);
   try {
     await prisma.pageDocState.upsert({
       where: { pageId },
@@ -105,6 +107,7 @@ export function registerCollab(io: Server) {
             try {
               let b64 = page.docState.state;
               if (key) b64 = decrypt(b64, key);
+              else b64 = unsealAtRest(b64);
               Y.applyUpdate(doc, Buffer.from(b64, "base64"));
               hadStoredState = true;
             } catch {

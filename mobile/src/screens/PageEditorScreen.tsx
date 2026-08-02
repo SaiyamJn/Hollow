@@ -15,6 +15,7 @@ import { fetchNotebooks, fetchPage, savePageContent, unlockSection } from "../li
 import { contentToText, isRichContent } from "../lib/content";
 import { rememberSection } from "../lib/navMemory";
 import { PAGE_TEMPLATES } from "../lib/templates";
+import { loadPagePosition, savePagePosition } from "../lib/pagePosition";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
@@ -73,8 +74,13 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const [unlockVisible, setUnlockVisible] = useState(false);
   const [focus, setFocus] = useState(false);
   const [templatesDismissed, setTemplatesDismissed] = useState(false);
+  const [selection, setSelection] = useState<{ start: number; end: number } | undefined>();
+  const [positionReady, setPositionReady] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingText = useRef<string | null>(null);
+  const posTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<TextInput>(null);
+  const selectionRef = useRef<{ start: number; end: number } | undefined>(undefined);
 
   const { data: page, error, isLoading } = useQuery({
     queryKey: ["page", pageId, password ?? null],
@@ -85,15 +91,37 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   useEffect(() => {
     if (page && text === null) {
-      setText(contentToText(page.content));
+      const body = contentToText(page.content);
+      setText(body);
       setWasRich(isRichContent(page.content));
+      void loadPagePosition(pageId).then((pos) => {
+        if (pos) {
+          const start = Math.min(Math.max(0, pos.selection), body.length);
+          setSelection({ start, end: start });
+        } else {
+          // New visit — leave caret at end so long notes don't jump to the top.
+          setSelection({ start: body.length, end: body.length });
+        }
+        setPositionReady(true);
+      });
     }
-  }, [page, text]);
+  }, [page, text, pageId]);
 
   // Remember where the user is so the floating "+" can target this section.
   useEffect(() => {
     if (page) rememberSection(page.section.id, page.section.title, page.section.notebookId);
   }, [page]);
+
+  useEffect(() => {
+    if (!positionReady || selection == null) return;
+    // One-shot restore, then release `selection` so typing stays uncontrolled.
+    const t = setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setNativeProps?.({ selection });
+      setSelection(undefined);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [positionReady, pageId]);
 
   const saveNow = useCallback(async () => {
     if (pendingText.current === null) return;
@@ -141,13 +169,16 @@ export default function PageEditorScreen({ route, navigation }: any) {
     onChangeText(next);
   }
 
-  // Flush pending edits when leaving the screen.
+  // Flush pending edits + caret when leaving the screen.
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (posTimer.current) clearTimeout(posTimer.current);
       void saveNow();
+      const sel = selectionRef.current;
+      if (sel) void savePagePosition(pageId, { selection: sel.start });
     };
-  }, [saveNow]);
+  }, [saveNow, pageId]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -218,7 +249,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
     );
   }
 
-  if (isLoading || text === null) {
+  if (isLoading || text === null || !positionReady) {
     return (
       <View style={[styles.center, { backgroundColor: colors.surface0 }]}>
         <ActivityIndicator color={colors.accent} />
@@ -262,12 +293,31 @@ export default function PageEditorScreen({ route, navigation }: any) {
         </ScrollView>
       )}
       <TextInput
+        ref={inputRef}
         style={[styles.editor, { color: colors.textPrimary }, focus && styles.focusEditor]}
         multiline
         textAlignVertical="top"
-        autoFocus
         value={text}
         onChangeText={onChangeText}
+        selection={selection}
+        onSelectionChange={(e) => {
+          const next = e.nativeEvent.selection;
+          selectionRef.current = next;
+          setSelection(next);
+          if (posTimer.current) clearTimeout(posTimer.current);
+          posTimer.current = setTimeout(() => {
+            void savePagePosition(pageId, { selection: next.start });
+          }, 250);
+        }}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset?.y;
+          const sel = selectionRef.current;
+          if (typeof y !== "number" || !sel) return;
+          if (posTimer.current) clearTimeout(posTimer.current);
+          posTimer.current = setTimeout(() => {
+            void savePagePosition(pageId, { selection: sel.start, scrollOffset: y });
+          }, 250);
+        }}
         placeholder="Start writing…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
       />

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -55,8 +55,27 @@ export default function AppShell() {
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   const binds = useKeybindsStore((s) => s.binds);
 
-  // Poll tasks so browser notifications fire while the app is open.
-  const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks, refetchInterval: 60_000 });
+  // Don't compete with Home/notebooks on first paint — start task polling after idle.
+  const [taskPollReady, setTaskPollReady] = useState(false);
+  useEffect(() => {
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof win.requestIdleCallback === "function") {
+      const id = win.requestIdleCallback(() => setTaskPollReady(true), { timeout: 2500 });
+      return () => win.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(() => setTaskPollReady(true), 1500);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const { data: tasks } = useQuery({
+    queryKey: ["tasks"],
+    queryFn: fetchTasks,
+    enabled: taskPollReady,
+    refetchInterval: 60_000,
+  });
   useEffect(() => {
     if (tasks) notifyDueTasks(tasks);
   }, [tasks]);

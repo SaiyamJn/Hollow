@@ -1,8 +1,10 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
-import { deriveKey, encrypt, decrypt } from "../lib/encryption";
+import { deriveKey, encrypt, decrypt, sealAtRest, unsealAtRest, isSealedAtRest } from "../lib/encryption";
+import { publicPage } from "../lib/sanitize";
 import { hasActiveDoc } from "../sockets/collab";
 
 const router = Router();
@@ -56,28 +58,37 @@ router.post("/daily", async (req: AuthedRequest, res) => {
   let created = false;
   if (!page) {
     if (section.isLocked) return res.status(423).json({ error: "Your daily notes section is locked" });
-    page = await prisma.page.create({ data: { title: date, sectionId: section.id, content: "" } });
+    page = await prisma.page.create({
+      data: { title: date, sectionId: section.id, content: sealAtRest("") },
+    });
     created = true;
   }
   res.json({ id: page.id, title: page.title, sectionId: section.id, notebookId: notebook.id, created });
 });
 
 router.get("/:id", async (req: AuthedRequest, res) => {
-  const page = await prisma.page.findUnique({ where: { id: req.params.id }, include: { section: true, tags: true } });
-  if (!page) return res.status(404).json({ error: "Not found" });
+  const page = await prisma.page.findUnique({
+    where: { id: req.params.id },
+    include: { section: { include: { notebook: true } }, tags: true },
+  });
+  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
   if (page.section.isLocked) {
     const password = req.header("x-section-password");
-    if (!password || !page.section.salt) return res.status(423).json({ error: "Section is locked" });
+    if (!password || !page.section.salt || !page.section.passwordHash)
+      return res.status(423).json({ error: "Section is locked" });
+    const ok = await bcrypt.compare(password, page.section.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Incorrect section password" });
     try {
       const key = deriveKey(password, page.section.salt);
       const content = decrypt(page.content, key);
-      return res.json({ ...page, content });
+      return res.json(publicPage({ ...page, content }));
     } catch {
       return res.status(401).json({ error: "Incorrect section password" });
     }
   }
-  res.json(page);
+
+  res.json(publicPage({ ...page, content: unsealAtRest(page.content) }));
 });
 
 /** Collect target page ids from `[[Title]]` text and /pages/:id hrefs in content. */
@@ -120,12 +131,17 @@ router.put("/:id", async (req: AuthedRequest, res) => {
   });
   if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
-  let storedContent = content;
+  let storedContent: string;
   if (page.section.isLocked) {
     const password = req.header("x-section-password");
-    if (!password || !page.section.salt) return res.status(423).json({ error: "Section is locked" });
-    const key = deriveKey(password, page.section.salt);
-    storedContent = encrypt(content, key);
+    if (!password || !page.section.salt || !page.section.passwordHash)
+      return res.status(423).json({ error: "Section is locked" });
+    // Verify before encrypting — a wrong password must never rewrite ciphertext.
+    const ok = await bcrypt.compare(password, page.section.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Incorrect section password" });
+    storedContent = encrypt(content, deriveKey(password, page.section.salt));
+  } else {
+    storedContent = sealAtRest(content);
   }
 
   // Parse `[[Page Title]]` (+ clickable /pages/:id hrefs) from plaintext
@@ -151,7 +167,7 @@ router.put("/:id", async (req: AuthedRequest, res) => {
     await prisma.pageDocState.deleteMany({ where: { pageId: page.id } });
   }
 
-  res.json({ ...updated, content });
+  res.json(publicPage({ ...updated, content }));
 });
 
 // Backlinks: pages whose outgoing [[links]] target this page.
@@ -202,8 +218,8 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
   });
 
   // Keep [[links]] resolving after rename: rewrite wiki titles in other pages'
-  // plaintext content. Locked pages stay encrypted — PageLink rows already use
-  // ids so edges survive; text updates when those pages are next unlocked/saved.
+  // plaintext (or server-sealed) content. Locked pages stay password-encrypted —
+  // PageLink rows already use ids so edges survive.
   if (oldTitle !== newTitle) {
     const siblings = await prisma.page.findMany({
       where: {
@@ -213,10 +229,15 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
       select: { id: true, content: true },
     });
     for (const sib of siblings) {
-      if (!sib.content || !/\[\[/i.test(sib.content)) continue;
-      const next = rewriteWikiTitle(sib.content, oldTitle, newTitle);
-      if (next !== sib.content) {
-        await prisma.page.update({ where: { id: sib.id }, data: { content: next } });
+      if (!sib.content) continue;
+      // Skip sealed rows that clearly aren't wiki text without decrypting everything —
+      // always unseal when prefixed; for legacy plaintext require [[.
+      if (!isSealedAtRest(sib.content) && !/\[\[/.test(sib.content)) continue;
+      const plain = unsealAtRest(sib.content);
+      if (!/\[\[/.test(plain)) continue;
+      const next = rewriteWikiTitle(plain, oldTitle, newTitle);
+      if (next !== plain) {
+        await prisma.page.update({ where: { id: sib.id }, data: { content: sealAtRest(next) } });
       }
     }
   }

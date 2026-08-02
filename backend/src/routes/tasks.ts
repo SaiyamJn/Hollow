@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
+import { sealAtRest, unsealAtRest } from "../lib/encryption";
 
 const router = Router();
 router.use(requireAuth);
@@ -22,6 +23,25 @@ const patchSchema = z.object({
   dueAt: z.string().datetime().nullable().optional(),
 });
 
+function publicTask<T extends { title: string; description: string; subtasks?: Array<{ title: string; description: string }> }>(
+  task: T
+): T {
+  return {
+    ...task,
+    title: unsealAtRest(task.title),
+    description: unsealAtRest(task.description ?? ""),
+    ...(task.subtasks
+      ? {
+          subtasks: task.subtasks.map((s) => ({
+            ...s,
+            title: unsealAtRest(s.title),
+            description: unsealAtRest(s.description ?? ""),
+          })),
+        }
+      : {}),
+  };
+}
+
 router.get("/", async (req: AuthedRequest, res) => {
   // Top-level tasks only; subtasks come nested so the client doesn't see duplicates.
   const tasks = await prisma.task.findMany({
@@ -29,7 +49,7 @@ router.get("/", async (req: AuthedRequest, res) => {
     include: { subtasks: { orderBy: { createdAt: "asc" } } },
     orderBy: [{ starred: "desc" }, { createdAt: "desc" }],
   });
-  res.json(tasks);
+  res.json(tasks.map(publicTask));
 });
 
 router.post("/", async (req: AuthedRequest, res) => {
@@ -44,8 +64,8 @@ router.post("/", async (req: AuthedRequest, res) => {
 
   const task = await prisma.task.create({
     data: {
-      title,
-      description: description?.trim() ?? "",
+      title: sealAtRest(title),
+      description: sealAtRest(description?.trim() ?? ""),
       ownerId: req.userId!,
       dueAt: dueAt ? new Date(dueAt) : null,
       parentTaskId: parentTaskId ?? null,
@@ -53,7 +73,7 @@ router.post("/", async (req: AuthedRequest, res) => {
     },
     include: { subtasks: true },
   });
-  res.status(201).json(task);
+  res.status(201).json(publicTask(task));
 });
 
 router.patch("/:id", async (req: AuthedRequest, res) => {
@@ -66,15 +86,15 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
   const updated = await prisma.task.update({
     where: { id: task.id },
     data: {
-      ...(title !== undefined ? { title } : {}),
-      ...(description !== undefined ? { description } : {}),
+      ...(title !== undefined ? { title: sealAtRest(title) } : {}),
+      ...(description !== undefined ? { description: sealAtRest(description) } : {}),
       ...(done !== undefined ? { done } : {}),
       ...(starred !== undefined ? { starred } : {}),
       ...(dueAt !== undefined ? { dueAt: dueAt === null ? null : new Date(dueAt) } : {}),
     },
     include: { subtasks: { orderBy: { createdAt: "asc" } } },
   });
-  res.json(updated);
+  res.json(publicTask(updated));
 });
 
 router.delete("/:id", async (req: AuthedRequest, res) => {
