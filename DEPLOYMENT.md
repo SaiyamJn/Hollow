@@ -622,6 +622,7 @@ df -h
 | Migrations fail after password change | `docker compose down -v` then `up -d --build` (wipes DB — ok on fresh install) |
 | Public IP works on SSH but not Hollow | Forward **80 → LAN:80**, set `HOST_PORT=80`, `ufw allow 80/tcp` |
 | Mobile cannot login | `EXPO_PUBLIC_API_URL` must end with `/api` |
+| Web register/login returns **405** | Frontend built with empty `VITE_API_URL` posts to `/auth` not `/api/auth`. Pull latest, `docker compose up -d --build` (rebuild **web**) |
 | Cloudflare login hangs over SSH | Copy the URL from the **server** terminal into your local browser; approve; confirm `~/.cloudflared/cert.pem` exists |
 
 ---

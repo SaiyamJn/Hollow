@@ -5,8 +5,9 @@ WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-# Leave unset so the browser calls same-origin /api (proxied by Nginx).
-ENV VITE_API_URL=
+# Same-origin /api — Nginx strips the prefix and proxies to the backend.
+# Do not set VITE_API_URL to "" (empty); that makes axios hit /auth instead of /api/auth.
+ENV VITE_API_URL=/api
 RUN npm run build
 
 FROM nginx:alpine

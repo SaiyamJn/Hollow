@@ -17,8 +17,12 @@ import type {
   User,
 } from "./types";
 
+// Empty string must not win: Docker sets VITE_API_URL= which would bypass ?? and
+// POST to /auth/... (SPA) → nginx 405. Always prefer a real base, default /api.
+const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.trim() || "/api";
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "/api",
+  baseURL: apiBase,
 });
 
 api.interceptors.request.use((config) => {
