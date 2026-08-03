@@ -1,92 +1,92 @@
-# Deploy Hollow on a home Ubuntu laptop (server + NAS)
+# Deploy Hollow on Ubuntu
 
-This guide assumes a **fresh Ubuntu 24.04 LTS** install on an old laptop that will
-act as:
+This guide gets **Hollow** running on a fresh **Ubuntu 24.04 LTS** machine
+(home laptop or VPS) and optionally reachable on the internet.
 
-1. A **home server** for Hollow (and later other apps)
-2. A **NAS** for files on your LAN
-3. A machine that stays on **DHCP** from your router (no static IP on the laptop
-   itself — reserve an address on the router if you want a stable LAN IP)
+Assumptions for a home laptop:
 
-Follow the sections in order the first time. Later sections assume earlier ones
-are done.
+- The machine uses **DHCP** from your router
+- You can reserve a LAN IP on the router if you want a stable address
+- Prefer **Cloudflare Tunnel** for HTTPS (no router port-forwarding)
+
+Follow the sections in order the first time.
 
 ---
 
 ## Table of contents
 
 1. [What you will end up with](#1-what-you-will-end-up-with)
-2. [Before you start (checklist)](#2-before-you-start-checklist)
+2. [Before you start](#2-before-you-start)
 3. [Ubuntu base setup](#3-ubuntu-base-setup)
-4. [DHCP, hostname, and finding the laptop on the LAN](#4-dhcp-hostname-and-finding-the-laptop-on-the-lan)
-5. [Keep the laptop awake (lid closed)](#5-keep-the-laptop-awake-lid-closed)
-6. [Disk layout for NAS + Docker apps](#6-disk-layout-for-nas--docker-apps)
-7. [Install Docker (shared by all projects)](#7-install-docker-shared-by-all-projects)
-8. [Firewall (LAN NAS + SSH; apps via tunnel)](#8-firewall-lan-nas--ssh-apps-via-tunnel)
-9. [NAS: Samba file share](#9-nas-samba-file-share)
-10. [Install and run Hollow](#10-install-and-run-hollow)
-11. [Reach Hollow from the internet (Cloudflare Tunnel)](#11-reach-hollow-from-the-internet-cloudflare-tunnel)
-12. [Auto-start after reboot](#12-auto-start-after-reboot)
-13. [Mobile app against production](#13-mobile-app-against-production)
-14. [Hosting other projects on the same laptop](#14-hosting-other-projects-on-the-same-laptop)
-15. [Backups (Hollow + NAS)](#15-backups-hollow--nas)
-16. [Updating Hollow](#16-updating-hollow)
-17. [Routine maintenance](#17-routine-maintenance)
-18. [Troubleshooting](#18-troubleshooting)
-19. [Security checklist](#19-security-checklist)
-20. [Local development vs this server](#20-local-development-vs-this-server)
+4. [DHCP, hostname, and LAN IP](#4-dhcp-hostname-and-lan-ip)
+5. [Keep a laptop awake (lid closed)](#5-keep-a-laptop-awake-lid-closed)
+6. [Install Docker](#6-install-docker)
+7. [Firewall](#7-firewall)
+8. [Install and run Hollow](#8-install-and-run-hollow)
+9. [Reach Hollow from the internet](#9-reach-hollow-from-the-internet)
+10. [Auto-start after reboot](#10-auto-start-after-reboot)
+11. [Mobile app against production](#11-mobile-app-against-production)
+12. [Backups](#12-backups)
+13. [Updating Hollow](#13-updating-hollow)
+14. [Routine maintenance](#14-routine-maintenance)
+15. [Troubleshooting](#15-troubleshooting)
+16. [Security checklist](#16-security-checklist)
+17. [Local development vs this server](#17-local-development-vs-this-server)
 
 ---
 
 ## 1. What you will end up with
 
 ```
-Your phone / PC (internet)
+Your phone / PC
         │
-        ▼
-Cloudflare Tunnel  (HTTPS, no router port-forward)
+        ├─ LAN  → http://SERVER_LAN_IP:8080
         │
-        ▼
-This Ubuntu laptop (DHCP from router)
-├─ Docker
-│  ├─ Hollow  → localhost:8080  (Nginx + API + Postgres + Redis)
-│  └─ (later) other apps on other localhost ports
-├─ Samba NAS  → \\SERVERNAME\share  or smb://SERVERNAME/share  (LAN only)
-└─ SSH        → you@LAN_IP  (admin)
+        └─ Internet (optional)
+                │
+                ▼
+         Cloudflare Tunnel (HTTPS)
+                │
+                ▼
+         Ubuntu host
+                │
+                ▼
+         Docker Compose
+         ├─ web (Nginx)   :8080
+         ├─ backend API
+         ├─ PostgreSQL
+         └─ Redis
 ```
 
-**Design choices for a shared home server:**
+Architecture inside Docker:
 
-| Choice | Why |
-|---|---|
-| Docker for apps | Isolate Hollow from other projects; easy rebuilds |
-| Each app on its own host port (`8080`, `8081`, …) | One Cloudflare Tunnel can route many hostnames |
-| Samba for NAS | Works from Windows, macOS, phones on the LAN |
-| Cloudflare Tunnel for public HTTPS | No opening 80/443 on the router; fine behind DHCP/NAT |
-| Firewall: SSH + Samba LAN-only | NAS stays private; Hollow is public only via Cloudflare |
+```
+Nginx (:8080 on the host)          ← compose service `web`
+├─ /            → static React SPA
+├─ /api/*       → backend:4000  (prefix stripped)
+└─ /socket.io/* → backend:4000  (WebSockets)
+```
+
+Mobile apps point `EXPO_PUBLIC_API_URL` at `https://your.domain/api`
+(or `http://LAN_IP:8080/api` for LAN-only testing).
 
 ---
 
-## 2. Before you start (checklist)
+## 2. Before you start
 
-- [ ] Ubuntu **24.04 LTS** installed (Server or Desktop — Server is lighter)
-- [ ] You can log in on the laptop (keyboard/monitor or already have SSH)
-- [ ] Laptop plugged into **AC power** whenever it acts as a server
-- [ ] Ethernet preferred over Wi‑Fi (more reliable for NAS)
-- [ ] Router uses **DHCP** (default on almost all home routers)
-- [ ] Optional but recommended: a domain on **Cloudflare** (free plan is enough)
-- [ ] This Hollow git repo URL (or a USB copy of the project)
-- [ ] Extra disk or large partition if you want serious NAS capacity (optional)
-
-If Ubuntu Desktop is installed: you can still follow this guide. Prefer logging
-in over SSH and leaving the graphical session alone, or install
-`ubuntu-server` next time for less RAM use.
+- [ ] Ubuntu **24.04 LTS** installed (Server preferred; Desktop also works)
+- [ ] You can log in (keyboard/monitor or SSH)
+- [ ] If it is a laptop: plugged into **AC power**
+- [ ] Ethernet preferred over Wi‑Fi
+- [ ] Router uses DHCP (default on most home routers)
+- [ ] Optional: a domain on **Cloudflare** for public HTTPS
+- [ ] This Hollow git repo URL (or a copy of the project)
 
 ---
 
 ## 3. Ubuntu base setup
 
-### 3.1 First login and updates
+### 3.1 Updates and basics
 
 ```bash
 sudo apt update
@@ -95,45 +95,37 @@ sudo apt install -y curl git ca-certificates ufw openssh-server \
   htop net-tools avahi-daemon
 ```
 
-`avahi-daemon` lets other devices find the laptop as `hostname.local` on the LAN
-(useful with DHCP).
+`avahi-daemon` lets other devices find the machine as `hostname.local` on the LAN.
 
-Enable SSH if it is not already running:
+Enable SSH if needed:
 
 ```bash
 sudo systemctl enable --now ssh
 ```
 
-### 3.2 Create a normal admin user (if you only have root)
-
-Skip if you already created a user during install.
+### 3.2 Admin user (if you only have root)
 
 ```bash
 sudo adduser saiya
 sudo usermod -aG sudo saiya
 ```
 
-From now on, prefer logging in as that user (not root).
+Prefer logging in as that user (not root).
 
-### 3.3 SSH key login (do this from your main PC)
-
-On your **main computer** (not the server):
+### 3.3 SSH key login (from your main PC)
 
 ```bash
-# Generate a key if you do not have one
-ssh-keygen -t ed25519 -C "hollow-server"
-
-# Copy it to the server (use the DHCP IP you find in §4)
+ssh-keygen -t ed25519 -C "hollow-server"   # if you do not have a key yet
 ssh-copy-id saiya@SERVER_LAN_IP
 ```
 
-Then on the **server**, harden SSH:
+On the server, harden SSH:
 
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-Recommended settings (uncomment / set):
+Set:
 
 ```text
 PasswordAuthentication no
@@ -141,107 +133,78 @@ PermitRootLogin no
 PubkeyAuthentication yes
 ```
 
-Reload:
-
 ```bash
 sudo systemctl reload ssh
 ```
 
-**Keep one SSH session open** until you confirm a new key-based login works in
-another window, or you can lock yourself out.
+Keep one SSH session open until a new key-based login works in another window.
 
-### 3.4 Timezone and NTP
+### 3.4 Timezone
 
 ```bash
 sudo timedatectl set-timezone Asia/Kolkata
 timedatectl status
 ```
 
-(Use your real timezone; list with `timedatectl list-timezones | grep -i asia`.)
+(Use your real timezone: `timedatectl list-timezones | grep -i asia`.)
 
 ---
 
-## 4. DHCP, hostname, and finding the laptop on the LAN
+## 4. DHCP, hostname, and LAN IP
 
-Your laptop gets its IP from the router. That IP can change after a reboot
-unless you **reserve** it on the router.
-
-### 4.1 Set a memorable hostname
+### 4.1 Hostname (name of the whole machine)
 
 ```bash
-sudo hostnamectl set-hostname hollow-nas
-```
-
-Also put the name in hosts:
-
-```bash
+sudo hostnamectl set-hostname hollow
 sudo nano /etc/hosts
 ```
 
-Ensure a line like:
+Ensure:
 
 ```text
-127.0.1.1   hollow-nas
+127.0.1.1   hollow
 ```
+
+This is the **server** name (SSH, `.local` discovery) — not a per-app name.
+Public app URLs are separate DNS names (e.g. `notes.example.com`).
 
 ### 4.2 Find the current LAN IP
 
 ```bash
-ip -4 addr show
 hostname -I
+ip -4 addr show
 ```
 
-Look for something like `192.168.1.42` or `192.168.0.x` (not `127.0.0.1`).
+Look for something like `192.168.1.42` (not `127.0.0.1`).
 
-From another device on the same Wi‑Fi/LAN you can often reach:
+### 4.3 DHCP reservation on the router (recommended)
 
-```text
-http://hollow-nas.local:8080
-```
+On the router admin page (often `192.168.1.1`):
 
-(after Hollow is running — Avahi/mDNS).
-
-### 4.3 DHCP reservation on the router (strongly recommended)
-
-On the router admin page (often `192.168.1.1` or `192.168.0.1`):
-
-1. Find **DHCP** / **LAN** / **Address reservation** / **Static lease**
-2. Reserve the laptop’s **MAC address** → a fixed IP (e.g. `192.168.1.50`)
-3. Save and reboot the laptop once so it picks up the reserved address
+1. Open **DHCP** / **Address reservation** / **Static lease**
+2. Reserve this machine’s **MAC address** → a fixed IP (e.g. `192.168.1.50`)
+3. Save; reboot the Ubuntu box once so it picks up the lease
 
 Find the MAC:
 
 ```bash
 ip link show
-# look for `link/ether aa:bb:cc:dd:ee:ff` on eth0 or wlan0
+# `link/ether aa:bb:cc:dd:ee:ff` on eth0 or wlan0
 ```
 
-You are still on DHCP — the router just always hands out the same IP. That is
-ideal for Samba bookmarks and SSH.
-
-### 4.4 Optional: prefer Ethernet
-
-If both Ethernet and Wi‑Fi are connected, prefer cable. Disable Wi‑Fi if you
-do not need it:
-
-```bash
-# NetworkManager (common on Desktop / some Server installs)
-nmcli radio wifi off
-```
+You stay on DHCP; the router just always hands out the same IP.
 
 ---
 
-## 5. Keep the laptop awake (lid closed)
+## 5. Keep a laptop awake (lid closed)
 
-Old laptops often sleep when the lid closes. For a server that must stay on:
-
-### 5.1 Ignore lid switch
+Skip this section on a VPS or desktop that never sleeps.
 
 ```bash
 sudo nano /etc/systemd/logind.conf
 ```
 
-Set (uncomment if needed):
+Set:
 
 ```ini
 HandleLidSwitch=ignore
@@ -252,91 +215,23 @@ IdleAction=ignore
 
 ```bash
 sudo systemctl restart systemd-logind
-```
-
-### 5.2 Disable suspend / hibernate targets
-
-```bash
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 ```
 
-### 5.3 If Ubuntu Desktop is installed
-
-Also turn off automatic suspend in **Settings → Power**, or:
+If Ubuntu Desktop is installed, also disable automatic suspend in
+**Settings → Power**, or:
 
 ```bash
 gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
 gsettings set org.gnome.settings-daemon.plugins.power lid-close-ac-action 'nothing'
 ```
 
-(Only applies when a GNOME session is active; `logind` + masking targets cover
-headless use.)
-
-### 5.4 Leave it on AC power
-
-Battery-only operation will eventually shut the machine down. Plug it in and,
-if the BIOS has it, enable **“AC power recovery → Always On”** so it comes
-back after a power cut.
+Leave the laptop on AC power. In BIOS, enable **AC power recovery → Always On**
+if available so it comes back after a power cut.
 
 ---
 
-## 6. Disk layout for NAS + Docker apps
-
-Keep **system**, **Docker**, and **NAS files** mentally (and preferably
-physically) separate so one project cannot fill the OS disk unnoticed.
-
-### 6.1 Recommended directories
-
-```bash
-sudo mkdir -p /opt/apps          # git checkouts: Hollow, other projects
-sudo mkdir -p /srv/nas           # Samba share root (user files)
-sudo mkdir -p /var/backups       # local backup dumps
-sudo chown "$USER":"$USER" /opt/apps
-sudo chown "$USER":"$USER" /srv/nas
-```
-
-Suggested layout later:
-
-```text
-/opt/apps/hollow/        ← this repo
-/opt/apps/other-project/ ← next Docker app
-/srv/nas/documents/
-/srv/nas/media/
-/srv/nas/backups/        ← optional copy of app backups
-```
-
-### 6.2 Optional second disk for NAS
-
-If you added a spare HDD/SSD:
-
-```bash
-# List disks (careful — do not wipe the wrong one)
-lsblk -f
-```
-
-Example: format and mount `/dev/sdb1` as `/srv/nas` (adjust device name):
-
-```bash
-sudo mkfs.ext4 -L NAS /dev/sdb1
-echo 'LABEL=NAS /srv/nas ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
-sudo mount -a
-sudo chown "$USER":"$USER" /srv/nas
-df -h /srv/nas
-```
-
-`nofail` lets the machine boot even if the disk is unplugged.
-
-### 6.3 Docker data
-
-By default Docker stores images/volumes under `/var/lib/docker`. That is fine
-for Hollow. If the OS disk is tiny, move Docker’s root later — do that before
-you accumulate many images (search: “Docker daemon.json data-root”).
-
----
-
-## 7. Install Docker (shared by all projects)
-
-One Docker Engine for Hollow and every future compose stack:
+## 6. Install Docker
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
@@ -345,42 +240,26 @@ sudo usermod -aG docker "$USER"
 
 **Log out and SSH back in** so the `docker` group applies.
 
-Verify:
-
 ```bash
 docker --version
 docker compose version
 docker run --rm hello-world
-```
-
-Enable Docker on boot (usually already enabled by the install script):
-
-```bash
 sudo systemctl enable --now docker
 ```
 
 ---
 
-## 8. Firewall (LAN NAS + SSH; apps via tunnel)
+## 7. Firewall
 
-Strategy for this machine:
-
-- **SSH** — allowed (so you can administer)
-- **Samba** — allowed on the LAN only (NAS)
-- **Hollow / other apps** — bound to localhost or LAN; **public** access only
-  through Cloudflare Tunnel (no need to open 80/443 on the router)
+Allow SSH. Optionally allow Hollow on the LAN. Public HTTPS should go through
+Cloudflare Tunnel (§9) — you do **not** need to open 80/443 on the router.
 
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow OpenSSH
 
-# Samba (NAS) — open to the world of your LAN only if you trust the network.
-# Replace 192.168.1.0/24 with your real LAN subnet from `ip route`.
-sudo ufw allow from 192.168.1.0/24 to any port 445 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 139 proto tcp
-
-# Optional: reach Hollow on the LAN without the tunnel (phones on Wi‑Fi)
+# Optional: open Hollow to your LAN only (replace with your subnet)
 sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp
 
 sudo ufw enable
@@ -390,118 +269,49 @@ sudo ufw status verbose
 Find your LAN CIDR:
 
 ```bash
-ip route | grep -E 'default|src'
-# e.g. default via 192.168.1.1 … → subnet is often 192.168.1.0/24
+ip route | grep default
+# e.g. via 192.168.1.1 → often 192.168.1.0/24
 ```
-
-Do **not** open 445/139 to the public internet. Cloudflare Tunnel does not need
-inbound router ports for Hollow.
 
 ---
 
-## 9. NAS: Samba file share
+## 8. Install and run Hollow
 
-### 9.1 Install Samba
-
-```bash
-sudo apt install -y samba
-sudo mkdir -p /srv/nas/{documents,media,backups}
-sudo chown -R "$USER":"$USER" /srv/nas
-```
-
-### 9.2 Configure a share
-
-Back up and edit the config:
+### 8.1 Clone
 
 ```bash
-sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.bak
-sudo nano /etc/samba/smb.conf
-```
-
-Append at the bottom:
-
-```ini
-[nas]
-   path = /srv/nas
-   browseable = yes
-   read only = no
-   guest ok = no
-   create mask = 0644
-   directory mask = 0755
-   force user = saiya
-```
-
-Replace `saiya` with your Linux username.
-
-### 9.3 Samba password (separate from Linux login)
-
-```bash
-sudo smbpasswd -a saiya
-sudo smbpasswd -e saiya
-sudo systemctl restart smbd nmbd
-sudo systemctl enable smbd nmbd
-```
-
-### 9.4 Connect from other devices
-
-| OS | How |
-|---|---|
-| Windows | File Explorer → `\\hollow-nas\nas` or `\\192.168.1.50\nas` |
-| macOS | Finder → Go → Connect to Server → `smb://hollow-nas/nas` |
-| Linux | Files → Other Locations → `smb://hollow-nas/nas` |
-| Phone | Solid Explorer / Files app with SMB, same host + share `nas` |
-
-Use the DHCP-reserved IP if `.local` discovery fails.
-
-### 9.5 Do not put Hollow’s Postgres data on the Samba share
-
-Keep Docker volumes under Docker’s control. Use `/srv/nas` for **your** files
-and optional backup copies — not as live DB storage.
-
----
-
-## 10. Install and run Hollow
-
-### 10.1 Clone the repo
-
-```bash
-sudo mkdir -p /opt/apps
-sudo chown "$USER":"$USER" /opt/apps
-git clone https://github.com/SaiyamJn/Hollow.git /opt/apps/hollow
-cd /opt/apps/hollow
+sudo mkdir -p /opt/hollow
+sudo chown "$USER":"$USER" /opt/hollow
+git clone https://github.com/SaiyamJn/Hollow.git /opt/hollow
+cd /opt/hollow
 ```
 
 (Use your real remote URL if different.)
 
-> Older docs used `/opt/hollow`. Either path works; this guide uses
-> `/opt/apps/hollow` so other projects can sit beside it. If you already use
-> `/opt/hollow`, keep that path and adjust commands below.
-
-### 10.2 Create production env
+### 8.2 Create production env
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Generate secrets (run three times for three values):
+Generate secrets (run three times). Prefer hex only — special characters like
+`@` in `POSTGRES_PASSWORD` used to break the database URL:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Set at least:
-
 | Variable | Notes |
 |---|---|
 | `POSTGRES_PASSWORD` | Long random password |
 | `JWT_SECRET` | Different long random secret |
-| `CONTENT_ENCRYPTION_KEY` | Recommended: another `openssl rand -hex 32`. Encrypts unlocked page/note/task bodies at rest. If omitted, derived from `JWT_SECRET` — rotating JWT later can make old ciphertext unreadable |
+| `CONTENT_ENCRYPTION_KEY` | Recommended: another `openssl rand -hex 32`. Encrypts unlocked content at rest. If omitted, derived from `JWT_SECRET` — rotating JWT later can make old ciphertext unreadable |
 | `ADMIN_EMAILS` | Your email, or leave empty |
-| `HOST_PORT` | Default `8080` — leave this; other apps use `8081+` |
-| `CORS_ORIGIN` | After the tunnel works: `https://notes.yourdomain.com` |
+| `HOST_PORT` | Default `8080` |
+| `CORS_ORIGIN` | After the public URL works: `https://notes.yourdomain.com` |
 
-Example `.env` shape:
+Example:
 
 ```env
 POSTGRES_PASSWORD=paste_secret_1
@@ -512,26 +322,26 @@ HOST_PORT=8080
 # CORS_ORIGIN=https://notes.example.com
 ```
 
-Never commit `.env`. Keep a copy in a password manager or encrypted USB.
+Never commit `.env`. Keep a copy in a password manager.
 
-### 10.3 Build and start
+### 8.3 Build and start
 
 ```bash
-cd /opt/apps/hollow
+cd /opt/hollow
 docker compose up -d --build
 ```
 
-First build can take several minutes on an old laptop (CPU-bound image builds).
+First build can take several minutes on an old CPU.
 
 Check:
 
 ```bash
 docker compose ps
 curl -s http://127.0.0.1:8080/api/health
-# → {"ok":true}
+# → {"ok":true,"name":"Hollow","version":"1.0.0",...}
 ```
 
-On the LAN (from phone/PC Wi‑Fi):
+On the LAN:
 
 ```text
 http://SERVER_LAN_IP:8080
@@ -540,87 +350,57 @@ http://SERVER_LAN_IP:8080
 or
 
 ```text
-http://hollow-nas.local:8080
+http://hollow.local:8080
 ```
 
-Register your account in the UI. Migrations run automatically on backend start
+Register an account in the UI. Migrations run automatically on backend start
 (`prisma migrate deploy`).
 
-### 10.4 Useful Compose commands
+### 8.4 Useful Compose commands
 
 ```bash
-cd /opt/apps/hollow
+cd /opt/hollow
 docker compose logs -f backend
 docker compose logs -f web
 docker compose restart backend
 docker compose ps
-docker compose down                 # stop Hollow only
-docker compose up -d --build        # after git pull / config change
+docker compose down
+docker compose up -d --build
 ```
-
-Hollow’s containers are named by the compose project; they do not stop your
-other Docker apps.
-
-### 10.5 systemd unit path
-
-If you use the bundled unit file, either edit its `WorkingDirectory` or copy
-with a fix:
-
-```bash
-sudo cp /opt/apps/hollow/deploy/hollow.service /etc/systemd/system/hollow.service
-sudo nano /etc/systemd/system/hollow.service
-```
-
-Set:
-
-```ini
-WorkingDirectory=/opt/apps/hollow
-```
-
-Then enable (also covered in §12).
 
 ---
 
-## 11. Reach Hollow from the internet (Cloudflare Tunnel)
+## 9. Reach Hollow from the internet
 
-Best option for a **home DHCP laptop**: no port forwarding, free HTTPS, works
-behind CGNAT.
+### Option A — Cloudflare Tunnel (recommended for home / DHCP)
 
-### 11.1 Cloudflare side
+No port-forwarding, free HTTPS at the edge.
 
-1. Create a free Cloudflare account
-2. Add your domain and change nameservers as Cloudflare instructs
-3. Wait until the domain shows **Active**
-
-### 11.2 Install `cloudflared` on the laptop
+1. Create a free Cloudflare account and add your domain.
+2. Install `cloudflared` on the server:
 
 ```bash
 curl -L --output /tmp/cloudflared.deb \
   https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 sudo dpkg -i /tmp/cloudflared.deb
-cloudflared --version
 ```
 
-### 11.3 Login, create tunnel, DNS route
+3. Authenticate and create a tunnel:
 
 ```bash
 cloudflared tunnel login
-# browser opens — pick your domain
-
 cloudflared tunnel create hollow
 cloudflared tunnel list
-# note the TUNNEL UUID
-
 cloudflared tunnel route dns hollow notes.example.com
 ```
 
 Replace `notes.example.com` with your hostname.
 
-### 11.4 Tunnel config
+4. Config:
 
 ```bash
 sudo mkdir -p /etc/cloudflared
-sudo cp /opt/apps/hollow/deploy/cloudflared.config.example.yml /etc/cloudflared/config.yml
+sudo cp /opt/hollow/deploy/cloudflared.config.example.yml /etc/cloudflared/config.yml
 sudo nano /etc/cloudflared/config.yml
 ```
 
@@ -633,18 +413,12 @@ credentials-file: /home/saiya/.cloudflared/YOUR_TUNNEL_UUID.json
 ingress:
   - hostname: notes.example.com
     service: http://localhost:8080
-  # Add more hostnames later for other projects, e.g.:
-  # - hostname: other.example.com
-  #   service: http://localhost:8081
   - service: http_status:404
 ```
 
-If credentials were created as root, path may be
-`/root/.cloudflared/<uuid>.json` — use the path printed by `tunnel create`.
-Ensure the `cloudflared` service user can read that file (often run as root via
-the official service install).
+Use the credentials path printed by `tunnel create` (sometimes under `/root/.cloudflared/`).
 
-### 11.5 Run tunnel as a service
+5. Install as a service:
 
 ```bash
 sudo cloudflared service install
@@ -652,42 +426,79 @@ sudo systemctl enable --now cloudflared
 sudo systemctl status cloudflared
 ```
 
-Visit `https://notes.example.com` and confirm login works.
+6. Visit `https://notes.example.com` and confirm login works.
 
-Then lock CORS:
+Then set CORS and restart:
 
 ```bash
-nano /opt/apps/hollow/.env
+nano /opt/hollow/.env
 # CORS_ORIGIN=https://notes.example.com
-cd /opt/apps/hollow && docker compose up -d
+cd /opt/hollow && docker compose up -d
 ```
 
-### 11.6 Option B — VPS / public IP (skip if using Cloudflare Tunnel)
+### Option B — VPS with public IP (Caddy / Nginx + Let’s Encrypt)
 
-Only if the laptop has a public IP or you port-forward 80/443 (not ideal for
-this DHCP home setup). Point DNS at the public IP and reverse-proxy to
-`127.0.0.1:8080` with Caddy or Nginx + Let’s Encrypt. Prefer §11 Tunnel for
-home laptops.
+1. Point DNS `A` record of `notes.example.com` to the VPS IP.
+2. Keep Hollow on `127.0.0.1:8080`, put Caddy or Nginx in front for TLS.
+
+**Caddy** (`/etc/caddy/Caddyfile`):
+
+```caddy
+notes.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+```bash
+sudo systemctl reload caddy
+```
+
+**Nginx** (host Nginx, not the container):
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name notes.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d notes.example.com
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
 
 ---
 
-## 12. Auto-start after reboot
-
-After a power blip you want: network → Docker → Hollow → Cloudflare Tunnel → Samba.
+## 10. Auto-start after reboot
 
 ```bash
 sudo systemctl enable docker
-sudo systemctl enable smbd nmbd
-sudo systemctl enable cloudflared   # if you installed the tunnel
-
-sudo cp /opt/apps/hollow/deploy/hollow.service /etc/systemd/system/hollow.service
-sudo sed -i 's|WorkingDirectory=.*|WorkingDirectory=/opt/apps/hollow|' /etc/systemd/system/hollow.service
+sudo cp /opt/hollow/deploy/hollow.service /etc/systemd/system/hollow.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now hollow.service
 ```
 
-Docker’s `restart: unless-stopped` also recreates containers when Docker
-starts; the systemd unit makes `compose up` explicit.
+If you use Cloudflare Tunnel:
+
+```bash
+sudo systemctl enable --now cloudflared
+```
+
+Docker’s `restart: unless-stopped` also brings containers back after reboot;
+the systemd unit makes `compose up` explicit.
 
 Test:
 
@@ -695,236 +506,110 @@ Test:
 sudo reboot
 ```
 
-After it comes back (wait a minute):
+After it comes back:
 
 ```bash
 ssh saiya@SERVER_LAN_IP
-docker compose -f /opt/apps/hollow/docker-compose.yml ps
+cd /opt/hollow && docker compose ps
 curl -s http://127.0.0.1:8080/api/health
-sudo systemctl status cloudflared --no-pager
 ```
 
 ---
 
-## 13. Mobile app against production
-
-On the machine where you build/run the Expo app, set:
+## 11. Mobile app against production
 
 ```bash
 # mobile/.env
 EXPO_PUBLIC_API_URL=https://notes.example.com/api
 ```
 
-Rebuild / restart Expo. The path **must** include `/api` because the Hollow
-Nginx strips that prefix before forwarding to Express.
+Rebuild / restart Expo. The path **must** include `/api` because Nginx strips
+that prefix before forwarding to Express.
 
-LAN-only testing (no tunnel):
+LAN-only testing:
 
 ```env
 EXPO_PUBLIC_API_URL=http://192.168.1.50:8080/api
 ```
 
-Phone and laptop must be on the same Wi‑Fi; HTTP is fine on LAN only.
+Phone and server must be on the same Wi‑Fi; HTTP is fine on LAN only.
 
 ---
 
-## 14. Hosting other projects on the same laptop
+## 12. Backups
 
-Treat each project like Hollow: its own folder, own `.env`, own Compose port.
-
-### 14.1 Conventions
-
-```text
-/opt/apps/hollow/          HOST_PORT=8080
-/opt/apps/project-b/       publish 127.0.0.1:8081:80
-/opt/apps/project-c/       publish 127.0.0.1:8082:80
-/srv/nas/                  Samba files (not app code)
-```
-
-Bind published ports to localhost when the app is only meant for the tunnel:
-
-```yaml
-# in the other project's docker-compose.yml
-ports:
-  - "127.0.0.1:8081:80"
-```
-
-Hollow’s compose currently publishes `8080` on all interfaces (handy for LAN).
-That is fine behind UFW. For stricter apps, use `127.0.0.1:PORT:80`.
-
-### 14.2 Add another hostname to the same tunnel
-
-Edit `/etc/cloudflared/config.yml`:
-
-```yaml
-ingress:
-  - hostname: notes.example.com
-    service: http://localhost:8080
-  - hostname: other.example.com
-    service: http://localhost:8081
-  - service: http_status:404
-```
-
-```bash
-cloudflared tunnel route dns hollow other.example.com
-sudo systemctl restart cloudflared
-```
-
-### 14.3 Resource limits on an old laptop
-
-Old CPUs/RAM fill up quickly. Per project you can add Compose limits, e.g.:
-
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 512M
-```
-
-Watch usage:
-
-```bash
-htop
-docker stats
-df -h
-```
-
-Leave headroom for Samba and OS (rough guide: if you have 8 GB RAM, avoid
-running many heavy stacks at once).
-
-### 14.4 One Postgres or many?
-
-Prefer **one Postgres container per app** (Hollow already has its own). Sharing
-a single global Postgres across projects is possible but couples upgrades and
-backups — more pain than it saves on a home NAS laptop.
-
----
-
-## 15. Backups (Hollow + NAS)
-
-### 15.1 Hollow database (nightly)
+Nightly Postgres dump:
 
 ```bash
 sudo mkdir -p /var/backups/hollow
 crontab -e
 ```
 
-Add:
-
 ```cron
-0 3 * * * docker compose -f /opt/apps/hollow/docker-compose.yml exec -T postgres pg_dump -U hollow hollow | gzip > /var/backups/hollow/hollow-$(date +\%F).sql.gz
+0 3 * * * docker compose -f /opt/hollow/docker-compose.yml exec -T postgres pg_dump -U hollow hollow | gzip > /var/backups/hollow/hollow-$(date +\%F).sql.gz
+30 3 * * * find /var/backups/hollow -name '*.sql.gz' -mtime +14 -delete
 ```
 
-Optional: copy dumps into the NAS share:
+Also keep a safe offline copy of `/opt/hollow/.env`.
 
-```cron
-5 3 * * * cp /var/backups/hollow/hollow-$(date +\%F).sql.gz /srv/nas/backups/
-```
-
-Keep `/opt/apps/hollow/.env` offline too (secrets). Without it, a DB restore
-is not enough to run the app.
-
-### 15.2 Restore Hollow DB (destructive)
+Restore (destructive — replaces DB contents):
 
 ```bash
-cd /opt/apps/hollow
+cd /opt/hollow
 gunzip -c /var/backups/hollow/hollow-YYYY-MM-DD.sql.gz | \
   docker compose exec -T postgres psql -U hollow hollow
 ```
 
-### 15.3 NAS files
-
-Samba files in `/srv/nas` are not backed up by the Hollow dump. Options:
-
-- Copy important folders to an external drive periodically
-- Use `restic` / `rsync` to another PC or cloud
-- At minimum: keep a second copy of `/srv/nas/backups` and photos off-site
-
-Example weekly rsync to an external disk mounted at `/mnt/backup-disk`:
-
-```bash
-sudo rsync -aH --delete /srv/nas/ /mnt/backup-disk/nas/
-```
-
-### 15.4 Prune old DB dumps (optional)
-
-```cron
-30 3 * * * find /var/backups/hollow -name '*.sql.gz' -mtime +14 -delete
-```
-
 ---
 
-## 16. Updating Hollow
+## 13. Updating Hollow
 
 ```bash
-cd /opt/apps/hollow
+cd /opt/hollow
 git pull
 docker compose up -d --build
 docker compose logs -f backend   # confirm migrate deploy succeeded
 ```
 
-If something breaks:
-
-```bash
-docker compose logs --tail=200 backend
-docker compose ps
-```
-
 ---
 
-## 17. Routine maintenance
-
-Monthly (or when things feel slow):
+## 14. Routine maintenance
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-docker system prune -f          # unused images/networks (does not delete volumes)
+cd /opt/hollow && docker compose ps
+docker system prune -f
 df -h
-docker compose -f /opt/apps/hollow/docker-compose.yml ps
-sudo systemctl status cloudflared --no-pager
+sudo systemctl status cloudflared --no-pager   # if using the tunnel
 ```
 
-After kernel updates, reboot when convenient:
-
-```bash
-sudo reboot
-```
-
-Check disk before it hits 100% — full disk breaks Postgres and Samba.
+Reboot after kernel updates when convenient: `sudo reboot`.
 
 ---
 
-## 18. Troubleshooting
+## 15. Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| Cannot SSH after reboot | Router gave a new DHCP IP — check router client list; set a reservation (§4.3) |
-| Laptop sleeps with lid closed | §5 — `logind.conf` + masked sleep targets |
-| `curl localhost:8080/api/health` fails | `cd /opt/apps/hollow && docker compose ps` and `docker compose logs backend` |
-| Migrations fail | `.env` `POSTGRES_PASSWORD` changed after first volume create; only wipe if OK to lose data: `docker compose down -v` |
-| Web loads, API 404 | Use Nginx URL (`:8080`), not the backend container port |
-| Live collab / sockets broken | Tunnel/proxy must allow WebSockets; Hollow Nginx already routes `/socket.io/` |
+| Cannot SSH after reboot | New DHCP IP — check router client list; set a reservation (§4.3) |
+| Laptop sleeps with lid closed | §5 |
+| `curl localhost:8080/api/health` fails | `cd /opt/hollow && docker compose ps` / `docker compose logs backend` |
+| Migrations fail | `.env` password changed after first volume create; wipe only if OK to lose data: `docker compose down -v` |
+| Web loads, API 404 | Use Nginx URL (`:8080`), not the backend port directly |
+| Live collab / sockets broken | Tunnel/proxy must allow WebSockets; see `/socket.io/` in Nginx config |
 | Mobile cannot login | `EXPO_PUBLIC_API_URL` must be `https://domain/api` (with `/api`) |
-| Cloudflare 502 | Hollow not on `HOST_PORT`; tunnel `service:` must match (`http://localhost:8080`) |
-| Samba not visible | UFW LAN rules; `smbd` running; use IP instead of `.local` |
-| Disk full | `df -h`, `docker system df`, prune old dumps under `/var/backups` |
-| Slow builds on old CPU | Normal for first `--build`; later starts are faster |
+| Cloudflare 502 | Hollow not on `HOST_PORT`; tunnel `service:` must match `http://localhost:8080` |
 
 ---
 
-## 19. Security checklist
+## 16. Security checklist
 
-- [ ] SSH key auth; password SSH disabled
-- [ ] Strong `POSTGRES_PASSWORD`, `JWT_SECRET`, `CONTENT_ENCRYPTION_KEY`
-- [ ] UFW on; Samba not exposed to the internet
-- [ ] Public Hollow only via HTTPS (Cloudflare Tunnel or similar)
-- [ ] `ADMIN_EMAILS` only accounts you trust
-- [ ] `.env` backed up offline, never in git
-- [ ] Nightly DB dumps + occasional off-site copy
-- [ ] NAS Samba password set; no guest write access
-- [ ] Unattended laptop: full-disk encryption was optional at install — if the
-      machine might be stolen, consider LUKS next reinstall
-- [ ] Keep Ubuntu and Docker images updated
+- [ ] Strong `POSTGRES_PASSWORD`, `JWT_SECRET`, and preferably `CONTENT_ENCRYPTION_KEY`
+- [ ] HTTPS via Cloudflare or Let’s Encrypt (do not expose plain HTTP publicly)
+- [ ] SSH key auth; disable password SSH if possible
+- [ ] `ADMIN_EMAILS` set only to accounts you trust
+- [ ] Regular DB backups + offline `.env` copy
+- [ ] Keep the host and images updated (`apt upgrade`, rebuild images periodically)
 
 Hollow stores JWTs in the browser `localStorage` by design for this project —
 fine for a self-hosted notes app; harden further before treating it as
@@ -932,35 +617,28 @@ high-security production.
 
 ---
 
-## 20. Local development vs this server
+## 17. Local development vs this server
 
-| | Dev (your PC) | This Ubuntu laptop |
+| | Dev (your PC) | This Ubuntu server |
 |---|---|---|
 | Infra | `docker compose -f docker-compose.dev.yml up -d` | `docker compose up -d --build` |
 | API | `cd backend && npm run dev` | container `backend` |
 | Web | `cd frontend && npm run dev` | container `web` (Nginx) |
 | DB URL | `localhost:5433` | `postgres:5432` inside compose |
-| Public URL | — | Cloudflare → `:8080` |
 
 Do **not** run both compose files against the same host ports at once without
 changing mappings.
 
 ---
 
-## Quick “first weekend” path
+## Quick path
 
-If you want the shortest successful path:
-
-1. §3 updates + SSH keys  
-2. §4 hostname + router DHCP reservation  
-3. §5 lid / sleep  
-4. §6 `/opt/apps` + `/srv/nas`  
-5. §7 Docker  
-6. §8 UFW  
-7. §9 Samba  
-8. §10 Hollow up on `:8080`  
-9. §11 Cloudflare Tunnel  
-10. §12 enable services + reboot test  
-11. §15 backups  
-
-Then add other projects with §14 when you need them.
+1. §3 updates + SSH  
+2. §4 hostname + DHCP reservation  
+3. §5 lid/sleep (laptop only)  
+4. §6 Docker  
+5. §7 UFW  
+6. §8 Hollow up on `:8080`  
+7. §9 Cloudflare Tunnel (if you want public HTTPS)  
+8. §10 enable services + reboot test  
+9. §12 backups  
