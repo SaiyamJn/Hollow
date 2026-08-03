@@ -1,13 +1,18 @@
 # Deploy Hollow on Ubuntu
 
-This guide gets **Hollow** running on a fresh **Ubuntu 24.04 LTS** machine
-(home laptop or VPS) and optionally reachable on the internet.
+This guide gets **Hollow** running on Ubuntu (22.04 / 24.04 LTS) — typically a
+home laptop used as a server — and reachable from other networks.
 
-Assumptions for a home laptop:
+You can do the entire setup over **SSH from another Wi‑Fi**. You do not need to
+be on the same LAN as the server while configuring it.
 
-- The machine uses **DHCP** from your router
-- You can reserve a LAN IP on the router if you want a stable address
-- Prefer **Cloudflare Tunnel** for HTTPS (no router port-forwarding)
+**Remote access options (pick one in §9):**
+
+| Option | Needs a domain? | Good when… |
+|---|---|---|
+| **Public IP on port 80** | No | Your ISP/router already forwards ports 80/81 to this machine |
+| **Tailscale** | No | You want private access only for your own devices |
+| **Cloudflare Tunnel** | Yes | You want a public `https://…` hostname |
 
 Follow the sections in order the first time.
 
@@ -23,7 +28,7 @@ Follow the sections in order the first time.
 6. [Install Docker](#6-install-docker)
 7. [Firewall](#7-firewall)
 8. [Install and run Hollow](#8-install-and-run-hollow)
-9. [Reach Hollow from the internet](#9-reach-hollow-from-the-internet)
+9. [Remote access](#9-remote-access)
 10. [Auto-start after reboot](#10-auto-start-after-reboot)
 11. [Mobile app against production](#11-mobile-app-against-production)
 12. [Backups](#12-backups)
@@ -38,22 +43,16 @@ Follow the sections in order the first time.
 ## 1. What you will end up with
 
 ```
-Your phone / PC
+Your phone / PC (any network)
         │
-        ├─ LAN  → http://SERVER_LAN_IP:8080
-        │
-        └─ Internet (optional)
+        ├─ LAN          → http://192.168.x.x   (or :8080)
+        ├─ Public IP    → http://YOUR_PUBLIC_IP   (port 80)
+        └─ Tailscale    → http://100.x.y.z:80
                 │
                 ▼
-         Cloudflare Tunnel (HTTPS)
-                │
-                ▼
-         Ubuntu host
-                │
-                ▼
-         Docker Compose
-         ├─ web (Nginx)   :8080
-         ├─ backend API
+         Ubuntu host (Docker Compose)
+         ├─ web (Nginx)   HOST_PORT → container :80
+         ├─ backend API   :4000 (internal)
          ├─ PostgreSQL
          └─ Redis
 ```
@@ -61,26 +60,28 @@ Your phone / PC
 Architecture inside Docker:
 
 ```
-Nginx (:8080 on the host)          ← compose service `web`
+Nginx (published as HOST_PORT on the host)   ← compose service `web`
 ├─ /            → static React SPA
 ├─ /api/*       → backend:4000  (prefix stripped)
 └─ /socket.io/* → backend:4000  (WebSockets)
 ```
 
-Mobile apps point `EXPO_PUBLIC_API_URL` at `https://your.domain/api`
-(or `http://LAN_IP:8080/api` for LAN-only testing).
+`HOST_PORT` in `.env` controls the host listen port (commonly `80` or `8080`).
+
+Mobile apps point `EXPO_PUBLIC_API_URL` at `http://YOUR_PUBLIC_IP/api`
+(or Tailscale / domain equivalent). The path **must** include `/api`.
 
 ---
 
 ## 2. Before you start
 
-- [ ] Ubuntu **24.04 LTS** installed (Server preferred; Desktop also works)
-- [ ] You can log in (keyboard/monitor or SSH)
+- [ ] Ubuntu **22.04 or 24.04 LTS** (Server preferred; Desktop also works)
+- [ ] SSH access to the machine (LAN or public IP + port)
 - [ ] If it is a laptop: plugged into **AC power**
 - [ ] Ethernet preferred over Wi‑Fi
-- [ ] Router uses DHCP (default on most home routers)
-- [ ] Optional: a domain on **Cloudflare** for public HTTPS
-- [ ] This Hollow git repo URL (or a copy of the project)
+- [ ] Router uses DHCP (reserve a LAN IP if you can — §4.3)
+- [ ] Know which ports are forwarded to this machine (e.g. **80** and **81**)
+- [ ] This Hollow git repo URL
 
 ---
 
@@ -94,8 +95,6 @@ sudo apt upgrade -y
 sudo apt install -y curl git ca-certificates ufw openssh-server \
   htop net-tools avahi-daemon
 ```
-
-`avahi-daemon` lets other devices find the machine as `hostname.local` on the LAN.
 
 Enable SSH if needed:
 
@@ -116,7 +115,7 @@ Prefer logging in as that user (not root).
 
 ```bash
 ssh-keygen -t ed25519 -C "hollow-server"   # if you do not have a key yet
-ssh-copy-id saiya@SERVER_LAN_IP
+ssh-copy-id -p YOUR_SSH_PORT saiya@SERVER_IP
 ```
 
 On the server, harden SSH:
@@ -146,65 +145,58 @@ sudo timedatectl set-timezone Asia/Kolkata
 timedatectl status
 ```
 
-(Use your real timezone: `timedatectl list-timezones | grep -i asia`.)
-
 ---
 
 ## 4. DHCP, hostname, and LAN IP
 
 ### 4.1 Hostname (name of the whole machine)
 
+This is the **server** name (SSH prompt, `.local` discovery) — not a per-app name.
+
 ```bash
-sudo hostnamectl set-hostname hollow
+sudo hostnamectl set-hostname snoe    # pick any name you like
 sudo nano /etc/hosts
 ```
 
-Ensure:
+The `127.0.1.1` line must match that hostname:
 
 ```text
-127.0.1.1   hollow
+127.0.0.1 localhost
+127.0.1.1 snoe
 ```
 
-This is the **server** name (SSH, `.local` discovery) — not a per-app name.
-Public app URLs are separate DNS names (e.g. `notes.example.com`).
+The shell prompt looks like `username@hostname`. Only the part after `@` is the
+hostname. Your Linux username (e.g. `saiyam`) does **not** change.
 
-### 4.2 Find the current LAN IP
+```bash
+hostnamectl
+hostname
+exec bash   # refresh the prompt
+```
+
+### 4.2 Find the LAN IP
 
 ```bash
 hostname -I
 ip -4 addr show
 ```
 
-Look for something like `192.168.1.42` (not `127.0.0.1`).
+Example: `192.168.29.109` → LAN subnet is usually `192.168.29.0/24`.
 
 ### 4.3 DHCP reservation on the router (recommended)
 
-On the router admin page (often `192.168.1.1`):
-
-1. Open **DHCP** / **Address reservation** / **Static lease**
-2. Reserve this machine’s **MAC address** → a fixed IP (e.g. `192.168.1.50`)
-3. Save; reboot the Ubuntu box once so it picks up the lease
-
-Find the MAC:
-
-```bash
-ip link show
-# `link/ether aa:bb:cc:dd:ee:ff` on eth0 or wlan0
-```
-
-You stay on DHCP; the router just always hands out the same IP.
+Reserve this machine’s MAC → a fixed LAN IP so bookmarks and port-forwards stay
+stable. Find the MAC with `ip link show`.
 
 ---
 
 ## 5. Keep a laptop awake (lid closed)
 
-Skip this section on a VPS or desktop that never sleeps.
+Skip on a VPS or a machine that never sleeps.
 
 ```bash
 sudo nano /etc/systemd/logind.conf
 ```
-
-Set:
 
 ```ini
 HandleLidSwitch=ignore
@@ -218,16 +210,8 @@ sudo systemctl restart systemd-logind
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 ```
 
-If Ubuntu Desktop is installed, also disable automatic suspend in
-**Settings → Power**, or:
-
-```bash
-gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
-gsettings set org.gnome.settings-daemon.plugins.power lid-close-ac-action 'nothing'
-```
-
 Leave the laptop on AC power. In BIOS, enable **AC power recovery → Always On**
-if available so it comes back after a power cut.
+if available.
 
 ---
 
@@ -238,7 +222,7 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker "$USER"
 ```
 
-**Log out and SSH back in** so the `docker` group applies.
+**Log out and SSH back in**, then:
 
 ```bash
 docker --version
@@ -251,26 +235,33 @@ sudo systemctl enable --now docker
 
 ## 7. Firewall
 
-Allow SSH. Optionally allow Hollow on the LAN. Public HTTPS should go through
-Cloudflare Tunnel (§9) — you do **not** need to open 80/443 on the router.
+Allow SSH. Allow Hollow on the port you will publish (`HOST_PORT`).
 
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow OpenSSH
 
-# Optional: open Hollow to your LAN only (replace with your subnet)
-sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp
-
-sudo ufw enable
-sudo ufw status verbose
+# If SSH uses a custom port (example: 5001):
+# sudo ufw allow 5001/tcp
 ```
 
-Find your LAN CIDR:
+**If you will use public IP on port 80** (§9A):
 
 ```bash
-ip route | grep default
-# e.g. via 192.168.1.1 → often 192.168.1.0/24
+sudo ufw allow 80/tcp
+```
+
+**If you keep Hollow on LAN-only 8080 for now:**
+
+```bash
+# replace 192.168.29.0/24 with your LAN from §4.2
+sudo ufw allow from 192.168.29.0/24 to any port 8080 proto tcp
+```
+
+```bash
+sudo ufw enable
+sudo ufw status verbose
 ```
 
 ---
@@ -295,8 +286,7 @@ cp .env.example .env
 nano .env
 ```
 
-Generate secrets (run three times). Prefer hex only — special characters like
-`@` in `POSTGRES_PASSWORD` used to break the database URL:
+Generate secrets (**hex only** — run three times):
 
 ```bash
 openssl rand -hex 32
@@ -304,25 +294,37 @@ openssl rand -hex 32
 
 | Variable | Notes |
 |---|---|
-| `POSTGRES_PASSWORD` | Long random password |
-| `JWT_SECRET` | Different long random secret |
-| `CONTENT_ENCRYPTION_KEY` | Recommended: another `openssl rand -hex 32`. Encrypts unlocked content at rest. If omitted, derived from `JWT_SECRET` — rotating JWT later can make old ciphertext unreadable |
+| `POSTGRES_PASSWORD` | **Must be hex from `openssl rand -hex 32`**. Do not use `@` or `#` |
+| `JWT_SECRET` | Different hex secret |
+| `CONTENT_ENCRYPTION_KEY` | Third hex secret (recommended). Encrypts unlocked content at rest |
 | `ADMIN_EMAILS` | Your email, or leave empty |
-| `HOST_PORT` | Default `8080` |
-| `CORS_ORIGIN` | After the public URL works: `https://notes.yourdomain.com` |
+| `HOST_PORT` | Host port published by Nginx. Use **`80`** if that port is forwarded to this machine; otherwise `8080` |
+| `CORS_ORIGIN` | Optional; for a real HTTPS domain later |
 
-Example:
+**Critical `.env` rules:**
+
+- In `.env` files, `#` starts a **comment**.  
+  `POSTGRES_PASSWORD=snoe#1234` becomes just `snoe` — broken.
+- Never put passwords into `docker-compose.yml`. Only into `.env`.
+- Prefer `openssl rand -hex 32` so URLs never break.
+
+Example for **public access on port 80**:
 
 ```env
-POSTGRES_PASSWORD=paste_secret_1
-JWT_SECRET=paste_secret_2
-CONTENT_ENCRYPTION_KEY=paste_secret_3
+POSTGRES_PASSWORD=paste_first_hex
+JWT_SECRET=paste_second_hex
+CONTENT_ENCRYPTION_KEY=paste_third_hex
 ADMIN_EMAILS=you@example.com
-HOST_PORT=8080
-# CORS_ORIGIN=https://notes.example.com
+HOST_PORT=80
 ```
 
-Never commit `.env`. Keep a copy in a password manager.
+Verify (values must be long hex, no `#`):
+
+```bash
+grep -E '^(POSTGRES_PASSWORD|JWT_SECRET|CONTENT_ENCRYPTION_KEY|HOST_PORT)=' .env
+```
+
+Never commit `.env`. Keep an offline copy.
 
 ### 8.3 Build and start
 
@@ -333,28 +335,32 @@ docker compose up -d --build
 
 First build can take several minutes on an old CPU.
 
-Check:
+Check (use your `HOST_PORT` — omit `:80` in the browser, but curl needs it only if not 80):
 
 ```bash
 docker compose ps
-curl -s http://127.0.0.1:8080/api/health
-# → {"ok":true,"name":"Hollow","version":"1.0.0",...}
+# HOST_PORT=80:
+curl -s http://127.0.0.1/api/health
+# HOST_PORT=8080:
+# curl -s http://127.0.0.1:8080/api/health
+```
+
+Expect:
+
+```json
+{"ok":true,"name":"Hollow","version":"1.0.0","service":"api",...}
 ```
 
 On the LAN:
 
 ```text
-http://SERVER_LAN_IP:8080
+http://SERVER_LAN_IP          # if HOST_PORT=80
+http://SERVER_LAN_IP:8080     # if HOST_PORT=8080
 ```
 
-or
+Register an account. Migrations run automatically on backend start.
 
-```text
-http://hollow.local:8080
-```
-
-Register an account in the UI. Migrations run automatically on backend start
-(`prisma migrate deploy`).
+If the backend crash-loops, see §15 (usually bad `.env` secrets or an outdated image).
 
 ### 8.4 Useful Compose commands
 
@@ -368,43 +374,118 @@ docker compose down
 docker compose up -d --build
 ```
 
+If you change `POSTGRES_PASSWORD` after the first successful start, Postgres still
+has the old password in its volume. Fresh install only:
+
+```bash
+docker compose down -v    # deletes database data
+docker compose up -d --build
+```
+
 ---
 
-## 9. Reach Hollow from the internet
+## 9. Remote access
 
-### Option A — Cloudflare Tunnel (recommended for home / DHCP)
+You do **not** need to be on the same Wi‑Fi as the server to configure this —
+SSH in from anywhere and run the commands on the server.
 
-No port-forwarding, free HTTPS at the edge.
+### Option A — Public IP on port 80 (no domain)
 
-1. Create a free Cloudflare account and add your domain.
-2. Install `cloudflared` on the server:
+Use this when your network already forwards **port 80** (and optionally 81) to
+this Ubuntu machine.
+
+1. Set Hollow to listen on 80:
+
+```bash
+cd /opt/hollow
+nano .env
+# HOST_PORT=80
+sudo ufw allow 80/tcp
+sudo ufw reload
+docker compose up -d
+curl -s http://127.0.0.1/api/health
+```
+
+2. Confirm the router / upstream forward:
+
+```text
+Internet :80  →  this machine LAN IP :80
+```
+
+Port **81** can stay free for another app later.
+
+3. Open from any network:
+
+```text
+http://YOUR_PUBLIC_IP
+```
+
+Example: `http://203.192.206.63`
+
+4. Mobile:
+
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_PUBLIC_IP/api
+```
+
+**Security note:** this is plain **HTTP**. Login traffic is not encrypted on the
+wire. Acceptable for a small personal setup if you understand the risk; prefer
+Tailscale or a domain + HTTPS for anything sensitive.
+
+---
+
+### Option B — Tailscale (no domain, private)
+
+Only your devices can reach Hollow. No public website.
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+# open the printed URL in your browser and approve
+tailscale ip -4
+```
+
+```bash
+# match your HOST_PORT (80 or 8080)
+sudo ufw allow in on tailscale0 to any port 80 proto tcp
+sudo ufw reload
+```
+
+On phone/PC: install Tailscale (same account) → open `http://100.x.y.z`
+(or `http://100.x.y.z:8080` if `HOST_PORT=8080`).
+
+```env
+EXPO_PUBLIC_API_URL=http://100.x.y.z/api
+```
+
+---
+
+### Option C — Cloudflare Tunnel (needs a domain)
+
+Free HTTPS hostname; no port-forward for Hollow. Requires a domain on Cloudflare.
+
+1. Install and log in (copy the URL from the **SSH terminal** into your local browser):
 
 ```bash
 curl -L --output /tmp/cloudflared.deb \
   https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 sudo dpkg -i /tmp/cloudflared.deb
+cloudflared tunnel login
 ```
 
-3. Authenticate and create a tunnel:
+2. Create tunnel + DNS:
 
 ```bash
-cloudflared tunnel login
 cloudflared tunnel create hollow
-cloudflared tunnel list
 cloudflared tunnel route dns hollow notes.example.com
 ```
 
-Replace `notes.example.com` with your hostname.
-
-4. Config:
+3. Config — point at your `HOST_PORT` (example uses 80):
 
 ```bash
 sudo mkdir -p /etc/cloudflared
-sudo cp /opt/hollow/deploy/cloudflared.config.example.yml /etc/cloudflared/config.yml
 sudo nano /etc/cloudflared/config.yml
 ```
-
-Example:
 
 ```yaml
 tunnel: YOUR_TUNNEL_UUID
@@ -412,73 +493,29 @@ credentials-file: /home/saiya/.cloudflared/YOUR_TUNNEL_UUID.json
 
 ingress:
   - hostname: notes.example.com
-    service: http://localhost:8080
+    service: http://localhost:80
   - service: http_status:404
 ```
-
-Use the credentials path printed by `tunnel create` (sometimes under `/root/.cloudflared/`).
-
-5. Install as a service:
 
 ```bash
 sudo cloudflared service install
 sudo systemctl enable --now cloudflared
-sudo systemctl status cloudflared
 ```
 
-6. Visit `https://notes.example.com` and confirm login works.
-
-Then set CORS and restart:
-
 ```bash
+# optional CORS lock
 nano /opt/hollow/.env
 # CORS_ORIGIN=https://notes.example.com
 cd /opt/hollow && docker compose up -d
 ```
 
-### Option B — VPS with public IP (Caddy / Nginx + Let’s Encrypt)
+---
 
-1. Point DNS `A` record of `notes.example.com` to the VPS IP.
-2. Keep Hollow on `127.0.0.1:8080`, put Caddy or Nginx in front for TLS.
+### Option D — Domain + Caddy / Nginx on a VPS
 
-**Caddy** (`/etc/caddy/Caddyfile`):
-
-```caddy
-notes.example.com {
-    reverse_proxy 127.0.0.1:8080
-}
-```
-
-```bash
-sudo systemctl reload caddy
-```
-
-**Nginx** (host Nginx, not the container):
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name notes.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d notes.example.com
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-```
+If the machine has a public IP and you later buy a domain, put Caddy/Nginx +
+Let’s Encrypt in front of `http://127.0.0.1:80` (or `:8080`). Details omitted
+here — use Option C (Cloudflare) or a standard reverse-proxy guide.
 
 ---
 
@@ -491,14 +528,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now hollow.service
 ```
 
-If you use Cloudflare Tunnel:
-
-```bash
-sudo systemctl enable --now cloudflared
-```
-
-Docker’s `restart: unless-stopped` also brings containers back after reboot;
-the systemd unit makes `compose up` explicit.
+If using Cloudflare Tunnel: `sudo systemctl enable --now cloudflared`  
+Tailscale usually enables itself with the install script.
 
 Test:
 
@@ -506,39 +537,29 @@ Test:
 sudo reboot
 ```
 
-After it comes back:
+After it comes back (SSH in again):
 
 ```bash
-ssh saiya@SERVER_LAN_IP
 cd /opt/hollow && docker compose ps
-curl -s http://127.0.0.1:8080/api/health
+curl -s http://127.0.0.1/api/health    # or :8080 if HOST_PORT=8080
 ```
 
 ---
 
 ## 11. Mobile app against production
 
-```bash
-# mobile/.env
-EXPO_PUBLIC_API_URL=https://notes.example.com/api
-```
+| How you access the server | `EXPO_PUBLIC_API_URL` |
+|---|---|
+| Public IP on port 80 | `http://YOUR_PUBLIC_IP/api` |
+| LAN only, port 8080 | `http://192.168.29.109:8080/api` |
+| Tailscale, port 80 | `http://100.x.y.z/api` |
+| Cloudflare HTTPS | `https://notes.example.com/api` |
 
-Rebuild / restart Expo. The path **must** include `/api` because Nginx strips
-that prefix before forwarding to Express.
-
-LAN-only testing:
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.1.50:8080/api
-```
-
-Phone and server must be on the same Wi‑Fi; HTTP is fine on LAN only.
+Always include the `/api` suffix. Rebuild / restart Expo after changing it.
 
 ---
 
 ## 12. Backups
-
-Nightly Postgres dump:
 
 ```bash
 sudo mkdir -p /var/backups/hollow
@@ -550,9 +571,9 @@ crontab -e
 30 3 * * * find /var/backups/hollow -name '*.sql.gz' -mtime +14 -delete
 ```
 
-Also keep a safe offline copy of `/opt/hollow/.env`.
+Also keep `/opt/hollow/.env` offline.
 
-Restore (destructive — replaces DB contents):
+Restore (destructive):
 
 ```bash
 cd /opt/hollow
@@ -568,8 +589,11 @@ gunzip -c /var/backups/hollow/hollow-YYYY-MM-DD.sql.gz | \
 cd /opt/hollow
 git pull
 docker compose up -d --build
-docker compose logs -f backend   # confirm migrate deploy succeeded
+docker compose logs -f backend
 ```
+
+If `git pull` does not include a fix you applied manually on the server, keep
+those local edits or re-apply them after pull.
 
 ---
 
@@ -580,10 +604,7 @@ sudo apt update && sudo apt upgrade -y
 cd /opt/hollow && docker compose ps
 docker system prune -f
 df -h
-sudo systemctl status cloudflared --no-pager   # if using the tunnel
 ```
-
-Reboot after kernel updates when convenient: `sudo reboot`.
 
 ---
 
@@ -591,29 +612,30 @@ Reboot after kernel updates when convenient: `sudo reboot`.
 
 | Symptom | Check |
 |---|---|
-| Cannot SSH after reboot | New DHCP IP — check router client list; set a reservation (§4.3) |
+| Cannot SSH after reboot | DHCP IP changed — reserve it (§4.3); or use your public SSH port |
 | Laptop sleeps with lid closed | §5 |
-| `curl localhost:8080/api/health` fails | `cd /opt/hollow && docker compose ps` / `docker compose logs backend` |
-| Migrations fail | `.env` password changed after first volume create; wipe only if OK to lose data: `docker compose down -v` |
-| Web loads, API 404 | Use Nginx URL (`:8080`), not the backend port directly |
-| Live collab / sockets broken | Tunnel/proxy must allow WebSockets; see `/socket.io/` in Nginx config |
-| Mobile cannot login | `EXPO_PUBLIC_API_URL` must be `https://domain/api` (with `/api`) |
-| Cloudflare 502 | Hollow not on `HOST_PORT`; tunnel `service:` must match `http://localhost:8080` |
+| `502 Bad Gateway` | Backend crash-looping: `docker compose logs --tail=80 backend` |
+| Prisma host shows `"1234"` / empty DB name | Bad `POSTGRES_PASSWORD` in `.env` (`@` or `#`). Use `openssl rand -hex 32`, never put secrets in `compose` YAML |
+| `.env` password “ignored” after `#` | `#` starts a comment in `.env` — use hex only |
+| Prisma OpenSSL / `Error load` | Backend image needs OpenSSL (current `backend/Dockerfile`). Rebuild: `docker compose build --no-cache backend` |
+| YAML error in compose | Don’t paste passwords into `docker-compose.yml`; restore from repo / §8 |
+| Migrations fail after password change | `docker compose down -v` then `up -d --build` (wipes DB — ok on fresh install) |
+| Public IP works on SSH but not Hollow | Forward **80 → LAN:80**, set `HOST_PORT=80`, `ufw allow 80/tcp` |
+| Mobile cannot login | `EXPO_PUBLIC_API_URL` must end with `/api` |
+| Cloudflare login hangs over SSH | Copy the URL from the **server** terminal into your local browser; approve; confirm `~/.cloudflared/cert.pem` exists |
 
 ---
 
 ## 16. Security checklist
 
-- [ ] Strong `POSTGRES_PASSWORD`, `JWT_SECRET`, and preferably `CONTENT_ENCRYPTION_KEY`
-- [ ] HTTPS via Cloudflare or Let’s Encrypt (do not expose plain HTTP publicly)
+- [ ] Hex-only `POSTGRES_PASSWORD`, `JWT_SECRET`, `CONTENT_ENCRYPTION_KEY`
+- [ ] Secrets only in `.env`, never in `docker-compose.yml`
 - [ ] SSH key auth; disable password SSH if possible
-- [ ] `ADMIN_EMAILS` set only to accounts you trust
+- [ ] Prefer Tailscale or HTTPS over long-term public plain HTTP
+- [ ] If exposing port 80 publicly, accept HTTP risk or add HTTPS later
+- [ ] `ADMIN_EMAILS` only accounts you trust
 - [ ] Regular DB backups + offline `.env` copy
-- [ ] Keep the host and images updated (`apt upgrade`, rebuild images periodically)
-
-Hollow stores JWTs in the browser `localStorage` by design for this project —
-fine for a self-hosted notes app; harden further before treating it as
-high-security production.
+- [ ] Keep Ubuntu and images updated
 
 ---
 
@@ -626,19 +648,18 @@ high-security production.
 | Web | `cd frontend && npm run dev` | container `web` (Nginx) |
 | DB URL | `localhost:5433` | `postgres:5432` inside compose |
 
-Do **not** run both compose files against the same host ports at once without
-changing mappings.
-
 ---
 
-## Quick path
+## Quick path (public IP on port 80, no domain)
 
 1. §3 updates + SSH  
-2. §4 hostname + DHCP reservation  
-3. §5 lid/sleep (laptop only)  
+2. §4 hostname + LAN IP (optional DHCP reservation)  
+3. §5 lid/sleep (laptop)  
 4. §6 Docker  
-5. §7 UFW  
-6. §8 Hollow up on `:8080`  
-7. §9 Cloudflare Tunnel (if you want public HTTPS)  
-8. §10 enable services + reboot test  
+5. §7 UFW — allow SSH + `80/tcp`  
+6. §8 Hollow with hex secrets and `HOST_PORT=80`  
+7. §9A — open `http://YOUR_PUBLIC_IP`  
+8. §10 enable `hollow.service` + reboot test  
 9. §12 backups  
+
+**Alternative without opening the app to the whole internet:** §9B Tailscale instead of §9A.
