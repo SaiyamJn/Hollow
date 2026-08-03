@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "./stores/auth";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import AdminLogin from "./pages/AdminLogin";
 import AppShell from "./pages/AppShell";
 import Home from "./pages/Home";
 
@@ -29,7 +30,6 @@ function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated) return;
     const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-    // If hydration already finished between render and effect.
     if (useAuthStore.persist.hasHydrated()) setHydrated(true);
     return unsub;
   }, [hydrated]);
@@ -46,6 +46,15 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route
+        path="/admin"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <AdminDashboard />
+          </Suspense>
+        }
+      />
       <Route
         path="/"
         element={
@@ -108,14 +117,6 @@ export default function App() {
           element={
             <Suspense fallback={<RouteFallback />}>
               <Settings />
-            </Suspense>
-          }
-        />
-        <Route
-          path="admin"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <AdminDashboard />
             </Suspense>
           }
         />

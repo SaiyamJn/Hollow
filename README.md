@@ -64,4 +64,4 @@ Use Expo Go on a device that supports SDK 54.
 ## Notes
 
 - Do not commit `.env` files — only `.env.example` templates are tracked.
-- Admin stats: set `ADMIN_EMAILS` in the backend / root env to a comma-separated allowlist.
+- Admin console: set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (min 8 chars), then open `/admin/login`.

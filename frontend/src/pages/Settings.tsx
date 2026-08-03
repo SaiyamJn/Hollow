@@ -5,7 +5,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { disconnectSocket } from "../lib/socket";
-import { fetchAdminStats, fetchHealth } from "../lib/api";
+import { fetchHealth } from "../lib/api";
 import {
   APP_BUILD,
   APP_COPYRIGHT,
@@ -87,12 +87,6 @@ export default function Settings() {
       setReminderError("Notifications are blocked for this site — allow them in your browser settings.");
     }
   }
-
-  const { data: adminStats } = useQuery({
-    queryKey: ["admin-stats"],
-    queryFn: fetchAdminStats,
-    retry: false,
-  });
 
   const { data: health } = useQuery({
     queryKey: ["health"],
@@ -184,19 +178,18 @@ export default function Settings() {
         {bindError && <p className="text-sm text-danger">{bindError}</p>}
       </section>
 
-      {adminStats && (
-        <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
-          <div>
-            <h2 className="text-sm font-medium text-primary inline-flex items-center gap-1.5">
-              <ShieldCheck size={14} className="text-accent" /> Admin
-            </h2>
-            <p className="text-sm text-secondary mt-0.5">
-              {adminStats.totals.users} {adminStats.totals.users === 1 ? "user" : "users"} on this server
-            </p>
-          </div>
-          <Button onClick={() => navigate("/admin")}>Open dashboard</Button>
-        </section>
-      )}
+      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+        <div>
+          <h2 className="text-sm font-medium text-primary inline-flex items-center gap-1.5">
+            <ShieldCheck size={14} className="text-accent" /> Admin console
+          </h2>
+          <p className="text-sm text-secondary mt-0.5">
+            Separate login using <code className="text-accent">ADMIN_EMAIL</code> /{" "}
+            <code className="text-accent">ADMIN_PASSWORD</code> from the server env.
+          </p>
+        </div>
+        <Button onClick={() => navigate("/admin/login")}>Open admin</Button>
+      </section>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3 text-center">
         <h2 className="text-sm font-medium text-primary">Session</h2>

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { useAuthStore } from "../stores/auth";
+import { useAdminStore } from "../stores/admin";
 import { useUnlockStore } from "../stores/unlock";
 import type {
   AdminStats,
@@ -29,6 +30,23 @@ api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
+});
+
+/** Admin console uses a separate JWT (ADMIN_EMAIL / ADMIN_PASSWORD). */
+const adminApi = axios.create({
+  baseURL: apiBase,
+});
+
+adminApi.interceptors.request.use((config) => {
+  const token = useAdminStore.getState().token;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+adminApi.interceptors.response.use(undefined, (error) => {
+  const status = error.response?.status;
+  if (status === 401) useAdminStore.getState().logout();
+  return Promise.reject(error);
 });
 
 // Expired/invalid JWT -> drop the session and land on /login. A 401 with a
@@ -237,8 +255,17 @@ export async function fetchHealth() {
 }
 
 // ---- admin ----
+export async function adminLogin(email: string, password: string) {
+  // Use the shared client without requiring an admin session yet.
+  const { data } = await api.post<{ token: string; email: string }>("/admin/login", {
+    email,
+    password,
+  });
+  return data;
+}
+
 export async function fetchAdminStats() {
-  const { data } = await api.get<AdminStats>("/admin/stats");
+  const { data } = await adminApi.get<AdminStats>("/admin/stats");
   return data;
 }
 

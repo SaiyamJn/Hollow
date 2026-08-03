@@ -297,7 +297,7 @@ openssl rand -hex 32
 | `POSTGRES_PASSWORD` | **Must be hex from `openssl rand -hex 32`**. Do not use `@` or `#` |
 | `JWT_SECRET` | Different hex secret |
 | `CONTENT_ENCRYPTION_KEY` | Third hex secret (recommended). Encrypts unlocked content at rest |
-| `ADMIN_EMAILS` | Your email, or leave empty |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin console login at `/admin/login` (min 8 char password). Leave empty to disable |
 | `HOST_PORT` | Host port published by Nginx. Use **`80`** if that port is forwarded to this machine; otherwise `8080` |
 | `CORS_ORIGIN` | Optional; for a real HTTPS domain later |
 
@@ -314,7 +314,8 @@ Example for **public access on port 80**:
 POSTGRES_PASSWORD=paste_first_hex
 JWT_SECRET=paste_second_hex
 CONTENT_ENCRYPTION_KEY=paste_third_hex
-ADMIN_EMAILS=you@example.com
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your_strong_admin_password
 HOST_PORT=80
 ```
 
@@ -634,7 +635,7 @@ df -h
 - [ ] SSH key auth; disable password SSH if possible
 - [ ] Prefer Tailscale or HTTPS over long-term public plain HTTP
 - [ ] If exposing port 80 publicly, accept HTTP risk or add HTTPS later
-- [ ] `ADMIN_EMAILS` only accounts you trust
+- [ ] Strong `ADMIN_EMAIL` / `ADMIN_PASSWORD` (or leave unset to disable admin)
 - [ ] Regular DB backups + offline `.env` copy
 - [ ] Keep Ubuntu and images updated
 

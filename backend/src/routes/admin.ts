@@ -1,31 +1,84 @@
-import { Router, Response, NextFunction } from "express";
+import { Router, Response, NextFunction, Request } from "express";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
+import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { requireAuth, AuthedRequest } from "../middleware/auth";
 
 const router = Router();
-router.use(requireAuth);
 
-// Admins are configured via ADMIN_EMAILS (comma-separated) in .env — no
-// schema change needed for a self-hosted deployment. With the variable unset
-// the whole /admin surface stays disabled.
-async function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction) {
-  const admins = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (admins.length === 0) return res.status(403).json({ error: "Admin access is not configured" });
-  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { email: true } });
-  if (!user || !admins.includes(user.email.toLowerCase())) {
-    return res.status(403).json({ error: "Admin access required" });
-  }
-  next();
+interface AdminRequest extends Request {
+  adminEmail?: string;
 }
+
+function adminConfigured() {
+  const email = process.env.ADMIN_EMAIL?.trim();
+  const password = process.env.ADMIN_PASSWORD ?? "";
+  return Boolean(email && password.length >= 8);
+}
+
+function timingSafeStringEqual(a: string, b: string) {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+function signAdminToken(email: string): string {
+  return jwt.sign({ role: "admin", email }, process.env.JWT_SECRET!, { expiresIn: "12h" });
+}
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+/** Separate from user accounts — credentials come only from env. */
+router.post("/login", async (req, res) => {
+  if (!adminConfigured()) {
+    return res.status(403).json({ error: "Admin access is not configured" });
+  }
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid email or password" });
+
+  const expectEmail = process.env.ADMIN_EMAIL!.trim().toLowerCase();
+  const expectPassword = process.env.ADMIN_PASSWORD!;
+  const emailOk = timingSafeStringEqual(parsed.data.email.trim().toLowerCase(), expectEmail);
+  const passOk = timingSafeStringEqual(parsed.data.password, expectPassword);
+  if (!emailOk || !passOk) {
+    return res.status(401).json({ error: "Invalid email or password" });
+  }
+
+  res.json({
+    token: signAdminToken(expectEmail),
+    email: expectEmail,
+  });
+});
+
+async function requireAdmin(req: AdminRequest, res: Response, next: NextFunction) {
+  if (!adminConfigured()) {
+    return res.status(403).json({ error: "Admin access is not configured" });
+  }
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "Missing token" });
+  try {
+    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as {
+      role?: string;
+      email?: string;
+    };
+    if (payload.role !== "admin" || !payload.email) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    req.adminEmail = payload.email;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
 router.use(requireAdmin);
 
-// Aggregate stats only — this endpoint never returns note contents, titles,
-// or anything else a user wrote. Locked content is additionally encrypted at
-// rest, so even raw sizes below are ciphertext sizes.
-router.get("/stats", async (_req: AuthedRequest, res) => {
+// Aggregate stats + per-user details. Never returns note contents or titles.
+router.get("/stats", async (_req: AdminRequest, res) => {
   const [userCount, notebookCount, sectionCount, pageCount, quickNoteCount, taskCount, linkCount] =
     await Promise.all([
       prisma.user.count(),
@@ -38,7 +91,7 @@ router.get("/stats", async (_req: AuthedRequest, res) => {
     ]);
 
   const users = await prisma.user.findMany({
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     select: {
       id: true,
       email: true,
@@ -48,7 +101,6 @@ router.get("/stats", async (_req: AuthedRequest, res) => {
     },
   });
 
-  // Approximate storage per user: total characters of page content.
   const byteRows = await prisma.$queryRaw<{ ownerId: string; bytes: bigint }[]>`
     SELECT n."ownerId" AS "ownerId", COALESCE(SUM(LENGTH(p."content")), 0)::bigint AS bytes
     FROM "Page" p
@@ -59,17 +111,37 @@ router.get("/stats", async (_req: AuthedRequest, res) => {
 
   const detailed = await Promise.all(
     users.map(async (u) => {
-      const [sections, lockedSections, pages, tasksDone, lastPage] = await Promise.all([
-        prisma.section.count({ where: { notebook: { ownerId: u.id } } }),
-        prisma.section.count({ where: { notebook: { ownerId: u.id }, isLocked: true } }),
-        prisma.page.count({ where: { section: { notebook: { ownerId: u.id } } } }),
-        prisma.task.count({ where: { ownerId: u.id, done: true } }),
-        prisma.page.findFirst({
-          where: { section: { notebook: { ownerId: u.id } } },
-          orderBy: { updatedAt: "desc" },
-          select: { updatedAt: true },
-        }),
-      ]);
+      const [sections, lockedSections, pages, tasksDone, lastPage, lastNote, lastTask] =
+        await Promise.all([
+          prisma.section.count({ where: { notebook: { ownerId: u.id } } }),
+          prisma.section.count({ where: { notebook: { ownerId: u.id }, isLocked: true } }),
+          prisma.page.count({ where: { section: { notebook: { ownerId: u.id } } } }),
+          prisma.task.count({ where: { ownerId: u.id, done: true } }),
+          prisma.page.findFirst({
+            where: { section: { notebook: { ownerId: u.id } } },
+            orderBy: { updatedAt: "desc" },
+            select: { updatedAt: true },
+          }),
+          prisma.quickNote.findFirst({
+            where: { ownerId: u.id },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          }),
+          prisma.task.findFirst({
+            where: { ownerId: u.id },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          }),
+        ]);
+
+      const activityDates = [lastPage?.updatedAt, lastNote?.createdAt, lastTask?.createdAt].filter(
+        Boolean
+      ) as Date[];
+      const lastActive =
+        activityDates.length > 0
+          ? new Date(Math.max(...activityDates.map((d) => d.getTime())))
+          : null;
+
       return {
         id: u.id,
         name: u.name,
@@ -82,7 +154,7 @@ router.get("/stats", async (_req: AuthedRequest, res) => {
         quickNotes: u._count.quickNotes,
         tasks: u._count.tasks,
         tasksDone,
-        lastActive: lastPage?.updatedAt ?? null,
+        lastActive,
         contentBytes: bytesByOwner.get(u.id) ?? 0,
       };
     })
