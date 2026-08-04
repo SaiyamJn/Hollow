@@ -7,6 +7,7 @@ import {
   CheckSquare,
   FileText,
   Home,
+  Layers,
   Lock,
   Maximize2,
   Moon,
@@ -17,7 +18,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import clsx from "clsx";
-import { fetchNotebooks, openDailyNote } from "../lib/api";
+import { fetchNotebooks, fetchQuickNotes, openDailyNote } from "../lib/api";
 import { formatCombo, useKeybindsStore } from "../lib/keybinds";
 import { useUiStore } from "../stores/ui";
 import { useUnlockStore } from "../stores/unlock";
@@ -30,7 +31,24 @@ interface PaletteItem {
   icon: React.ReactNode;
   keywords?: string;
   locked?: boolean;
+  /** Higher = shown first when searching. */
+  rank?: number;
   run: () => void;
+}
+
+function scoreMatch(item: PaletteItem, q: string): number {
+  const label = item.label.toLowerCase();
+  const hint = (item.hint ?? "").toLowerCase();
+  const keys = (item.keywords ?? "").toLowerCase();
+  const hay = `${label} ${hint} ${keys}`;
+  if (!hay.includes(q)) return -1;
+  let score = item.rank ?? 0;
+  if (label === q) score += 100;
+  else if (label.startsWith(q)) score += 60;
+  else if (label.includes(q)) score += 40;
+  if (hint.includes(q)) score += 15;
+  if (keys.includes(q)) score += 8;
+  return score;
 }
 
 export function CommandPalette() {
@@ -52,6 +70,11 @@ export function CommandPalette() {
   const listRef = useRef<HTMLDivElement>(null);
 
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks, enabled: open });
+  const { data: quickNotes } = useQuery({
+    queryKey: ["quicknotes", false],
+    queryFn: () => fetchQuickNotes(false),
+    enabled: open,
+  });
 
   const daily = useMutation({
     mutationFn: openDailyNote,
@@ -65,7 +88,6 @@ export function CommandPalette() {
     if (open) {
       setQuery("");
       setSelected(0);
-      // Wait for the panel to mount before focusing.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -82,6 +104,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.daily),
         icon: <CalendarDays size={15} />,
         keywords: "journal today diary",
+        rank: 10,
         run: () => {
           close();
           daily.mutate();
@@ -93,6 +116,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.quickNotes),
         icon: <StickyNote size={15} />,
         keywords: "capture sticky keep",
+        rank: 10,
         run: () => {
           close();
           navigate("/quick-notes");
@@ -104,6 +128,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.home),
         icon: <Home size={15} />,
         keywords: "dashboard start",
+        rank: 5,
         run: () => {
           close();
           navigate("/");
@@ -115,6 +140,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.notebooks),
         icon: <Book size={15} />,
         keywords: "shelf library",
+        rank: 5,
         run: () => {
           close();
           navigate("/notebooks");
@@ -126,6 +152,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.tasks),
         icon: <CheckSquare size={15} />,
         keywords: "todo",
+        rank: 5,
         run: () => {
           close();
           navigate("/tasks");
@@ -137,6 +164,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.quickNotes),
         icon: <StickyNote size={15} />,
         keywords: "sticky",
+        rank: 5,
         run: () => {
           close();
           navigate("/quick-notes");
@@ -150,6 +178,7 @@ export function CommandPalette() {
               hint: formatCombo(binds.graph),
               icon: <Waypoints size={15} />,
               keywords: "links network map",
+              rank: 5,
               run: () => {
                 close();
                 navigate(`/notebooks/${graphNotebookId}/graph`);
@@ -162,6 +191,7 @@ export function CommandPalette() {
         label: "Open settings",
         hint: formatCombo(binds.settings),
         icon: <Settings size={15} />,
+        rank: 3,
         run: () => {
           close();
           navigate("/settings");
@@ -173,6 +203,7 @@ export function CommandPalette() {
         hint: formatCombo(binds.theme),
         icon: theme === "dark" ? <Sun size={15} /> : <Moon size={15} />,
         keywords: "dark light mode appearance",
+        rank: 3,
         run: () => {
           close();
           toggleTheme();
@@ -186,6 +217,7 @@ export function CommandPalette() {
               hint: formatCombo(binds.focus),
               icon: <Maximize2 size={15} />,
               keywords: "zen write distraction",
+              rank: 8,
               run: () => {
                 close();
                 setFocusMode(!focusMode);
@@ -195,6 +227,36 @@ export function CommandPalette() {
         : []),
     ];
 
+    const notebookItems: PaletteItem[] = (notebooks ?? []).map((nb) => ({
+      id: `nb-${nb.id}`,
+      label: nb.title,
+      hint: "Notebook",
+      icon: <Book size={15} />,
+      keywords: `notebook shelf ${nb.title}`,
+      rank: 50,
+      locked: nb.isLocked,
+      run: () => {
+        setOpen(false);
+        navigate(`/notebooks/${nb.id}`);
+      },
+    }));
+
+    const sectionItems: PaletteItem[] = (notebooks ?? []).flatMap((nb) =>
+      nb.sections.map((sec) => ({
+        id: `sec-${sec.id}`,
+        label: sec.title,
+        hint: `${nb.title} · section`,
+        icon: <Layers size={15} />,
+        keywords: `section ${nb.title} ${sec.title}`,
+        rank: 40,
+        locked: sec.isLocked && !sectionPasswords[sec.id],
+        run: () => {
+          setOpen(false);
+          navigate(`/notebooks/${nb.id}`);
+        },
+      }))
+    );
+
     const pages: PaletteItem[] = (notebooks ?? []).flatMap((nb) =>
       nb.sections.flatMap((sec) =>
         sec.pages.map((p) => ({
@@ -202,6 +264,8 @@ export function CommandPalette() {
           label: p.title,
           hint: `${nb.title} / ${sec.title}`,
           icon: <FileText size={15} />,
+          keywords: `page note ${nb.title} ${sec.title} ${p.title}`,
+          rank: 55,
           locked: sec.isLocked && !sectionPasswords[sec.id],
           run: () => {
             setOpen(false);
@@ -211,26 +275,52 @@ export function CommandPalette() {
       )
     );
 
-    const notebookItems: PaletteItem[] = (notebooks ?? []).map((nb) => ({
+    const noteItems: PaletteItem[] = (quickNotes ?? []).map((note) => {
+      const preview = note.content.trim().split(/\n/)[0].slice(0, 72) || "Empty note";
+      return {
+        id: `qn-${note.id}`,
+        label: preview,
+        hint: "Quick note",
+        icon: <StickyNote size={15} />,
+        keywords: `quick note sticky ${note.content}`,
+        rank: 45,
+        run: () => {
+          setOpen(false);
+          navigate("/quick-notes");
+        },
+      };
+    });
+
+    const graphItems: PaletteItem[] = (notebooks ?? []).map((nb) => ({
       id: `nb-graph-${nb.id}`,
       label: `Graph: ${nb.title}`,
-      icon: <Book size={15} />,
-      keywords: "notebook graph",
+      hint: "Graph",
+      icon: <Waypoints size={15} />,
+      keywords: `notebook graph ${nb.title}`,
+      rank: 20,
       run: () => {
         setOpen(false);
         navigate(`/notebooks/${nb.id}/graph`);
       },
     }));
 
-    return [...actions, ...pages, ...notebookItems];
-  }, [notebooks, theme, focusMode, onEditorPage, graphNotebookId, sectionPasswords, binds]); // eslint-disable-line react-hooks/exhaustive-deps
+    return [...actions, ...notebookItems, ...sectionItems, ...pages, ...noteItems, ...graphItems];
+  }, [notebooks, quickNotes, theme, focusMode, onEditorPage, graphNotebookId, sectionPasswords, binds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items.slice(0, 12);
+    if (!q) {
+      // Idle: prefer content jump targets, then a few actions.
+      const content = items.filter((i) => (i.rank ?? 0) >= 40).slice(0, 10);
+      const actions = items.filter((i) => (i.rank ?? 0) < 40).slice(0, 6);
+      return [...content, ...actions].slice(0, 16);
+    }
     return items
-      .filter((item) => `${item.label} ${item.hint ?? ""} ${item.keywords ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 12);
+      .map((item) => ({ item, score: scoreMatch(item, q) }))
+      .filter((x) => x.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map((x) => x.item);
   }, [items, query]);
 
   useEffect(() => setSelected(0), [query]);
@@ -274,7 +364,7 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             className="flex-1 bg-transparent py-3 text-sm focus:outline-none placeholder:text-secondary"
-            placeholder="Search pages, or type a command…"
+            placeholder="Search notebooks, pages, notes…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

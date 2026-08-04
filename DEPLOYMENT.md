@@ -296,7 +296,7 @@ openssl rand -hex 32
 |---|---|
 | `POSTGRES_PASSWORD` | **Must be hex from `openssl rand -hex 32`**. Do not use `@` or `#` |
 | `JWT_SECRET` | Different hex secret |
-| `CONTENT_ENCRYPTION_KEY` | Third hex secret (recommended). Encrypts unlocked content at rest |
+| `CONTENT_ENCRYPTION_KEY` | **Required** third hex secret. Encrypts pages / notes / tasks at rest. Without it, creates fail |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin console login at `/admin/login` (min 8 char password). Leave empty to disable |
 | `HOST_PORT` | Host port published by Nginx. Use **`80`** if that port is forwarded to this machine; otherwise `8080` |
 | `CORS_ORIGIN` | Optional; for a real HTTPS domain later |
@@ -689,6 +689,7 @@ df -h
 | Mobile cannot login | `EXPO_PUBLIC_API_URL` must end with `/api` (production Nginx). Rebuild EAS after changing it |
 | EAS Android build fails / no API | Set `EXPO_PUBLIC_API_URL` in `mobile/eas.json` before `eas build`; run `eas init` once |
 | Mobile HTTP blocked on device | `app.config.js` enables cleartext / ATS bypass — rebuild if you removed those |
+| Create page / note / task fails; backend log `CONTENT_ENCRYPTION_KEY or a strong JWT_SECRET` | Your `JWT_SECRET` is too short or the key is unset. On the server: `openssl rand -hex 32` → add `CONTENT_ENCRYPTION_KEY=<hex>` to `/opt/hollow/.env` → `docker compose up -d --force-recreate backend` |
 | Web register/login returns **405** | Frontend built with empty `VITE_API_URL` posts to `/auth` not `/api/auth`. Pull latest, `docker compose up -d --build` (rebuild **web**) |
 | Cloudflare login hangs over SSH | Copy the URL from the **server** terminal into your local browser; approve; confirm `~/.cloudflared/cert.pem` exists |
 

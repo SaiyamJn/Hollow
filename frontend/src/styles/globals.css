@@ -126,8 +126,24 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   animation: seal-pulse 2.6s ease-in-out infinite;
 }
 
+/* Soft keyboard focus — visible when tabbing, quiet on mouse click. */
+:where(a, button, input, textarea, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus {
+  outline: none;
+}
+:where(a, button, input, textarea, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface-0),
+    0 0 0 3.5px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+/* Nested controls (e.g. icon buttons) keep a slightly tighter halo. */
+:where(button, [role="button"], a):focus-visible {
+  border-radius: 0.5rem;
+}
+
 /* Focus mode: calmer, roomier prose. */
 .focus-prose .bn-editor {
   font-size: 1.0625rem;
   line-height: 1.75;
 }
+

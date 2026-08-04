@@ -13,6 +13,9 @@ import tagRoutes from "./routes/tags";
 import adminRoutes from "./routes/admin";
 import { registerCollab } from "./sockets/collab";
 import { APP_NAME, APP_SERVICE, APP_VERSION } from "./lib/appInfo";
+import { assertAtRestKeyConfigured } from "./lib/encryption";
+
+assertAtRestKeyConfigured();
 
 const app = express();
 app.set("trust proxy", 1);

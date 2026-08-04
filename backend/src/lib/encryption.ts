@@ -45,12 +45,16 @@ export function decrypt(payload: string, key: Buffer): string {
 
 let cachedAtRestKey: Buffer | null = null;
 
-/** 32-byte AES key for server-side at-rest encryption. */
+/**
+ * 32-byte AES key for server-side at-rest encryption.
+ * Prefer CONTENT_ENCRYPTION_KEY (64-char hex). Falls back to a stable hash of
+ * JWT_SECRET so short secrets still work — never crash create/save routes.
+ */
 function getAtRestKey(): Buffer {
   if (cachedAtRestKey) return cachedAtRestKey;
+
   const raw = process.env.CONTENT_ENCRYPTION_KEY?.trim();
   if (raw) {
-    // Accept 64-char hex or base64 / utf8 secret (≥32 chars preferred).
     if (/^[0-9a-fA-F]{64}$/.test(raw)) {
       cachedAtRestKey = Buffer.from(raw, "hex");
     } else {
@@ -64,16 +68,36 @@ function getAtRestKey(): Buffer {
         cachedAtRestKey = crypto.createHash("sha256").update(raw).digest();
       }
     }
-  } else {
-    const jwt = process.env.JWT_SECRET;
-    if (!jwt || jwt.length < 16) {
-      throw new Error(
-        "CONTENT_ENCRYPTION_KEY or a strong JWT_SECRET is required to encrypt content at rest"
+    return cachedAtRestKey;
+  }
+
+  const jwt = process.env.JWT_SECRET?.trim();
+  if (jwt) {
+    if (jwt.length < 16) {
+      console.warn(
+        "[hollow] JWT_SECRET is short (<16). Set CONTENT_ENCRYPTION_KEY=" +
+          "`openssl rand -hex 32` in .env for a dedicated at-rest key."
       );
     }
     cachedAtRestKey = crypto.createHash("sha256").update(`hollow-at-rest:${jwt}`).digest();
+    return cachedAtRestKey;
   }
-  return cachedAtRestKey;
+
+  throw new Error(
+    "CONTENT_ENCRYPTION_KEY or JWT_SECRET is required to encrypt content at rest. " +
+      "Add CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32) to .env and recreate the backend container."
+  );
+}
+
+/** Call once at startup so misconfig is obvious in logs before the first write. */
+export function assertAtRestKeyConfigured(): void {
+  getAtRestKey();
+  if (!process.env.CONTENT_ENCRYPTION_KEY?.trim()) {
+    console.warn(
+      "[hollow] CONTENT_ENCRYPTION_KEY is unset — deriving at-rest key from JWT_SECRET. " +
+        "Set a dedicated hex key in .env before rotating JWT_SECRET."
+    );
+  }
 }
 
 export function isSealedAtRest(value: string): boolean {
