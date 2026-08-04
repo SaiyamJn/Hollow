@@ -52,14 +52,28 @@ Vite proxies `/api` and `/socket.io` to `localhost:4000`.
 
 ### 4. Mobile
 
+Same backend and user accounts as the web app. Point the phone at your API:
+
 ```bash
 cd mobile
-cp .env.example .env   # EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:4000
+cp .env.example .env
+# Local backend:  EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:4000
+# Production:     EXPO_PUBLIC_API_URL=http://YOUR_PUBLIC_IP/api
 npm install
 npx expo start
 ```
 
-Use Expo Go on a device that supports SDK 54.
+Use Expo Go (SDK 54) for day-to-day work.
+
+**Installable builds (Expo.dev / EAS):** see [DEPLOYMENT.md §11](./DEPLOYMENT.md#11-mobile-app-same-users-as-web--eas-build). Short version:
+
+```bash
+cd mobile
+# edit eas.json → EXPO_PUBLIC_API_URL=http://YOUR_PUBLIC_IP/api
+npx eas-cli@latest login
+npx eas-cli@latest init
+npm run build:android   # APK on expo.dev
+```
 
 ## Notes
 

@@ -30,7 +30,7 @@ Follow the sections in order the first time.
 8. [Install and run Hollow](#8-install-and-run-hollow)
 9. [Remote access](#9-remote-access)
 10. [Auto-start after reboot](#10-auto-start-after-reboot)
-11. [Mobile app against production](#11-mobile-app-against-production)
+11. [Mobile app (same users as web + EAS Build)](#11-mobile-app-same-users-as-web--eas-build)
 12. [Backups](#12-backups)
 13. [Updating Hollow](#13-updating-hollow)
 14. [Routine maintenance](#14-routine-maintenance)
@@ -547,7 +547,11 @@ curl -s http://127.0.0.1/api/health    # or :8080 if HOST_PORT=8080
 
 ---
 
-## 11. Mobile app against production
+## 11. Mobile app (same users as web + EAS Build)
+
+The Expo app talks to the **same** Hollow API and PostgreSQL as the web UI.
+Register or log in with the same email/password on phone or desktop — notebooks,
+pages, tasks, and quick notes are shared.
 
 | How you access the server | `EXPO_PUBLIC_API_URL` |
 |---|---|
@@ -556,7 +560,67 @@ curl -s http://127.0.0.1/api/health    # or :8080 if HOST_PORT=8080
 | Tailscale, port 80 | `http://100.x.y.z/api` |
 | Cloudflare HTTPS | `https://notes.example.com/api` |
 
-Always include the `/api` suffix. Rebuild / restart Expo after changing it.
+Always include the `/api` suffix. That value is **baked into** release binaries
+at build time (not changeable later without rebuilding).
+
+### 11.1 Dev against production (Expo Go)
+
+On your PC:
+
+```bash
+cd mobile
+cp .env.example .env
+# edit: EXPO_PUBLIC_API_URL=http://YOUR_PUBLIC_IP/api
+npm install
+npx expo start
+```
+
+Scan the QR code with Expo Go (SDK 54). Confirm Settings shows the API URL and
+`/health` is OK.
+
+### 11.2 Build installable apps with Expo.dev (EAS)
+
+One-time setup (Expo account required — free tier is enough for APKs):
+
+```bash
+cd mobile
+npm install
+npx eas-cli@latest login
+npx eas-cli@latest init    # links this folder to an Expo project; writes projectId
+```
+
+`mobile/eas.json` already points production builds at
+`http://203.192.206.63/api`. Change that value if your host or path differs
+(Tailscale, HTTPS domain, etc.).
+
+Android APK you can sideload (recommended first):
+
+```bash
+npm run build:android
+# same as: npx eas-cli@latest build --profile preview --platform android
+```
+
+Follow the URL on [expo.dev](https://expo.dev) → download the APK → install on
+the phone (allow “install unknown apps” if prompted).
+
+iOS (needs Apple Developer account for device builds):
+
+```bash
+npm run build:ios
+```
+
+Profiles in `eas.json`:
+
+| Profile | Output | Use |
+|---|---|---|
+| `preview` | Android **APK**, internal iOS | Sideload / TestFlight-style internal |
+| `production` | Android **AAB**, store iOS | Play Store / App Store |
+| `development` | Dev client | Optional native debugging |
+
+Cleartext HTTP is enabled in `app.config.js` so `http://…` APIs work on device.
+When you move to HTTPS, you can tighten ATS / cleartext settings later.
+
+If you change the server URL later, update `eas.json` and run a new EAS build.
 
 ---
 
@@ -622,7 +686,9 @@ df -h
 | YAML error in compose | Don’t paste passwords into `docker-compose.yml`; restore from repo / §8 |
 | Migrations fail after password change | `docker compose down -v` then `up -d --build` (wipes DB — ok on fresh install) |
 | Public IP works on SSH but not Hollow | Forward **80 → LAN:80**, set `HOST_PORT=80`, `ufw allow 80/tcp` |
-| Mobile cannot login | `EXPO_PUBLIC_API_URL` must end with `/api` |
+| Mobile cannot login | `EXPO_PUBLIC_API_URL` must end with `/api` (production Nginx). Rebuild EAS after changing it |
+| EAS Android build fails / no API | Set `EXPO_PUBLIC_API_URL` in `mobile/eas.json` before `eas build`; run `eas init` once |
+| Mobile HTTP blocked on device | `app.config.js` enables cleartext / ATS bypass — rebuild if you removed those |
 | Web register/login returns **405** | Frontend built with empty `VITE_API_URL` posts to `/auth` not `/api/auth`. Pull latest, `docker compose up -d --build` (rebuild **web**) |
 | Cloudflare login hangs over SSH | Copy the URL from the **server** terminal into your local browser; approve; confirm `~/.cloudflared/cert.pem` exists |
 

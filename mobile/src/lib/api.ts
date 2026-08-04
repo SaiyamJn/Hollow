@@ -6,13 +6,19 @@ import { Platform } from "react-native";
 import type { Backlink, DailyNote, Notebook, Page, PageMeta, QuickNote, RecentPage, Section, Task, User } from "./types";
 
 // Resolve the backend URL. Priority:
-// 1. EXPO_PUBLIC_API_URL (set this to your server, e.g. http://192.168.1.5:4000)
-// 2. On web: localhost (browser can't reach the phone's LAN host)
-// 3. The Metro bundler host (phones on the same Wi-Fi as the dev machine)
-// 4. localhost (emulator / last resort)
+// 1. EXPO_PUBLIC_API_URL (dev .env or EAS build env — baked at build time)
+// 2. app.config.js → extra.apiUrl (same value when set for EAS)
+// 3. On web: localhost (browser can't reach the phone's LAN host)
+// 4. Metro bundler host + :4000 (Expo Go / local backend on same Wi‑Fi)
+// 5. localhost (emulator / last resort)
+//
+// Production (Nginx): use http(s)://HOST/api  — must include the /api suffix.
+// Local backend only:  http://LAN_IP:4000
 function resolveBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
+  const fromExtra = String(Constants.expoConfig?.extra?.apiUrl ?? "").trim();
+  if (fromExtra) return fromExtra.replace(/\/$/, "");
   if (Platform.OS === "web") return "http://localhost:4000";
   const hostUri = Constants.expoConfig?.hostUri; // e.g. "192.168.1.5:8081"
   if (hostUri) return `http://${hostUri.split(":")[0]}:4000`;
