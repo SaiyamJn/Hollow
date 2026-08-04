@@ -32,8 +32,8 @@ services:
       # Entrypoint builds DATABASE_URL from this (URL-encoded) — do not set DATABASE_URL here.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      CONTENT_ENCRYPTION_KEY: ${CONTENT_ENCRYPTION_KEY:?Set CONTENT_ENCRYPTION_KEY in .env — run: openssl rand -hex 32}
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env}"
+      CONTENT_ENCRYPTION_KEY: "${CONTENT_ENCRYPTION_KEY:?Set CONTENT_ENCRYPTION_KEY in .env}"
       PORT: "4000"
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
