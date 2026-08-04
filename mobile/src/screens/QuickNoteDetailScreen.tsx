@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +12,7 @@ import { Feather } from "@expo/vector-icons";
 import { deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
 import { useTheme } from "../contexts/theme";
 import { GlassCard } from "../components/GlassCard";
+import { KeyboardSafe } from "../components/KeyboardSafe";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -135,10 +134,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   const archived = note?.archived ?? false;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.surface0 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <View style={styles.body}>
         <GlassCard
           style={{ flex: 1 }}
@@ -204,7 +200,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
           </View>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardSafe>
   );
 }
 

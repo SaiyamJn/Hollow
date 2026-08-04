@@ -5,23 +5,65 @@ import axios, { AxiosError } from "axios";
 import { Platform } from "react-native";
 import type { Backlink, DailyNote, Notebook, Page, PageMeta, QuickNote, RecentPage, Section, Task, User } from "./types";
 
+/** Expo tunnel / ngrok hosts — Metro only; never a Hollow API host. */
+function isTunnelOrPublicDevHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return (
+    h.includes("exp.direct") ||
+    h.includes("exp.host") ||
+    h.includes("ngrok") ||
+    h.includes("tunnel") ||
+    h.endsWith(".loca.lt")
+  );
+}
+
+function lanBackendFromMetro(): string | null {
+  // Prefer debuggerHost / hostUri like "192.168.1.5:8081" — not tunnel URLs.
+  const candidates = [
+    Constants.expoConfig?.hostUri,
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri,
+    (Constants as any).manifest?.debuggerHost,
+    (Constants as any).linkingUri,
+  ]
+    .filter(Boolean)
+    .map(String);
+
+  for (const raw of candidates) {
+    // "192.168.1.5:8081" or "http://192.168.1.5:8081"
+    const match = raw.match(/(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?/);
+    if (match) return `http://${match[1]}:4000`;
+
+    try {
+      const withProto = raw.includes("://") ? raw : `http://${raw}`;
+      const { hostname } = new URL(withProto);
+      if (hostname && !isTunnelOrPublicDevHost(hostname) && hostname !== "localhost") {
+        return `http://${hostname}:4000`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
 // Resolve the backend URL. Priority:
 // 1. EXPO_PUBLIC_API_URL (dev .env or EAS build env — baked at build time)
 // 2. app.config.js → extra.apiUrl (same value when set for EAS)
-// 3. On web: localhost (browser can't reach the phone's LAN host)
-// 4. Metro bundler host + :4000 (Expo Go / local backend on same Wi‑Fi)
+// 3. On web: localhost
+// 4. LAN IP from Metro (same Wi‑Fi, local backend) — never Expo tunnel hosts
 // 5. localhost (emulator / last resort)
 //
 // Production (Nginx): use http(s)://HOST/api  — must include the /api suffix.
 // Local backend only:  http://LAN_IP:4000
+// With `expo start --tunnel`, you MUST set EXPO_PUBLIC_API_URL (see mobile/.env).
 function resolveBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
   const fromExtra = String(Constants.expoConfig?.extra?.apiUrl ?? "").trim();
   if (fromExtra) return fromExtra.replace(/\/$/, "");
   if (Platform.OS === "web") return "http://localhost:4000";
-  const hostUri = Constants.expoConfig?.hostUri; // e.g. "192.168.1.5:8081"
-  if (hostUri) return `http://${hostUri.split(":")[0]}:4000`;
+  const fromLan = lanBackendFromMetro();
+  if (fromLan) return fromLan;
   return "http://localhost:4000";
 }
 

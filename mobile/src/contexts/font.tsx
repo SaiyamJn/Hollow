@@ -21,16 +21,15 @@ interface FontContextValue {
 
 const FontContext = createContext<FontContextValue | null>(null);
 
-// Patch Text / TextInput so the chosen face applies app-wide without
-// touching every screen. Custom fonts win over bare fontWeight.
+type WithDefaults = { defaultProps?: { style?: unknown } };
+
+/** Apply the chosen face to Text / TextInput app-wide. */
 function applyGlobalFontFamily(family: string | undefined) {
   const base = family ? { fontFamily: family } : {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const TextAny = Text as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inputAny = TextInput as any;
-  textAny.defaultProps = { ...(textAny.defaultProps ?? {}), style: base };
-  inputAny.defaultProps = { ...(inputAny.defaultProps ?? {}), style: base };
+  const textComponent = Text as unknown as WithDefaults;
+  const inputComponent = TextInput as unknown as WithDefaults;
+  textComponent.defaultProps = { ...(textComponent.defaultProps ?? {}), style: base };
+  inputComponent.defaultProps = { ...(inputComponent.defaultProps ?? {}), style: base };
 }
 
 export function FontProvider({ children }: { children: ReactNode }) {

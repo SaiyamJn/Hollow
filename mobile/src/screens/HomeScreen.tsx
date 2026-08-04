@@ -26,6 +26,8 @@ import { useUnlock } from "../contexts/unlock";
 import { Fab } from "../components/Fab";
 import { PromptModal } from "../components/PromptModal";
 import { GlassCard } from "../components/GlassCard";
+import { KeyboardSafe } from "../components/KeyboardSafe";
+import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 
 function greeting() {
   const h = new Date().getHours();
@@ -58,6 +60,7 @@ export default function HomeScreen({ navigation }: any) {
   const [captured, setCaptured] = useState(false);
   const [prompt, setPrompt] = useState<"notebook" | "task" | null>(null);
   const captureRef = useRef<TextInput>(null);
+  const keyboardInset = useKeyboardBottomInset();
 
   const {
     data: recent,
@@ -120,10 +123,10 @@ export default function HomeScreen({ navigation }: any) {
   const list = (scheduled.length > 0 ? scheduled : open.slice(0, 5).map((t) => ({ task: t, overdue: false }))).slice(0, 7);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+    <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 170 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 170 + keyboardInset }}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
     >
@@ -289,7 +292,7 @@ export default function HomeScreen({ navigation }: any) {
         }
       }}
     />
-    </View>
+    </KeyboardSafe>
   );
 }
 

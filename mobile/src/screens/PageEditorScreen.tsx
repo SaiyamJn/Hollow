@@ -20,6 +20,7 @@ import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
 import { GlassCard } from "../components/GlassCard";
+import { KeyboardSafe } from "../components/KeyboardSafe";
 
 // Slow breathing ring around the lock emblem on sealed content.
 function VaultSeal({ color, background }: { color: string; background: string }) {
@@ -260,7 +261,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const showTemplates = !templatesDismissed && !page?.content && text.trim() === "";
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+    <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       {wasRich && !focus && (
         <Text style={[styles.notice, { color: colors.textSecondary, borderBottomColor: colors.border }]}>
           Editing as plain text — rich formatting from the web is flattened on save.
@@ -338,7 +339,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
           </GlassCard>
         </Pressable>
       )}
-    </View>
+    </KeyboardSafe>
   );
 }
 

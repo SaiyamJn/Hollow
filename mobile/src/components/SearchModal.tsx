@@ -3,7 +3,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -127,7 +126,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <Pressable style={[styles.panel, { borderColor: colors.glassBorder }]} onPress={(e) => e.stopPropagation()}>
             <BlurView
               intensity={60}

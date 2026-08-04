@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -20,6 +19,8 @@ import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { GlassDateTimePicker, formatDueLabel } from "../components/GlassDateTimePicker";
+import { KeyboardSafe } from "../components/KeyboardSafe";
+import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
@@ -74,6 +75,7 @@ export default function TasksScreen() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
   const quickAddRef = useRef<TextInput>(null);
+  const keyboardInset = useKeyboardBottomInset();
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -142,12 +144,13 @@ export default function TasksScreen() {
         : colors.textSecondary;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+    <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <SectionList
         sections={groupTasks(tasks ?? [])}
         keyExtractor={(t) => t.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 170 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 170 + keyboardInset }}
         stickySectionHeadersEnabled={false}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ marginBottom: 16, alignItems: "center" }}>
             <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
@@ -329,7 +332,7 @@ export default function TasksScreen() {
           });
         }}
       />
-    </View>
+    </KeyboardSafe>
   );
 }
 
@@ -357,9 +360,13 @@ function TaskFormModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.draftOverlay}>
+      <KeyboardAvoidingView behavior="padding" style={styles.draftOverlay}>
         <GlassCard strong style={{ maxHeight: "90%" }} contentStyle={styles.draftCard}>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets
+          >
             <Text
               style={{
                 color: colors.textPrimary,

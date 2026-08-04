@@ -1,9 +1,19 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput } from "react-native";
 import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
 import { GlassCard } from "../components/GlassCard";
 import { BrandMark } from "../components/BrandMark";
+import { KeyboardSafe } from "../components/KeyboardSafe";
+import { API_URL } from "../lib/api";
+
+function authErrorMessage(err: any): string {
+  const fromApi = err?.response?.data?.error;
+  if (typeof fromApi === "string" && fromApi) return fromApi;
+  if (err?.code === "ECONNABORTED") return "Request timed out — check the API URL.";
+  if (!err?.response) return `Couldn't reach ${API_URL}`;
+  return "Couldn't create account";
+}
 
 export default function RegisterScreen({ navigation }: any) {
   const { register } = useAuth();
@@ -21,16 +31,17 @@ export default function RegisterScreen({ navigation }: any) {
     try {
       await register(email.trim(), password, name.trim(), username.trim());
     } catch (err: any) {
-      setError(err.response?.data?.error ?? "Couldn't reach the server");
+      setError(authErrorMessage(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={[styles.container, { backgroundColor: colors.surface0 }]}
+    <KeyboardSafe
+      scroll
+      style={{ backgroundColor: colors.surface0 }}
+      contentContainerStyle={styles.container}
     >
       <GlassCard strong contentStyle={styles.card}>
         <BrandMark size="lg" wordmark style={{ marginBottom: 4 }} />
@@ -82,15 +93,17 @@ export default function RegisterScreen({ navigation }: any) {
             Have an account? <Text style={{ color: colors.accent }}>Sign in</Text>
           </Text>
         </Pressable>
+        <Text style={[styles.apiHint, { color: colors.textSecondary }]} selectable>
+          API: {API_URL}
+        </Text>
       </GlassCard>
-    </KeyboardAvoidingView>
+    </KeyboardSafe>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
+  container: { flexGrow: 1, justifyContent: "center", padding: 24 },
   card: { padding: 24 },
-  logo: { fontSize: 20, fontWeight: "500" },
   subtitle: { fontSize: 13, marginTop: 2, marginBottom: 18 },
   input: {
     borderRadius: 12,
@@ -102,4 +115,5 @@ const styles = StyleSheet.create({
   },
   error: { color: "#f87171", fontSize: 13, marginBottom: 10 },
   button: { borderRadius: 12, alignItems: "center", paddingVertical: 11, marginTop: 4 },
+  apiHint: { fontSize: 11, marginTop: 16, textAlign: "center", opacity: 0.75 },
 });

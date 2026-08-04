@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useTheme } from "../contexts/theme";
 import { GlassCard } from "./GlassCard";
 
@@ -51,7 +51,7 @@ export function PromptModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={styles.overlay}>
         <GlassCard strong contentStyle={styles.card}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           <TextInput

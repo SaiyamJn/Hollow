@@ -38,6 +38,8 @@ const config = {
     predictiveBackGestureEnabled: false,
     // Required for http:// API hosts on release builds.
     usesCleartextTraffic: true,
+    // Shrink the window when the keyboard opens so inputs aren't covered.
+    softwareKeyboardLayoutMode: "resize",
   },
   web: {
     favicon: "./assets/favicon.png",

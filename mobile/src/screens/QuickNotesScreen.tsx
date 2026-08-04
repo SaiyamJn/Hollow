@@ -7,6 +7,8 @@ import type { QuickNote } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
+import { KeyboardSafe } from "../components/KeyboardSafe";
+import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -34,6 +36,7 @@ export default function QuickNotesScreen({ navigation }: any) {
   const [draftColor, setDraftColor] = useState("gray");
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<TextInput>(null);
+  const keyboardInset = useKeyboardBottomInset();
 
   const { data: notes } = useQuery({
     queryKey: ["quicknotes", showArchived],
@@ -65,14 +68,14 @@ export default function QuickNotesScreen({ navigation }: any) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+    <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <FlatList
         ref={listRef}
         data={notes ?? []}
         keyExtractor={(n) => n.id}
         numColumns={2}
         columnWrapperStyle={{ gap: 10, paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: 170, gap: 10 }}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: 170 + keyboardInset, gap: 10 }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ paddingHorizontal: 16, marginBottom: 12, alignItems: "center" }}>
@@ -97,6 +100,7 @@ export default function QuickNotesScreen({ navigation }: any) {
                 multiline
                 value={draft}
                 onChangeText={setDraft}
+                onFocus={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
               />
               <View style={styles.composerRow}>
                 <View style={styles.dots}>
@@ -167,7 +171,7 @@ export default function QuickNotesScreen({ navigation }: any) {
           },
         ]}
       />
-    </View>
+    </KeyboardSafe>
   );
 }
 
