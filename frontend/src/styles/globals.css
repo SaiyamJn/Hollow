@@ -15,6 +15,7 @@
   --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.05);
   --shadow-pop: 0 4px 24px rgba(20, 20, 20, 0.12);
   --glow: radial-gradient(ellipse 55% 40% at 50% -8%, rgba(13, 138, 104, 0.028), transparent);
+  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
 }
 .dark {
   --surface-0: #0f1012;
@@ -39,12 +40,11 @@ body {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-/* Minimal visual language: Inter with system fallbacks, two weights (400/500). */
+/* Typeface comes from --font-sans (FontProvider / Settings). Default Sora. */
 html {
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-weight: 400;
   letter-spacing: -0.011em;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
 }
 h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
@@ -71,6 +71,7 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 .bn-editor {
   background: transparent !important;
   padding-inline: 0 !important;
+  font-family: var(--font-sans) !important;
 }
 
 /* Soft-enter paragraphs should read as continuous prose, not stacked cards. */

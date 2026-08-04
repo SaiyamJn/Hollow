@@ -1,8 +1,8 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { Shield } from "lucide-react";
 import { adminLogin } from "../lib/api";
 import { useAdminStore } from "../stores/admin";
+import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -42,11 +42,14 @@ export default function AdminLogin() {
         className="w-full max-w-sm rounded-xl border border-border glass-strong p-8 space-y-4 shadow-pop animate-rise-in"
       >
         <div className="pb-1">
-          <div className="flex items-center gap-2">
-            <Shield size={16} className="text-accent" />
-            <h1 className="text-xl font-medium tracking-tight">Admin</h1>
+          <div className="flex items-center gap-2.5">
+            <BrandMark size="md" />
+            <div>
+              <h1 className="text-xl font-medium tracking-tight">Admin</h1>
+              <p className="text-xs text-secondary">Hollow</p>
+            </div>
           </div>
-          <p className="text-sm text-secondary mt-2">
+          <p className="text-sm text-secondary mt-3">
             Sign in with the credentials from your server <code className="text-accent">.env</code>.
           </p>
         </div>

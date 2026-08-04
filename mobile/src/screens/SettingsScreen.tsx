@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "re
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
+import { useFont } from "../contexts/font";
 import { useUnlock } from "../contexts/unlock";
 import { API_URL, fetchHealth } from "../lib/api";
 import {
@@ -13,8 +14,10 @@ import {
   APP_TAGLINE,
   APP_VERSION,
 } from "../lib/appInfo";
+import { FONT_OPTIONS } from "../lib/fonts";
 import { getNotificationsEnabled, setNotificationsEnabled, syncTaskReminders } from "../lib/notifications";
 import type { Task } from "../lib/types";
+import { BrandMark } from "../components/BrandMark";
 import { GlassCard } from "../components/GlassCard";
 
 function DetailRow({
@@ -38,6 +41,7 @@ function DetailRow({
 
 export default function SettingsScreen() {
   const { colors, theme, toggle } = useTheme();
+  const { font, setFont } = useFont();
   const { user, logout } = useAuth();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
@@ -99,6 +103,35 @@ export default function SettingsScreen() {
         />
       </GlassCard>
 
+      <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>FONT</Text>
+      <GlassCard contentStyle={{ paddingVertical: 4 }}>
+        {FONT_OPTIONS.map((opt, i) => {
+          const active = font === opt.id;
+          const face = opt.id === "system" ? undefined : `${opt.id}-regular`;
+          return (
+            <Pressable
+              key={opt.id}
+              onPress={() => setFont(opt.id)}
+              style={[
+                styles.fontRow,
+                i < FONT_OPTIONS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                active && { backgroundColor: colors.accentSoft },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", fontFamily: face }}>
+                  {opt.label}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: face }}>
+                  {opt.sample}
+                </Text>
+              </View>
+              {active && <Text style={{ color: colors.accent, fontSize: 13 }}>✓</Text>}
+            </Pressable>
+          );
+        })}
+      </GlassCard>
+
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>NOTIFICATIONS</Text>
       <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
         <View style={{ flex: 1, paddingRight: 12 }}>
@@ -125,8 +158,8 @@ export default function SettingsScreen() {
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>ABOUT</Text>
       <GlassCard contentStyle={[styles.card, styles.centered]}>
-        <View style={[styles.mark, { backgroundColor: colors.accent }]} />
-        <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500", marginTop: 10 }}>{APP_NAME}</Text>
+        <BrandMark size="xl" />
+        <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500", marginTop: 12 }}>{APP_NAME}</Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4, textAlign: "center" }}>
           {APP_TAGLINE}
         </Text>
@@ -162,7 +195,13 @@ const styles = StyleSheet.create({
   card: { padding: 14 },
   centered: { alignItems: "center", justifyContent: "center" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  mark: { height: 10, width: 10, borderRadius: 5 },
+  fontRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",

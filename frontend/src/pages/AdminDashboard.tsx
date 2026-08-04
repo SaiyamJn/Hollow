@@ -17,6 +17,7 @@ import {
 import { deleteAdminUser, fetchAdminStats } from "../lib/api";
 import type { AdminUserStats } from "../lib/types";
 import { useAdminStore } from "../stores/admin";
+import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -149,8 +150,8 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-surface-0 text-primary">
       <header className="h-12 border-b border-border glass-strong flex items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <Shield size={15} className="text-accent" />
+        <div className="flex items-center gap-2.5">
+          <BrandMark size="sm" />
           <span className="text-sm font-medium">Hollow Admin</span>
           {adminEmail && <span className="text-xs text-secondary hidden sm:inline">· {adminEmail}</span>}
         </div>

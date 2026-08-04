@@ -9,12 +9,12 @@ const config = {
   slug: "hollow",
   version: "1.0.0",
   orientation: "portrait",
-  icon: "./assets/icon.png",
+  icon: "./assets/hollow-logo.png",
   scheme: "hollow",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   splash: {
-    image: "./assets/splash-icon.png",
+    image: "./assets/hollow-logo.png",
     resizeMode: "contain",
     backgroundColor: "#0f1012",
   },
@@ -33,9 +33,7 @@ const config = {
     package: "com.hollow.notes",
     adaptiveIcon: {
       backgroundColor: "#0f1012",
-      foregroundImage: "./assets/android-icon-foreground.png",
-      backgroundImage: "./assets/android-icon-background.png",
-      monochromeImage: "./assets/android-icon-monochrome.png",
+      foregroundImage: "./assets/hollow-logo.png",
     },
     predictiveBackGestureEnabled: false,
     // Required for http:// API hosts on release builds.

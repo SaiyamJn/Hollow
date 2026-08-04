@@ -9,6 +9,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { ThemeProvider, useTheme } from "./src/contexts/theme";
+import { FontProvider, useFont } from "./src/contexts/font";
 import { AuthProvider, useAuth } from "./src/contexts/auth";
 import { UnlockProvider } from "./src/contexts/unlock";
 import { initOfflineSync } from "./src/lib/api";
@@ -196,6 +197,7 @@ function MainTabs({ navigation }: any) {
 function Root() {
   const { status } = useAuth();
   const { theme, colors } = useTheme();
+  const { fontsReady, fontFamily } = useFont();
 
   const navTheme = {
     ...(theme === "dark" ? DarkTheme : DefaultTheme),
@@ -209,7 +211,7 @@ function Root() {
     },
   };
 
-  if (status === "loading") {
+  if (status === "loading" || !fontsReady) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface0 }}>
         <ActivityIndicator color={colors.accent} />
@@ -224,7 +226,12 @@ function Root() {
         screenOptions={{
           headerStyle: { backgroundColor: "transparent" },
           headerBackground: () => <GlassChrome />,
-          headerTitleStyle: { color: colors.textPrimary, fontWeight: "500", fontSize: 16 },
+          headerTitleStyle: {
+            color: colors.textPrimary,
+            fontWeight: "500",
+            fontSize: 16,
+            ...(fontFamily ? { fontFamily } : null),
+          },
           headerTintColor: colors.accent,
           headerShadowVisible: false,
         }}
@@ -263,11 +270,13 @@ export default function App() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <AuthProvider>
-            <UnlockProvider>
-              <Root />
-            </UnlockProvider>
-          </AuthProvider>
+          <FontProvider>
+            <AuthProvider>
+              <UnlockProvider>
+                <Root />
+              </UnlockProvider>
+            </AuthProvider>
+          </FontProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

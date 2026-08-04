@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput 
 import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
 import { GlassCard } from "../components/GlassCard";
+import { BrandMark } from "../components/BrandMark";
 
 export default function RegisterScreen({ navigation }: any) {
   const { register } = useAuth();
@@ -32,7 +33,7 @@ export default function RegisterScreen({ navigation }: any) {
       style={[styles.container, { backgroundColor: colors.surface0 }]}
     >
       <GlassCard strong contentStyle={styles.card}>
-        <Text style={[styles.logo, { color: colors.textPrimary }]}>Hollow</Text>
+        <BrandMark size="lg" wordmark style={{ marginBottom: 4 }} />
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Create an account</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}

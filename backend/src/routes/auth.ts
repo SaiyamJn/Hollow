@@ -44,42 +44,62 @@ function normalizeUsername(raw: string) {
 }
 
 router.post("/register", async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
-  const email = parsed.data.email.trim().toLowerCase();
-  const username = normalizeUsername(parsed.data.username);
-  const { password, name } = parsed.data;
+  try {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+    const email = parsed.data.email.trim().toLowerCase();
+    const username = normalizeUsername(parsed.data.username);
+    const { password, name } = parsed.data;
 
-  const [byEmail, byUsername] = await Promise.all([
-    prisma.user.findUnique({ where: { email } }),
-    prisma.user.findUnique({ where: { username } }),
-  ]);
-  if (byEmail) return res.status(409).json({ error: "Email already registered" });
-  if (byUsername) return res.status(409).json({ error: "Username already taken" });
+    const [byEmail, byUsername] = await Promise.all([
+      prisma.user.findUnique({ where: { email } }),
+      prisma.user.findUnique({ where: { username } }),
+    ]);
+    if (byEmail) return res.status(409).json({ error: "Email already registered" });
+    if (byUsername) return res.status(409).json({ error: "Username already taken" });
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const user = await prisma.user.create({
-    data: { email, username, passwordHash, name: name.trim() },
-  });
-  res.status(201).json({ token: signToken(user.id), user: publicUser(user) });
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await prisma.user.create({
+      data: { email, username, passwordHash, name: name.trim() },
+    });
+    res.status(201).json({ token: signToken(user.id), user: publicUser(user) });
+  } catch (err: any) {
+    console.error("Register failed:", err);
+    if (err?.code === "P2022") {
+      return res.status(503).json({
+        error: "Database is missing a recent migration (username). Run: npx prisma migrate deploy",
+      });
+    }
+    res.status(500).json({ error: "Couldn't create account" });
+  }
 });
 
 router.post("/login", async (req, res) => {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
-  const identifier = (parsed.data.login ?? parsed.data.email)!.trim();
-  const { password } = parsed.data;
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+    const identifier = (parsed.data.login ?? parsed.data.email)!.trim();
+    const { password } = parsed.data;
 
-  const user = identifier.includes("@")
-    ? await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } })
-    : await prisma.user.findUnique({ where: { username: normalizeUsername(identifier) } });
+    const user = identifier.includes("@")
+      ? await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } })
+      : await prisma.user.findUnique({ where: { username: normalizeUsername(identifier) } });
 
-  if (!user) return res.status(401).json({ error: "Invalid email/username or password" });
+    if (!user) return res.status(401).json({ error: "Invalid email/username or password" });
 
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ error: "Invalid email/username or password" });
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Invalid email/username or password" });
 
-  res.json({ token: signToken(user.id), user: publicUser(user) });
+    res.json({ token: signToken(user.id), user: publicUser(user) });
+  } catch (err: any) {
+    console.error("Login failed:", err);
+    if (err?.code === "P2022") {
+      return res.status(503).json({
+        error: "Database is missing a recent migration (username). Run: npx prisma migrate deploy",
+      });
+    }
+    res.status(500).json({ error: "Couldn't sign in" });
+  }
 });
 
 /** Cheap session check for clients — avoids loading the full notebooks tree. */

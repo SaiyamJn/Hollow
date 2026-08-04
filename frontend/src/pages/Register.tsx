@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../lib/api";
 import { useAuthStore } from "../stores/auth";
+import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -40,11 +41,8 @@ export default function Register() {
         className="w-full max-w-sm rounded-xl border border-border glass-strong p-8 space-y-4 shadow-pop animate-rise-in"
       >
         <div className="pb-1">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />
-            <h1 className="text-xl font-medium tracking-tight">Hollow</h1>
-          </div>
-          <p className="text-sm text-secondary mt-2">Create an account</p>
+          <BrandMark size="lg" wordmark wordmarkClassName="text-xl" />
+          <p className="text-sm text-secondary mt-3">Create an account</p>
         </div>
         <Input placeholder="Display name" value={name} onChange={(e) => setName(e.target.value)} required />
         <Input

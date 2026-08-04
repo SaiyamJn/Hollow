@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, Moon, ShieldCheck, Sun } from "lucide-react";
+import { Bell, BellOff, Check, Moon, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import clsx from "clsx";
 import { useTheme } from "../theme/ThemeProvider";
+import { useFont } from "../theme/FontProvider";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { disconnectSocket } from "../lib/socket";
@@ -14,6 +16,7 @@ import {
   APP_TAGLINE,
   APP_VERSION,
 } from "../lib/appInfo";
+import { FONT_OPTIONS } from "../lib/fonts";
 import { remindersPref, setRemindersEnabled } from "../lib/notify";
 import {
   KEYBIND_DEFS,
@@ -22,11 +25,13 @@ import {
   useKeybindsStore,
   type KeybindId,
 } from "../lib/keybinds";
+import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
   const { theme, toggle } = useTheme();
+  const { font, setFont } = useFont();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const clearUnlocks = useUnlockStore((s) => s.clearAll);
@@ -125,6 +130,39 @@ export default function Settings() {
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
         <div>
+          <h2 className="text-sm font-medium text-primary">Font</h2>
+          <p className="text-sm text-secondary mt-0.5">Applies across the whole app</p>
+        </div>
+        <ul className="space-y-1.5 text-left">
+          {FONT_OPTIONS.map((opt) => {
+            const active = font === opt.id;
+            return (
+              <li key={opt.id}>
+                <button
+                  type="button"
+                  onClick={() => setFont(opt.id)}
+                  className={clsx(
+                    "w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                    active
+                      ? "border-accent bg-accent-soft"
+                      : "border-border hover:border-secondary hover:bg-surface-2/60"
+                  )}
+                  style={{ fontFamily: opt.family }}
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-primary">{opt.label}</span>
+                    <span className="block text-xs text-secondary mt-0.5">{opt.sample}</span>
+                  </span>
+                  {active && <Check size={15} className="text-accent shrink-0" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+        <div>
           <h2 className="text-sm font-medium text-primary">Task reminders</h2>
           <p className="text-sm text-secondary mt-0.5">
             Notify me when a task is due (while the app is open)
@@ -182,19 +220,6 @@ export default function Settings() {
         {bindError && <p className="text-sm text-danger">{bindError}</p>}
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
-        <div>
-          <h2 className="text-sm font-medium text-primary inline-flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-accent" /> Admin console
-          </h2>
-          <p className="text-sm text-secondary mt-0.5">
-            Separate login using <code className="text-accent">ADMIN_EMAIL</code> /{" "}
-            <code className="text-accent">ADMIN_PASSWORD</code> from the server env.
-          </p>
-        </div>
-        <Button onClick={() => navigate("/admin/login")}>Open admin</Button>
-      </section>
-
       <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3 text-center">
         <h2 className="text-sm font-medium text-primary">Session</h2>
         <p className="text-sm text-secondary">
@@ -214,10 +239,12 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-4">
-        <div className="flex flex-col items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
-          <h2 className="text-base font-medium tracking-tight text-primary">{APP_NAME}</h2>
-          <p className="text-sm text-secondary max-w-xs">{APP_TAGLINE}</p>
+        <div className="flex flex-col items-center gap-3">
+          <BrandMark size="xl" />
+          <div>
+            <h2 className="text-base font-medium tracking-tight text-primary">{APP_NAME}</h2>
+            <p className="text-sm text-secondary max-w-xs mt-1">{APP_TAGLINE}</p>
+          </div>
         </div>
 
         <dl className="text-left text-sm space-y-2 border-t border-border pt-4">

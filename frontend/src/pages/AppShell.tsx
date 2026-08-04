@@ -14,6 +14,7 @@ import { formatCombo, matchesCombo, useKeybindsStore, type KeybindId } from "../
 import { Sidebar } from "../components/Sidebar";
 import { CommandPalette } from "../components/CommandPalette";
 import { QuickCreate } from "../components/QuickCreate";
+import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
 
 function isTypingTarget(target: EventTarget | null) {
@@ -204,10 +205,9 @@ export default function AppShell() {
                 type="button"
                 title="Hollow"
                 onClick={() => navigate("/")}
-                className="flex items-center gap-2 pl-1"
+                className="flex items-center pl-0.5"
               >
-                <span className="h-2 w-2 rounded-full bg-accent" />
-                <span className="text-sm font-medium tracking-tight">Hollow</span>
+                <BrandMark size="sm" wordmark />
               </button>
               <button
                 className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-xs
