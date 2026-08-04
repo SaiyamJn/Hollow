@@ -44,13 +44,6 @@ function groupTasks(tasks: Task[]): [GroupName, Task[]][] {
   return ordered;
 }
 
-function defaultDue() {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return d;
-}
-
 function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
   return (
     <button
@@ -85,6 +78,10 @@ export default function Tasks() {
       setQuickAdd("");
     },
   });
+  const createSubtask = useMutation({
+    mutationFn: createTask,
+    onSuccess: invalidate,
+  });
   const update = useMutation({
     mutationFn: ({
       id,
@@ -117,7 +114,8 @@ export default function Tasks() {
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", due: defaultDue() });
+    setDraft({ title: title.trim(), description: "", due: null });
+    create.reset();
   }
 
   function onQuickAdd(e: KeyboardEvent<HTMLInputElement>) {
@@ -144,6 +142,11 @@ export default function Tasks() {
       },
     });
   }
+
+  const createError =
+    (create.error as any)?.response?.data?.error ?? (create.error ? "Couldn't add task." : null);
+  const editError =
+    (saveEdit.error as any)?.response?.data?.error ?? (saveEdit.error ? "Couldn't save." : null);
 
   return (
     <div className="max-w-2xl mx-auto px-7 py-10">
@@ -183,15 +186,16 @@ export default function Tasks() {
                   task={task}
                   onPatch={(id, patch) => update.mutate({ id, patch })}
                   onDelete={(id) => remove.mutate(id)}
-                  onEdit={() =>
+                  onEdit={() => {
+                    saveEdit.reset();
                     setEditing({
                       id: task.id,
                       title: task.title,
                       description: task.description ?? "",
                       due: task.dueAt ? new Date(task.dueAt) : null,
-                    })
-                  }
-                  onAddSubtask={(title) => create.mutate({ title, parentTaskId: task.id })}
+                    });
+                  }}
+                  onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
                 />
               ))}
             </div>
@@ -199,7 +203,15 @@ export default function Tasks() {
         ))}
       </div>
 
-      <Dialog open={draft !== null} onOpenChange={(o) => !o && setDraft(null)}>
+      <Dialog
+        open={draft !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDraft(null);
+            create.reset();
+          }
+        }}
+      >
         <DialogContent title="New task" className="max-w-md">
           {draft && (
             <div className="space-y-3">
@@ -209,6 +221,9 @@ export default function Tasks() {
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                 className="text-center"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && draft.title.trim()) submitDraft();
+                }}
               />
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
@@ -218,6 +233,7 @@ export default function Tasks() {
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
               <DateTimePicker value={draft.due} onChange={(due) => setDraft({ ...draft, due })} />
+              {createError && <p className="text-sm text-danger text-center">{createError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
                   Cancel
@@ -236,7 +252,15 @@ export default function Tasks() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditing(null);
+            saveEdit.reset();
+          }
+        }}
+      >
         <DialogContent title="Edit task" className="max-w-md">
           {editing && (
             <div className="space-y-3">
@@ -255,6 +279,7 @@ export default function Tasks() {
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               />
               <DateTimePicker value={editing.due} onChange={(due) => setEditing({ ...editing, due })} />
+              {editError && <p className="text-sm text-danger text-center">{editError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
                   Cancel

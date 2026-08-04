@@ -5,16 +5,18 @@ import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { PartialBlock } from "@blocknote/core";
 import { withCollaboration } from "@blocknote/core/yjs";
-import { Lock, Maximize2, Minimize2, ShieldCheck, X } from "lucide-react";
+import { Lock, LockOpen, Maximize2, Minimize2, ShieldCheck, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import {
   addTagToPage,
+  deletePage,
   fetchBacklinks,
   fetchNotebooks,
   fetchOutlinks,
   fetchPage,
+  lockSection,
   removeTagFromPage,
   renamePage,
   savePageContent,
@@ -30,6 +32,7 @@ import { hollowEditorSchema, newBlockOnShiftEnter } from "../lib/editorSchema";
 import { usePageCollab, CollabSession } from "../hooks/usePageCollab";
 import { PasswordDialog } from "../components/PasswordDialog";
 import { Button } from "../components/ui/button";
+import { Dialog, DialogContent } from "../components/ui/dialog";
 import { PAGE_TEMPLATES } from "../lib/templates";
 import {
   findEditorScrollParent,
@@ -117,26 +120,54 @@ export default function PageEditor() {
   if (isLoading) return <div className="p-7 text-sm text-secondary">Loading…</div>;
   if (error || !page) return <div className="p-7 text-sm text-secondary">Couldn't load this page.</div>;
 
-  return <CollabGate key={`${pageId}:${password ?? ""}`} page={page} notebookId={notebookId} password={password} />;
+  return (
+    <CollabGate
+      key={`${pageId}:${password ?? ""}`}
+      page={page}
+      notebookId={notebookId}
+      sectionId={sectionId}
+      password={password}
+    />
+  );
 }
 
 // Editor mounts only once the Yjs session is synced, so the document renders
 // from the shared CRDT state rather than a REST snapshot.
-function CollabGate({ page, notebookId, password }: { page: Page; notebookId: string; password?: string }) {
+function CollabGate({
+  page,
+  notebookId,
+  sectionId,
+  password,
+}: {
+  page: Page;
+  notebookId: string;
+  sectionId: string;
+  password?: string;
+}) {
   const { session, error } = usePageCollab(page.id, password);
   if (error) return <div className="p-7 text-sm text-secondary">Realtime connection failed: {error}</div>;
   if (!session) return <div className="p-7 text-sm text-secondary">Connecting…</div>;
-  return <Editor page={page} notebookId={notebookId} password={password} session={session} />;
+  return (
+    <Editor
+      page={page}
+      notebookId={notebookId}
+      sectionId={sectionId}
+      password={password}
+      session={session}
+    />
+  );
 }
 
 function Editor({
   page,
   notebookId,
+  sectionId,
   password,
   session,
 }: {
   page: Page;
   notebookId: string;
+  sectionId: string;
   password?: string;
   session: CollabSession;
 }) {
@@ -146,16 +177,20 @@ function Editor({
   const queryClient = useQueryClient();
   const focusMode = useUiStore((s) => s.focusMode);
   const setFocusMode = useUiStore((s) => s.setFocusMode);
+  const setSectionPassword = useUnlockStore((s) => s.setSectionPassword);
   const focusBind = useKeybindsStore((s) => s.binds.focus);
   const escapeBind = useKeybindsStore((s) => s.binds.escape);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [title, setTitle] = useState(page.title);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [lockOpen, setLockOpen] = useState(false);
   // Offer templates only on brand-new pages (first client, nothing saved yet).
   const [showTemplates, setShowTemplates] = useState(session.seed && !page.content);
   const saveTimer = useRef<number | null>(null);
   const latestContent = useRef<string | null>(null);
   const editorShellRef = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
+  const [deleting, setDeleting] = useState(false);
 
   const editor = useCreateBlockNote(
     withCollaboration({
@@ -349,6 +384,18 @@ function Editor({
     queryClient.invalidateQueries({ queryKey: ["outlinks"] });
   }
 
+  async function removePage() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deletePage(page.id);
+      queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+      navigate(`/notebooks/${notebookId}`);
+    } catch {
+      setDeleting(false);
+    }
+  }
+
   function applyTemplate(blocks: typeof PAGE_TEMPLATES[number]["blocks"]) {
     editor.replaceBlocks(editor.document, blocks);
     setShowTemplates(false);
@@ -386,6 +433,24 @@ function Editor({
             />
             {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save" : "Saved"}
           </span>
+          {!focusMode && !password && (
+            <button
+              title="Lock this section (encrypts all pages in it)"
+              className="text-secondary hover:text-primary transition-colors"
+              onClick={() => setLockOpen(true)}
+            >
+              <LockOpen size={14} />
+            </button>
+          )}
+          {!focusMode && (
+            <button
+              title="Delete page"
+              className="text-secondary hover:text-danger transition-colors"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
           <button
             title={
               focusMode
@@ -497,6 +562,42 @@ function Editor({
           )}
         </div>
       )}
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent title="Delete page">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary">
+              Delete “{page.title}”? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </Button>
+              <Button className="flex-1" disabled={deleting} onClick={() => void removePage()}>
+                <span className="text-danger">{deleting ? "Deleting…" : "Delete"}</span>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <PasswordDialog
+        open={lockOpen}
+        onOpenChange={setLockOpen}
+        title="Lock section"
+        submitLabel="Lock"
+        minLength={8}
+        onSubmit={async (pw) => {
+          try {
+            await lockSection(sectionId, pw);
+            setSectionPassword(sectionId, pw);
+            queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't lock section";
+          }
+        }}
+      />
     </div>
   );
 }

@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Book, Lock, Pencil, Plus, Trash2 } from "lucide-react";
-import { createNotebook, deleteNotebook, fetchNotebooks, renameNotebook, unlockNotebook } from "../lib/api";
+import { Book, Lock, LockOpen, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  createNotebook,
+  deleteNotebook,
+  fetchNotebooks,
+  lockNotebook,
+  renameNotebook,
+  unlockNotebook,
+} from "../lib/api";
 import type { Notebook } from "../lib/types";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
@@ -22,6 +29,7 @@ export default function Notebooks() {
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [unlockNb, setUnlockNb] = useState<Notebook | null>(null);
+  const [lockNb, setLockNb] = useState<Notebook | null>(null);
   const [deleteNb, setDeleteNb] = useState<Notebook | null>(null);
   const [editNb, setEditNb] = useState<{ id: string; title: string } | null>(null);
 
@@ -108,6 +116,31 @@ export default function Notebooks() {
                 >
                   <Pencil size={14} />
                 </button>
+                {!nb.isLocked && (
+                  <button
+                    type="button"
+                    title="Lock notebook"
+                    className="p-1.5 rounded-md text-secondary hover:text-primary hover:bg-surface-2"
+                    onClick={() => setLockNb(nb)}
+                  >
+                    <LockOpen size={14} />
+                  </button>
+                )}
+                {nb.isLocked && unlockedNotebooks[nb.id] && (
+                  <button
+                    type="button"
+                    title="Re-lock for this session"
+                    className="p-1.5 rounded-md text-secondary hover:text-primary hover:bg-surface-2"
+                    onClick={() =>
+                      unlockStore.relockNotebook(
+                        nb.id,
+                        nb.sections.map((s) => s.id)
+                      )
+                    }
+                  >
+                    <Lock size={14} />
+                  </button>
+                )}
                 <button
                   type="button"
                   title="Delete notebook"
@@ -232,6 +265,29 @@ export default function Notebooks() {
             return null;
           } catch (err: any) {
             return err.response?.data?.error ?? "Wrong password";
+          }
+        }}
+      />
+
+      <PasswordDialog
+        open={lockNb !== null}
+        onOpenChange={(o) => !o && setLockNb(null)}
+        title={lockNb ? `Lock "${lockNb.title}"` : "Lock"}
+        submitLabel="Lock"
+        minLength={8}
+        onSubmit={async (password) => {
+          if (!lockNb) return null;
+          try {
+            await lockNotebook(lockNb.id, password);
+            unlockStore.unlockNotebook(
+              lockNb.id,
+              lockNb.sections.map((s) => s.id),
+              password
+            );
+            queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't lock notebook";
           }
         }}
       />

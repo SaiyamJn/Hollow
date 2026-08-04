@@ -7,10 +7,14 @@ import { sealAtRest, unsealAtRest } from "../lib/encryption";
 const router = Router();
 router.use(requireAuth);
 
+// Accept any parseable ISO string (toISOString() includes milliseconds; Zod's
+// default .datetime() rejects those and left the UI stuck on "Adding…").
+const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "Invalid date");
+
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  dueAt: z.string().datetime().optional(),
+  dueAt: isoDate.optional(),
   parentTaskId: z.string().uuid().optional(),
   starred: z.boolean().optional(),
 });
@@ -20,7 +24,7 @@ const patchSchema = z.object({
   description: z.string().optional(),
   done: z.boolean().optional(),
   starred: z.boolean().optional(),
-  dueAt: z.string().datetime().nullable().optional(),
+  dueAt: isoDate.nullable().optional(),
 });
 
 function publicTask<T extends { title: string; description: string; subtasks?: Array<{ title: string; description: string }> }>(

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { KeyboardEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, Pencil, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
@@ -89,11 +89,37 @@ export default function QuickNotes() {
   });
   const remove = useMutation({ mutationFn: deleteQuickNote, onSuccess: invalidate });
 
+  function onDraftKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (draft.trim() && !create.isPending) create.mutate();
+    }
+  }
+
+  function onEditKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey && editing) {
+      e.preventDefault();
+      if (editing.content.trim() && !saveEdit.isPending) {
+        saveEdit.mutate({
+          id: editing.id,
+          patch: { content: editing.content.trim(), color: editing.color },
+        });
+      }
+    }
+  }
+
+  const createError =
+    (create.error as any)?.response?.data?.error ?? (create.error ? "Couldn't add note." : null);
+  const editError =
+    (saveEdit.error as any)?.response?.data?.error ?? (saveEdit.error ? "Couldn't save." : null);
+
   return (
     <div className="max-w-5xl mx-auto px-7 py-10">
       <div className="text-center mb-6">
         <h1 className="text-xl font-medium">Quick notes</h1>
-        <p className="text-sm text-secondary mt-1">Capture thoughts — star the keepers.</p>
+        <p className="text-sm text-secondary mt-1">
+          Capture thoughts — Enter to save, Shift+Enter for a new line.
+        </p>
         <Button variant="ghost" className="mt-2" onClick={() => setShowArchived((v) => !v)}>
           {showArchived ? "Hide archived" : "Show archived"}
         </Button>
@@ -110,11 +136,13 @@ export default function QuickNotes() {
           placeholder="Take a note…"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onDraftKeyDown}
         />
         <div className="flex flex-col items-center gap-3 mt-3">
           <ColorDots value={draftColor} onPick={setDraftColor} />
+          {createError && <p className="text-sm text-danger">{createError}</p>}
           <Button variant="accent" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()}>
-            Add note
+            {create.isPending ? "Adding…" : "Add note"}
           </Button>
         </div>
       </div>
@@ -145,12 +173,15 @@ export default function QuickNotes() {
                            min-h-[min(56vh,420px)] text-left"
                 value={editing.content}
                 onChange={(e) => setEditing({ ...editing, content: e.target.value })}
+                onKeyDown={onEditKeyDown}
                 style={{ background: editing.color !== "gray" ? PALETTE[editing.color] : undefined }}
               />
+              <p className="text-xs text-secondary text-center">Enter to save · Shift+Enter for a new line</p>
               <ColorDots
                 value={editing.color}
                 onPick={(color) => setEditing({ ...editing, color })}
               />
+              {editError && <p className="text-sm text-danger text-center">{editError}</p>}
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
                   Cancel

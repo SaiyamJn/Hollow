@@ -8,6 +8,7 @@ import {
   FileText,
   Layers,
   Lock,
+  LockOpen,
   Pencil,
   Plus,
   Trash2,
@@ -17,8 +18,12 @@ import {
   createPage,
   createSection,
   deleteNotebook,
+  deleteSection,
   fetchNotebooks,
+  lockNotebook,
+  lockSection,
   renameNotebook,
+  renameSection,
   unlockNotebook,
   unlockSection,
 } from "../lib/api";
@@ -32,9 +37,16 @@ import { Input } from "../components/ui/input";
 
 type DialogKind =
   | { kind: "unlock-notebook" }
-  | { kind: "unlock-section"; section: Section; thenOpen?: { pageId: string; title: string } }
+  | { kind: "unlock-section"; section: Section; thenOpen?: { pageId: string; title: string }; thenCreatePage?: boolean }
+  | { kind: "lock-notebook" }
+  | { kind: "lock-section"; section: Section }
   | { kind: "new-section" }
   | { kind: "new-page"; section: Section }
+  | null;
+
+type EditTarget =
+  | { kind: "notebook"; title: string }
+  | { kind: "section"; section: Section; title: string }
   | null;
 
 // Inside one notebook: sections drop down into pages (matches the mobile drill-down).
@@ -53,8 +65,8 @@ export default function NotebookDetail() {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [draft, setDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renameTitle, setRenameTitle] = useState("");
+  const [deleteSectionTarget, setDeleteSectionTarget] = useState<Section | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget>(null);
 
   useEffect(() => {
     if (notebookId) setActiveNotebook(notebookId);
@@ -78,7 +90,6 @@ export default function NotebookDetail() {
       ),
     onSuccess: (sec) => {
       invalidate();
-      // New section under a locked notebook is created already locked — keep the password.
       const pw =
         notebookPasswords[notebookId!] ??
         notebook?.sections.map((s) => sectionPasswords[s.id]).find(Boolean);
@@ -109,11 +120,24 @@ export default function NotebookDetail() {
     },
   });
 
-  const rename = useMutation({
-    mutationFn: (title: string) => renameNotebook(notebookId!, title),
+  const removeSection = useMutation({
+    mutationFn: (id: string) => deleteSection(id),
     onSuccess: () => {
       invalidate();
-      setRenameOpen(false);
+      setDeleteSectionTarget(null);
+    },
+  });
+
+  const rename = useMutation({
+    mutationFn: async () => {
+      if (!editTarget) return;
+      const title = editTarget.title.trim();
+      if (editTarget.kind === "notebook") await renameNotebook(notebookId!, title);
+      else await renameSection(editTarget.section.id, title);
+    },
+    onSuccess: () => {
+      invalidate();
+      setEditTarget(null);
     },
   });
 
@@ -137,6 +161,16 @@ export default function NotebookDetail() {
     navigate(`/notebooks/${notebookId}/sections/${sec.id}/pages/${pageId}`);
   }
 
+  function startNewPage(sec: Section) {
+    if (sec.isLocked && !sectionPasswords[sec.id]) {
+      setDialog({ kind: "unlock-section", section: sec, thenCreatePage: true });
+      return;
+    }
+    setExpanded((s) => new Set(s).add(sec.id));
+    setDraft("");
+    setDialog({ kind: "new-page", section: sec });
+  }
+
   if (isLoading) {
     return <p className="px-7 py-10 text-sm text-secondary">Loading…</p>;
   }
@@ -153,6 +187,11 @@ export default function NotebookDetail() {
   }
 
   const sealed = notebook.isLocked && !unlockedNotebooks[notebook.id];
+  const createError =
+    ((createSec.error || createPg.error) as any)?.response?.data?.error ??
+    (createSec.error || createPg.error ? "Couldn't create." : null);
+  const renameError =
+    (rename.error as any)?.response?.data?.error ?? (rename.error ? "Couldn't save." : null);
 
   return (
     <div className="max-w-2xl mx-auto px-7 py-10 animate-rise-in">
@@ -174,14 +213,24 @@ export default function NotebookDetail() {
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap">
           <Button
-            title="Rename"
-            onClick={() => {
-              setRenameTitle(notebook.title);
-              setRenameOpen(true);
-            }}
+            title="Rename notebook"
+            onClick={() => setEditTarget({ kind: "notebook", title: notebook.title })}
           >
             <Pencil size={14} />
           </Button>
+          {!notebook.isLocked && (
+            <Button title="Lock notebook" onClick={() => setDialog({ kind: "lock-notebook" })} disabled={sealed}>
+              <LockOpen size={14} />
+            </Button>
+          )}
+          {notebook.isLocked && unlockedNotebooks[notebook.id] && (
+            <Button
+              title="Re-lock for this session"
+              onClick={() => unlockStore.relockNotebook(notebook.id, notebook.sections.map((s) => s.id))}
+            >
+              <Lock size={14} />
+            </Button>
+          )}
           <Button
             title="Graph"
             onClick={() => navigate(`/notebooks/${notebook.id}/graph`)}
@@ -220,23 +269,71 @@ export default function NotebookDetail() {
             const open = expanded.has(sec.id) && !secSealed;
             return (
               <div key={sec.id} className="rounded-xl border border-border glass overflow-hidden">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-surface-2 transition-colors"
-                  onClick={() => toggleSection(sec)}
-                >
-                  {open ? (
-                    <ChevronDown size={15} className="text-secondary shrink-0" />
-                  ) : (
-                    <ChevronRight size={15} className="text-secondary shrink-0" />
-                  )}
-                  <Layers size={14} className="text-accent shrink-0" />
-                  <span className="text-sm font-medium flex-1 truncate">{sec.title}</span>
-                  {sec.isLocked && (
-                    <Lock size={12} className={secSealed ? "text-secondary" : "text-accent"} />
-                  )}
-                  <span className="text-xs text-secondary">{sec.pages.length}</span>
-                </button>
+                <div className="group flex items-center gap-1 px-2 py-1.5 hover:bg-surface-2/60 transition-colors">
+                  <button
+                    type="button"
+                    className="flex-1 flex items-center gap-2.5 px-1.5 py-1.5 text-left min-w-0"
+                    onClick={() => toggleSection(sec)}
+                  >
+                    {open ? (
+                      <ChevronDown size={15} className="text-secondary shrink-0" />
+                    ) : (
+                      <ChevronRight size={15} className="text-secondary shrink-0" />
+                    )}
+                    <Layers size={14} className="text-accent shrink-0" />
+                    <span className="text-sm font-medium flex-1 truncate">{sec.title}</span>
+                    {sec.isLocked && (
+                      <Lock size={12} className={secSealed ? "text-secondary" : "text-accent"} />
+                    )}
+                    <span className="text-xs text-secondary">{sec.pages.length}</span>
+                  </button>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      type="button"
+                      title="New page"
+                      className="p-1.5 rounded-md text-secondary hover:text-accent"
+                      onClick={() => startNewPage(sec)}
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Rename section"
+                      className="p-1.5 rounded-md text-secondary hover:text-primary"
+                      onClick={() => setEditTarget({ kind: "section", section: sec, title: sec.title })}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    {!sec.isLocked && (
+                      <button
+                        type="button"
+                        title="Lock section"
+                        className="p-1.5 rounded-md text-secondary hover:text-primary"
+                        onClick={() => setDialog({ kind: "lock-section", section: sec })}
+                      >
+                        <LockOpen size={14} />
+                      </button>
+                    )}
+                    {sec.isLocked && sectionPasswords[sec.id] && (
+                      <button
+                        type="button"
+                        title="Re-lock for this session"
+                        className="p-1.5 rounded-md text-secondary hover:text-primary"
+                        onClick={() => unlockStore.relockSection(sec.id)}
+                      >
+                        <Lock size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      title="Delete section"
+                      className="p-1.5 rounded-md text-secondary hover:text-danger"
+                      onClick={() => setDeleteSectionTarget(sec)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
 
                 {open && (
                   <div className="border-t border-border px-3.5 py-2 space-y-0.5">
@@ -256,7 +353,7 @@ export default function NotebookDetail() {
                       type="button"
                       className="w-full flex items-center gap-2 rounded-md px-2 py-2 text-sm text-secondary
                                  hover:text-accent transition-colors"
-                      onClick={() => setDialog({ kind: "new-page", section: sec })}
+                      onClick={() => startNewPage(sec)}
                     >
                       <Plus size={13} /> New page
                     </button>
@@ -269,14 +366,24 @@ export default function NotebookDetail() {
       )}
 
       <PasswordDialog
-        open={dialog?.kind === "unlock-notebook" || dialog?.kind === "unlock-section"}
+        open={
+          dialog?.kind === "unlock-notebook" ||
+          dialog?.kind === "unlock-section" ||
+          dialog?.kind === "lock-notebook" ||
+          dialog?.kind === "lock-section"
+        }
         onOpenChange={(o) => !o && setDialog(null)}
         title={
           dialog?.kind === "unlock-section"
             ? `Unlock "${dialog.section.title}"`
-            : `Unlock "${notebook.title}"`
+            : dialog?.kind === "lock-section"
+              ? `Lock "${dialog.section.title}"`
+              : dialog?.kind === "lock-notebook"
+                ? `Lock "${notebook.title}"`
+                : `Unlock "${notebook.title}"`
         }
-        submitLabel="Unlock"
+        submitLabel={dialog?.kind?.startsWith("lock") ? "Lock" : "Unlock"}
+        minLength={dialog?.kind?.startsWith("lock") ? 8 : undefined}
         onSubmit={async (password) => {
           try {
             if (dialog?.kind === "unlock-notebook") {
@@ -294,11 +401,27 @@ export default function NotebookDetail() {
                 navigate(
                   `/notebooks/${notebookId}/sections/${dialog.section.id}/pages/${dialog.thenOpen.pageId}`
                 );
+              } else if (dialog.thenCreatePage) {
+                const section = dialog.section;
+                // PasswordDialog closes first (setDialog(null)); reopen create after.
+                window.setTimeout(() => setDialog({ kind: "new-page", section }), 0);
               }
+            } else if (dialog?.kind === "lock-notebook") {
+              await lockNotebook(notebook.id, password);
+              unlockStore.unlockNotebook(
+                notebook.id,
+                notebook.sections.map((s) => s.id),
+                password
+              );
+              invalidate();
+            } else if (dialog?.kind === "lock-section") {
+              await lockSection(dialog.section.id, password);
+              unlockStore.setSectionPassword(dialog.section.id, password);
+              invalidate();
             }
             return null;
           } catch (err: any) {
-            return err.response?.data?.error ?? "Wrong password";
+            return err.response?.data?.error ?? "Something went wrong";
           }
         }}
       />
@@ -309,6 +432,8 @@ export default function NotebookDetail() {
           if (!o) {
             setDialog(null);
             setDraft("");
+            createSec.reset();
+            createPg.reset();
           }
         }}
       >
@@ -331,49 +456,51 @@ export default function NotebookDetail() {
                 if (dialog?.kind === "new-page") createPg.mutate({ section: dialog.section, title: draft.trim() });
               }}
             />
+            {createError && <p className="text-sm text-danger text-center">{createError}</p>}
             <Button
               className="w-full"
-              disabled={
-                !draft.trim() || createSec.isPending || createPg.isPending
-              }
+              disabled={!draft.trim() || createSec.isPending || createPg.isPending}
               onClick={() => {
                 if (dialog?.kind === "new-section") createSec.mutate(draft.trim());
                 if (dialog?.kind === "new-page") createPg.mutate({ section: dialog.section, title: draft.trim() });
               }}
             >
-              Create
+              {createSec.isPending || createPg.isPending ? "Creating…" : "Create"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent title="Rename notebook">
-          <div className="space-y-3">
-            <Input
-              autoFocus
-              placeholder="Title"
-              value={renameTitle}
-              onChange={(e) => setRenameTitle(e.target.value)}
-              className="text-center"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && renameTitle.trim()) rename.mutate(renameTitle.trim());
-              }}
-            />
-            <div className="flex gap-2">
-              <Button className="flex-1" variant="ghost" onClick={() => setRenameOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                variant="accent"
-                disabled={!renameTitle.trim() || rename.isPending}
-                onClick={() => rename.mutate(renameTitle.trim())}
-              >
-                {rename.isPending ? "Saving…" : "Save"}
-              </Button>
+      <Dialog open={editTarget !== null} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent title={editTarget?.kind === "section" ? "Rename section" : "Rename notebook"}>
+          {editTarget && (
+            <div className="space-y-3">
+              <Input
+                autoFocus
+                placeholder="Title"
+                value={editTarget.title}
+                onChange={(e) => setEditTarget({ ...editTarget, title: e.target.value })}
+                className="text-center"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && editTarget.title.trim()) rename.mutate();
+                }}
+              />
+              {renameError && <p className="text-sm text-danger text-center">{renameError}</p>}
+              <div className="flex gap-2">
+                <Button className="flex-1" variant="ghost" onClick={() => setEditTarget(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="accent"
+                  disabled={!editTarget.title.trim() || rename.isPending}
+                  onClick={() => rename.mutate()}
+                >
+                  {rename.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -393,6 +520,28 @@ export default function NotebookDetail() {
                 onClick={() => removeNotebook.mutate()}
               >
                 <span className="text-danger">{removeNotebook.isPending ? "Deleting…" : "Delete"}</span>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteSectionTarget !== null} onOpenChange={(o) => !o && setDeleteSectionTarget(null)}>
+        <DialogContent title="Delete section">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary">
+              Delete “{deleteSectionTarget?.title}”? All pages inside will be permanently removed.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setDeleteSectionTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={removeSection.isPending}
+                onClick={() => deleteSectionTarget && removeSection.mutate(deleteSectionTarget.id)}
+              >
+                <span className="text-danger">{removeSection.isPending ? "Deleting…" : "Delete"}</span>
               </Button>
             </div>
           </div>

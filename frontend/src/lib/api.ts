@@ -105,6 +105,15 @@ export async function createSection(notebookId: string, title: string, notebookP
   return data;
 }
 
+export async function renameSection(sectionId: string, title: string) {
+  const { data } = await api.patch<Section>(`/sections/${sectionId}`, { title });
+  return data;
+}
+
+export async function deleteSection(sectionId: string) {
+  await api.delete(`/sections/${sectionId}`);
+}
+
 export async function lockNotebook(notebookId: string, password: string) {
   await api.post(`/notebooks/${notebookId}/lock`, { password });
 }
