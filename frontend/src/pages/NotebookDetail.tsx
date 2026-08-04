@@ -287,7 +287,7 @@ export default function NotebookDetail() {
                     )}
                     <span className="text-xs text-secondary">{sec.pages.length}</span>
                   </button>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="row-actions flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
                       title="New page"

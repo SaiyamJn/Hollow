@@ -105,7 +105,11 @@ export default function Settings() {
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-1">
         <h2 className="text-xs uppercase tracking-wide text-secondary mb-2">Account</h2>
         <p className="text-sm font-medium text-primary">{user?.name}</p>
-        <p className="text-sm text-secondary">{user?.email}</p>
+        <p className="text-sm text-secondary">
+          {user?.username ? `@${user.username}` : null}
+          {user?.username && user?.email ? " · " : null}
+          {user?.email}
+        </p>
       </section>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">

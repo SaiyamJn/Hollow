@@ -66,13 +66,19 @@ function sectionHeaders(password?: string) {
 }
 
 // ---- auth ----
-export async function register(email: string, password: string, name: string) {
-  const { data } = await api.post<{ token: string; user: User }>("/auth/register", { email, password, name });
+export async function register(email: string, password: string, name: string, username: string) {
+  const { data } = await api.post<{ token: string; user: User }>("/auth/register", {
+    email,
+    password,
+    name,
+    username,
+  });
   return data;
 }
 
-export async function login(email: string, password: string) {
-  const { data } = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
+/** `login` may be email or username. */
+export async function login(login: string, password: string) {
+  const { data } = await api.post<{ token: string; user: User }>("/auth/login", { login, password });
   return data;
 }
 
@@ -276,6 +282,10 @@ export async function adminLogin(email: string, password: string) {
 export async function fetchAdminStats() {
   const { data } = await adminApi.get<AdminStats>("/admin/stats");
   return data;
+}
+
+export async function deleteAdminUser(userId: string) {
+  await adminApi.delete(`/admin/users/${userId}`);
 }
 
 // ---- tags ----

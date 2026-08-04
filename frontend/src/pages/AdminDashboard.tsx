@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Book,
   CheckSquare,
@@ -11,12 +11,14 @@ import {
   Search,
   Shield,
   StickyNote,
+  Trash2,
   Users,
 } from "lucide-react";
-import { fetchAdminStats } from "../lib/api";
+import { deleteAdminUser, fetchAdminStats } from "../lib/api";
 import type { AdminUserStats } from "../lib/types";
 import { useAdminStore } from "../stores/admin";
 import { Button } from "../components/ui/button";
+import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 
 function formatBytes(n: number) {
@@ -56,11 +58,13 @@ function relativeTime(iso: string | null) {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const token = useAdminStore((s) => s.token);
   const adminEmail = useAdminStore((s) => s.email);
   const logout = useAdminStore((s) => s.logout);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data, error, isLoading } = useQuery({
     queryKey: ["admin-stats"],
@@ -69,12 +73,25 @@ export default function AdminDashboard() {
     retry: false,
   });
 
+  const removeUser = useMutation({
+    mutationFn: (id: string) => deleteAdminUser(id),
+    onSuccess: (_void, id) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+      setConfirmDelete(false);
+      setSelectedId((cur) => (cur === id ? null : cur));
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!data?.users) return [];
     const q = query.trim().toLowerCase();
     if (!q) return data.users;
     return data.users.filter(
-      (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.id.includes(q)
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.username ?? "").toLowerCase().includes(q) ||
+        u.id.includes(q)
     );
   }, [data, query]);
 
@@ -181,7 +198,7 @@ export default function AdminDashboard() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
           <Input
             className="pl-9"
-            placeholder="Search by name, email, or id…"
+            placeholder="Search by name, username, email, or id…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -214,7 +231,9 @@ export default function AdminDashboard() {
                     >
                       <td className="px-4 py-2.5">
                         <p className="font-medium">{u.name}</p>
-                        <p className="text-xs text-secondary">{u.email}</p>
+                        <p className="text-xs text-secondary">
+                          @{u.username} · {u.email}
+                        </p>
                       </td>
                       <td className="text-right px-3 py-2.5 tabular-nums">{u.notebooks}</td>
                       <td className="text-right px-3 py-2.5 tabular-nums">{u.pages}</td>
@@ -241,30 +260,73 @@ export default function AdminDashboard() {
           <aside className="rounded-xl border border-border glass p-5 space-y-3 lg:sticky lg:top-16">
             <h2 className="text-sm font-medium">User details</h2>
             {selected ? (
-              <dl className="space-y-2.5 text-sm">
-                <Detail label="Name" value={selected.name} />
-                <Detail label="Email" value={selected.email} />
-                <Detail label="User ID" value={selected.id} mono />
-                <Detail label="Joined" value={formatDateTime(selected.joinedAt)} />
-                <Detail label="Last active" value={formatDateTime(selected.lastActive)} />
-                <Detail label="Notebooks" value={String(selected.notebooks)} />
-                <Detail
-                  label="Sections"
-                  value={`${selected.sections}${
-                    selected.lockedSections ? ` (${selected.lockedSections} locked)` : ""
-                  }`}
-                />
-                <Detail label="Pages" value={String(selected.pages)} />
-                <Detail label="Quick notes" value={String(selected.quickNotes)} />
-                <Detail label="Tasks" value={`${selected.tasksDone} done / ${selected.tasks} total`} />
-                <Detail label="Approx. storage" value={formatBytes(selected.contentBytes)} />
-              </dl>
+              <>
+                <dl className="space-y-2.5 text-sm">
+                  <Detail label="Name" value={selected.name} />
+                  <Detail label="Username" value={`@${selected.username}`} />
+                  <Detail label="Email" value={selected.email} />
+                  <Detail label="User ID" value={selected.id} mono />
+                  <Detail label="Joined" value={formatDateTime(selected.joinedAt)} />
+                  <Detail label="Last active" value={formatDateTime(selected.lastActive)} />
+                  <Detail label="Notebooks" value={String(selected.notebooks)} />
+                  <Detail
+                    label="Sections"
+                    value={`${selected.sections}${
+                      selected.lockedSections ? ` (${selected.lockedSections} locked)` : ""
+                    }`}
+                  />
+                  <Detail label="Pages" value={String(selected.pages)} />
+                  <Detail label="Quick notes" value={String(selected.quickNotes)} />
+                  <Detail label="Tasks" value={`${selected.tasksDone} done / ${selected.tasks} total`} />
+                  <Detail label="Approx. storage" value={formatBytes(selected.contentBytes)} />
+                </dl>
+                <Button
+                  className="w-full mt-2"
+                  onClick={() => setConfirmDelete(true)}
+                  title="Delete this user and all their data"
+                >
+                  <span className="inline-flex items-center gap-1.5 text-danger">
+                    <Trash2 size={14} /> Remove user
+                  </span>
+                </Button>
+                {removeUser.error && (
+                  <p className="text-xs text-danger text-center">
+                    {(removeUser.error as any)?.response?.data?.error ?? "Couldn't delete user."}
+                  </p>
+                )}
+              </>
             ) : (
               <p className="text-sm text-secondary">Select a user from the table.</p>
             )}
           </aside>
         </div>
       </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent title="Remove user">
+          <div className="space-y-3 text-center">
+            <p className="text-sm text-secondary">
+              Permanently delete <span className="text-primary">{selected?.name}</span>
+              {selected?.username ? ` (@${selected.username})` : ""} and all notebooks, pages, notes,
+              and tasks? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!selected || removeUser.isPending}
+                onClick={() => selected && removeUser.mutate(selected.id)}
+              >
+                <span className="text-danger">
+                  {removeUser.isPending ? "Removing…" : "Remove user"}
+                </span>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

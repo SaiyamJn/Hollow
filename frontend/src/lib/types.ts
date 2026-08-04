@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   email: string;
+  username: string;
   name: string;
 }
 
@@ -103,6 +104,7 @@ export interface DailyNote {
 export interface AdminUserStats {
   id: string;
   name: string;
+  username: string;
   email: string;
   joinedAt: string;
   notebooks: number;

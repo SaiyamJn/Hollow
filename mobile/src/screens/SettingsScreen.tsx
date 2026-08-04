@@ -82,6 +82,8 @@ export default function SettingsScreen() {
           {user?.name ?? "—"}
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }}>
+          {user?.username ? `@${user.username}` : ""}
+          {user?.username && user?.email ? " · " : ""}
           {user?.email ?? ""}
         </Text>
       </GlassCard>

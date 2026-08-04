@@ -126,7 +126,10 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   animation: seal-pulse 2.6s ease-in-out infinite;
 }
 
-/* Soft keyboard focus — visible when tabbing, quiet on mouse click. */
+/*
+ * Keyboard focus only (:focus-visible). Mouse clicks stay quiet — no rings on
+ * cards/sections from pointer interaction.
+ */
 :where(a, button, input, textarea, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus {
   outline: none;
 }
@@ -134,11 +137,25 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   outline: none;
   box-shadow:
     0 0 0 2px var(--surface-0),
-    0 0 0 3.5px color-mix(in srgb, var(--accent) 42%, transparent);
-}
-/* Nested controls (e.g. icon buttons) keep a slightly tighter halo. */
-:where(button, [role="button"], a):focus-visible {
+    0 0 0 3.5px color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 0.5rem;
+}
+
+/* Hover-only action strips: also reveal when tabbing into a child control. */
+.row-actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.group:hover .row-actions,
+.group:focus-within .row-actions {
+  opacity: 1;
+}
+/* The specific control under the keyboard caret is always readable. */
+.row-actions:focus-visible,
+.row-actions > :focus-visible {
+  opacity: 1;
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 /* Focus mode: calmer, roomier prose. */
@@ -146,4 +163,3 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   font-size: 1.0625rem;
   line-height: 1.75;
 }
-

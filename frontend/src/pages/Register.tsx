@@ -9,6 +9,7 @@ export default function Register() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export default function Register() {
     setError(null);
     setBusy(true);
     try {
-      const { token, user } = await register(email, password, name);
+      const { token, user } = await register(email.trim(), password, name.trim(), username.trim());
       setAuth(token, user);
       navigate("/", { replace: true });
     } catch (err: any) {
@@ -45,7 +46,16 @@ export default function Register() {
           </div>
           <p className="text-sm text-secondary mt-2">Create an account</p>
         </div>
-        <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input placeholder="Display name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input
+          placeholder="Username"
+          autoComplete="username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          pattern="[A-Za-z0-9_]{3,32}"
+          title="3–32 characters: letters, numbers, underscores"
+          required
+        />
         <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <Input
           type="password"

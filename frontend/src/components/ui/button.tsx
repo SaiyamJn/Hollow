@@ -20,7 +20,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       className={clsx(
         "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium",
         "transition-all duration-150 active:scale-[0.98]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
+        "focus-visible:outline-none",
         "disabled:opacity-50 disabled:pointer-events-none",
         styles[variant],
         className

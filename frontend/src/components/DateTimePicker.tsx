@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react";
 import clsx from "clsx";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const MINUTES = Array.from({ length: 60 }, (_, m) => m);
+
+const ITEM_H = 28;
+const VISIBLE = 3;
+const PAD = Math.floor(VISIBLE / 2);
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -34,11 +40,105 @@ interface DateTimePickerProps {
   value: Date | null;
   onChange: (next: Date | null) => void;
   className?: string;
-  /** Start collapsed (default). Opens a compact popover when needed. */
   defaultOpen?: boolean;
 }
 
-/** Compact due-date control: one-line trigger, calendar + time only when expanded. */
+/** Compact snap wheel for hour / minute. */
+function RollingColumn({
+  items,
+  value,
+  onChange,
+  format = (n) => String(n).padStart(2, "0"),
+  ariaLabel,
+}: {
+  items: number[];
+  value: number;
+  onChange: (n: number) => void;
+  format?: (n: number) => string;
+  ariaLabel: string;
+}) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const lockRef = useRef(false);
+  const endTimer = useRef<number | null>(null);
+  const index = Math.max(0, items.indexOf(value));
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || lockRef.current) return;
+    const top = index * ITEM_H;
+    if (Math.abs(el.scrollTop - top) > 1) {
+      el.scrollTo({ top, behavior: "smooth" });
+    }
+  }, [index]);
+
+  function commitFromScroll() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const i = Math.min(items.length - 1, Math.max(0, Math.round(el.scrollTop / ITEM_H)));
+    const snapped = i * ITEM_H;
+    if (Math.abs(el.scrollTop - snapped) > 0.5) {
+      el.scrollTo({ top: snapped, behavior: "smooth" });
+    }
+    const next = items[i];
+    if (next !== value) onChange(next);
+    lockRef.current = false;
+  }
+
+  function onScroll() {
+    lockRef.current = true;
+    if (endTimer.current) window.clearTimeout(endTimer.current);
+    endTimer.current = window.setTimeout(commitFromScroll, 80);
+  }
+
+  return (
+    <div className="relative w-11 select-none" style={{ height: ITEM_H * VISIBLE }} aria-label={ariaLabel}>
+      <div
+        className="pointer-events-none absolute inset-x-0 z-10 rounded-md bg-accent-soft border border-accent/20"
+        style={{ top: ITEM_H * PAD, height: ITEM_H }}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-5 bg-gradient-to-b from-[var(--surface-1)] to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-5 bg-gradient-to-t from-[var(--surface-1)] to-transparent" />
+
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className="h-full overflow-y-auto overscroll-contain snap-y snap-mandatory scrollbar-none"
+        style={{
+          scrollSnapType: "y mandatory",
+          WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
+        <div style={{ height: ITEM_H * PAD }} />
+        {items.map((n) => {
+          const active = n === value;
+          return (
+            <button
+              key={n}
+              type="button"
+              tabIndex={-1}
+              onClick={() => {
+                onChange(n);
+                scrollerRef.current?.scrollTo({ top: items.indexOf(n) * ITEM_H, behavior: "smooth" });
+              }}
+              className={clsx(
+                "w-full snap-center flex items-center justify-center text-xs tabular-nums transition-colors",
+                active ? "text-primary font-medium" : "text-secondary"
+              )}
+              style={{ height: ITEM_H }}
+            >
+              {format(n)}
+            </button>
+          );
+        })}
+        <div style={{ height: ITEM_H * PAD }} />
+      </div>
+    </div>
+  );
+}
+
+/** Collapsed due-date control; expands to a compact calendar + custom time wheels. */
 export function DateTimePicker({ value, onChange, className, defaultOpen = false }: DateTimePickerProps) {
   const [open, setOpen] = useState(defaultOpen || value !== null);
   const initial = value ?? new Date();
@@ -63,7 +163,6 @@ export function DateTimePicker({ value, onChange, className, defaultOpen = false
   const today = startOfDay(new Date());
   const hour = value?.getHours() ?? 9;
   const minute = value?.getMinutes() ?? 0;
-  const timeValue = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   const monthLabel = cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
   function pickDay(day: Date) {
@@ -72,11 +171,7 @@ export function DateTimePicker({ value, onChange, className, defaultOpen = false
     onChange(next);
   }
 
-  function setTimeFromInput(raw: string) {
-    const [hStr, mStr] = raw.split(":");
-    const h = Number(hStr);
-    const m = Number(mStr);
-    if (Number.isNaN(h) || Number.isNaN(m)) return;
+  function setTime(h: number, m: number) {
     const base = value ? new Date(value) : new Date();
     if (!value) base.setHours(0, 0, 0, 0);
     base.setHours(h, m, 0, 0);
@@ -166,14 +261,10 @@ export function DateTimePicker({ value, onChange, className, defaultOpen = false
             })}
           </div>
 
-          <div className="flex items-center justify-center gap-2 pt-1 border-t border-border">
-            <Clock size={13} className="text-secondary shrink-0" />
-            <input
-              type="time"
-              value={timeValue}
-              onChange={(e) => setTimeFromInput(e.target.value)}
-              className="bg-transparent text-sm text-primary tabular-nums focus:outline-none"
-            />
+          <div className="flex items-center justify-center gap-1 pt-1.5 border-t border-border">
+            <RollingColumn items={HOURS} value={hour} onChange={(h) => setTime(h, minute)} ariaLabel="Hour" />
+            <span className="text-secondary text-sm font-medium pb-0.5">:</span>
+            <RollingColumn items={MINUTES} value={minute} onChange={(m) => setTime(hour, m)} ariaLabel="Minute" />
           </div>
         </div>
       )}

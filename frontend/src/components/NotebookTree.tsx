@@ -209,7 +209,7 @@ export function NotebookTree({ search }: { search: string }) {
             {!nb.isLocked && (
               <button
                 title="Lock notebook"
-                className="opacity-0 group-hover:opacity-100 text-secondary hover:text-primary"
+                className="row-actions p-1 rounded-md text-secondary hover:text-primary"
                 onClick={() => setDialog({ kind: "lock-notebook", notebook: nb })}
               >
                 <LockOpen size={13} />
@@ -218,7 +218,7 @@ export function NotebookTree({ search }: { search: string }) {
             {nb.isLocked && unlockedNotebooks[nb.id] && (
               <button
                 title="Re-lock for this session"
-                className="opacity-0 group-hover:opacity-100 text-secondary hover:text-primary"
+                className="row-actions p-1 rounded-md text-secondary hover:text-primary"
                 onClick={() =>
                   unlockStore.relockNotebook(nb.id, nb.sections.map((s) => s.id))
                 }
@@ -259,7 +259,7 @@ export function NotebookTree({ search }: { search: string }) {
                     {!sec.isLocked && (
                       <button
                         title="Lock section"
-                        className="opacity-0 group-hover:opacity-100 text-secondary hover:text-primary"
+                        className="row-actions p-1 rounded-md text-secondary hover:text-primary"
                         onClick={() => setDialog({ kind: "lock-section", section: sec })}
                       >
                         <LockOpen size={13} />
@@ -268,7 +268,7 @@ export function NotebookTree({ search }: { search: string }) {
                     {sec.isLocked && sectionPasswords[sec.id] && (
                       <button
                         title="Re-lock for this session"
-                        className="opacity-0 group-hover:opacity-100 text-secondary hover:text-primary"
+                        className="row-actions p-1 rounded-md text-secondary hover:text-primary"
                         onClick={() => unlockStore.relockSection(sec.id)}
                       >
                         <Lock size={13} />

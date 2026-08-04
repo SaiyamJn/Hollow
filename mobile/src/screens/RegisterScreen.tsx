@@ -8,6 +8,7 @@ export default function RegisterScreen({ navigation }: any) {
   const { register } = useAuth();
   const { colors } = useTheme();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +18,7 @@ export default function RegisterScreen({ navigation }: any) {
     setError(null);
     setBusy(true);
     try {
-      await register(email.trim(), password, name.trim());
+      await register(email.trim(), password, name.trim(), username.trim());
     } catch (err: any) {
       setError(err.response?.data?.error ?? "Couldn't reach the server");
     } finally {
@@ -35,10 +36,19 @@ export default function RegisterScreen({ navigation }: any) {
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Create an account</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}
-          placeholder="Name"
+          placeholder="Display name"
           placeholderTextColor={colors.textSecondary}
           value={name}
           onChangeText={setName}
+        />
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}
+          placeholder="Username"
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={username}
+          onChangeText={setUsername}
         />
         <TextInput
           style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}

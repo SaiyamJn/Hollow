@@ -107,7 +107,23 @@ export default function Notebooks() {
                          hover:border-accent transition-colors shadow-card
                          flex flex-col items-center text-center min-h-[160px]"
             >
-              <div className="absolute top-3 right-3 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Main control first in tab order; actions follow. */}
+              <button type="button" onClick={() => openNotebook(nb)} className="w-full flex flex-col items-center flex-1 justify-center">
+                <div className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center">
+                  {sealed ? (
+                    <Lock size={16} className="text-secondary" />
+                  ) : (
+                    <Book size={16} className="text-accent" />
+                  )}
+                </div>
+                <h2 className="mt-4 text-sm font-medium text-primary truncate w-full px-1">{nb.title}</h2>
+                <p className="mt-1 text-xs text-secondary">
+                  {sealed
+                    ? "Sealed · encrypted"
+                    : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pages} ${pages === 1 ? "page" : "pages"}`}
+                </p>
+              </button>
+              <div className="row-actions absolute top-3 right-3 flex items-center gap-0.5">
                 <button
                   type="button"
                   title="Rename"
@@ -150,21 +166,6 @@ export default function Notebooks() {
                   <Trash2 size={14} />
                 </button>
               </div>
-              <button type="button" onClick={() => openNotebook(nb)} className="w-full flex flex-col items-center flex-1 justify-center">
-                <div className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center">
-                  {sealed ? (
-                    <Lock size={16} className="text-secondary" />
-                  ) : (
-                    <Book size={16} className="text-accent" />
-                  )}
-                </div>
-                <h2 className="mt-4 text-sm font-medium text-primary truncate w-full px-1">{nb.title}</h2>
-                <p className="mt-1 text-xs text-secondary">
-                  {sealed
-                    ? "Sealed · encrypted"
-                    : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pages} ${pages === 1 ? "page" : "pages"}`}
-                </p>
-              </button>
             </div>
           );
         })}

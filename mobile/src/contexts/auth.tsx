@@ -9,8 +9,8 @@ type Status = "loading" | "signedIn" | "signedOut";
 interface AuthContextValue {
   status: Status;
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  login: (login: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -130,13 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("signedIn");
   }
 
-  async function login(email: string, password: string) {
-    const { token, user: nextUser } = await apiLogin(email, password);
+  async function login(identifier: string, password: string) {
+    const { token, user: nextUser } = await apiLogin(identifier, password);
     await persistSession(token, nextUser);
   }
 
-  async function register(email: string, password: string, name: string) {
-    const { token, user: nextUser } = await apiRegister(email, password, name);
+  async function register(email: string, password: string, name: string, username: string) {
+    const { token, user: nextUser } = await apiRegister(email, password, name, username);
     await persistSession(token, nextUser);
   }
 

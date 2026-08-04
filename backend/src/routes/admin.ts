@@ -95,6 +95,7 @@ router.get("/stats", async (_req: AdminRequest, res) => {
     select: {
       id: true,
       email: true,
+      username: true,
       name: true,
       createdAt: true,
       _count: { select: { notebooks: true, quickNotes: true, tasks: true } },
@@ -145,6 +146,7 @@ router.get("/stats", async (_req: AdminRequest, res) => {
       return {
         id: u.id,
         name: u.name,
+        username: u.username,
         email: u.email,
         joinedAt: u.createdAt,
         notebooks: u._count.notebooks,
@@ -172,6 +174,56 @@ router.get("/stats", async (_req: AdminRequest, res) => {
     },
     users: detailed,
   });
+});
+
+/** Permanently delete a registered user and all of their data. */
+router.delete("/users/:id", async (req: AdminRequest, res) => {
+  const userId = req.params.id;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  const notebooks = await prisma.notebook.findMany({
+    where: { ownerId: userId },
+    select: { id: true, sections: { select: { id: true } } },
+  });
+  const sectionIds = notebooks.flatMap((nb) => nb.sections.map((s) => s.id));
+  const pageIds =
+    sectionIds.length > 0
+      ? (
+          await prisma.page.findMany({
+            where: { sectionId: { in: sectionIds } },
+            select: { id: true },
+          })
+        ).map((p) => p.id)
+      : [];
+
+  await prisma.$transaction(async (tx) => {
+    if (pageIds.length > 0) {
+      await tx.pageLink.deleteMany({
+        where: { OR: [{ sourcePageId: { in: pageIds } }, { targetPageId: { in: pageIds } }] },
+      });
+      await tx.pageDocState.deleteMany({ where: { pageId: { in: pageIds } } });
+      // Clear M2M tags before pages
+      for (const pageId of pageIds) {
+        await tx.page.update({
+          where: { id: pageId },
+          data: { tags: { set: [] } },
+        });
+      }
+      await tx.page.deleteMany({ where: { id: { in: pageIds } } });
+    }
+    if (sectionIds.length > 0) {
+      await tx.section.deleteMany({ where: { id: { in: sectionIds } } });
+    }
+    await tx.notebook.deleteMany({ where: { ownerId: userId } });
+    await tx.quickNote.deleteMany({ where: { ownerId: userId } });
+    // Subtasks first (self-FK), then remaining tasks
+    await tx.task.deleteMany({ where: { ownerId: userId, parentTaskId: { not: null } } });
+    await tx.task.deleteMany({ where: { ownerId: userId } });
+    await tx.user.delete({ where: { id: userId } });
+  });
+
+  res.status(204).end();
 });
 
 export default router;

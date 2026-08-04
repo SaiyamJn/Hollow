@@ -119,13 +119,19 @@ export async function fetchHealth() {
 }
 
 // ---- auth ----
-export async function login(email: string, password: string) {
-  const { data } = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
+/** `login` may be email or username. */
+export async function login(login: string, password: string) {
+  const { data } = await api.post<{ token: string; user: User }>("/auth/login", { login, password });
   return data;
 }
 
-export async function register(email: string, password: string, name: string) {
-  const { data } = await api.post<{ token: string; user: User }>("/auth/register", { email, password, name });
+export async function register(email: string, password: string, name: string, username: string) {
+  const { data } = await api.post<{ token: string; user: User }>("/auth/register", {
+    email,
+    password,
+    name,
+    username,
+  });
   return data;
 }
 

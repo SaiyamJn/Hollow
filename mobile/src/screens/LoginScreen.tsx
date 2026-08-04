@@ -7,7 +7,7 @@ import { GlassCard } from "../components/GlassCard";
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuth();
   const { colors } = useTheme();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -16,7 +16,7 @@ export default function LoginScreen({ navigation }: any) {
     setError(null);
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      await login(identifier.trim(), password);
     } catch (err: any) {
       setError(err.response?.data?.error ?? "Couldn't reach the server");
     } finally {
@@ -34,12 +34,12 @@ export default function LoginScreen({ navigation }: any) {
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Sign in to your notes</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}
-          placeholder="Email"
+          placeholder="Email or username"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
+          autoCorrect={false}
+          value={identifier}
+          onChangeText={setIdentifier}
         />
         <TextInput
           style={[styles.input, { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary }]}

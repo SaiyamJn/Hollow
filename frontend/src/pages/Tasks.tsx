@@ -357,30 +357,29 @@ function TaskRow({
             {subtasks.filter((s) => s.done).length}/{subtasks.length}
           </span>
         )}
-        <button
-          title={task.starred ? "Unstar" : "Star"}
-          className={clsx(
-            "shrink-0",
-            task.starred ? "text-accent" : "text-secondary opacity-0 group-hover:opacity-100 hover:text-primary"
-          )}
-          onClick={() => onPatch(task.id, { starred: !task.starred })}
-        >
-          <Star size={14} fill={task.starred ? "currentColor" : "none"} />
-        </button>
-        <button
-          title="Edit"
-          className="text-secondary opacity-0 group-hover:opacity-100 hover:text-primary"
-          onClick={onEdit}
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          title="Delete"
-          className="text-secondary opacity-0 group-hover:opacity-100 hover:text-primary"
-          onClick={() => onDelete(task.id)}
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className={clsx("row-actions flex items-center gap-1 shrink-0", task.starred && "!opacity-100")}>
+          <button
+            title={task.starred ? "Unstar" : "Star"}
+            className={clsx("p-1 rounded-md", task.starred ? "text-accent" : "text-secondary hover:text-primary")}
+            onClick={() => onPatch(task.id, { starred: !task.starred })}
+          >
+            <Star size={14} fill={task.starred ? "currentColor" : "none"} />
+          </button>
+          <button
+            title="Edit"
+            className="p-1 rounded-md text-secondary hover:text-primary"
+            onClick={onEdit}
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            title="Delete"
+            className="p-1 rounded-md text-secondary hover:text-primary"
+            onClick={() => onDelete(task.id)}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       {expanded && (
@@ -393,7 +392,7 @@ function TaskRow({
               </span>
               <button
                 title="Delete subtask"
-                className="text-secondary opacity-0 group-hover:opacity-100 hover:text-primary"
+                className="row-actions p-1 rounded-md text-secondary hover:text-primary"
                 onClick={() => onDelete(sub.id)}
               >
                 <Trash2 size={13} />

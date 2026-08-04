@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 export default function Login() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,7 @@ export default function Login() {
     setError(null);
     setBusy(true);
     try {
-      const { token, user } = await login(email, password);
+      const { token, user } = await login(identifier.trim(), password);
       setAuth(token, user);
       navigate("/", { replace: true });
     } catch (err: any) {
@@ -44,7 +44,14 @@ export default function Login() {
           </div>
           <p className="text-sm text-secondary mt-2">Sign in to your notes</p>
         </div>
-        <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <Input
+          type="text"
+          autoComplete="username"
+          placeholder="Email or username"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          required
+        />
         <Input
           type="password"
           placeholder="Password"
