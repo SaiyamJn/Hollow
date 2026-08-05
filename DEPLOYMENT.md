@@ -651,8 +651,9 @@ npm run apk
 ```
 
 Versioning lives in `mobile/appVersion.js` (`version` + `versionCode`). Sideload
-APKs are named **`Hollow Ver-{version}.apk`**. Bump both fields before every
-new release. Production builds also auto-increment `versionCode` on EAS.
+APKs are named **`Hollow Ver-{version}.apk`**. Bump both fields in
+`appVersion.js` before every new release (EAS `autoIncrement` is unavailable
+with dynamic `app.config.js`).
 
 Upload to Play Console (draft / internal testing track):
 
