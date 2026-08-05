@@ -7,17 +7,14 @@ interface GlassCardProps {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
-  intensity?: number;
   /** Stronger frost for modals / prominent panels. */
   strong?: boolean;
 }
 
-// Frosted panel used across screens. BlurView on iOS/Android when available;
-// falls back to a translucent tint if blur isn't useful.
-export function GlassCard({ children, style, contentStyle, intensity, strong }: GlassCardProps) {
+// Frosted panel used across screens. BlurView on iOS; solid tint on Android.
+export function GlassCard({ children, style, contentStyle, strong }: GlassCardProps) {
   const { theme, colors } = useTheme();
-  const blur = intensity ?? (strong ? 55 : 40);
-  // Android BlurView is costly during scroll/first paint — solid tint is enough.
+  const blur = strong ? 55 : 40;
   const useBlur = Platform.OS === "ios";
 
   return (

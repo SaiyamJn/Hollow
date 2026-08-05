@@ -14,12 +14,13 @@ const config = {
   slug: "hollow",
   version,
   orientation: "portrait",
-  icon: "./assets/hollow-logo.png",
+  // Sized like WallyMobile: mark ~43% of canvas with safe-zone padding.
+  icon: "./assets/icon.png",
   scheme: "hollow",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   splash: {
-    image: "./assets/hollow-logo.png",
+    image: "./assets/splash-icon.png",
     resizeMode: "contain",
     backgroundColor: "#0f1012",
   },
@@ -40,7 +41,7 @@ const config = {
     versionCode,
     adaptiveIcon: {
       backgroundColor: "#0f1012",
-      foregroundImage: "./assets/hollow-logo.png",
+      foregroundImage: "./assets/adaptive-icon.png",
     },
     predictiveBackGestureEnabled: false,
     // Required for http:// API hosts on release builds.

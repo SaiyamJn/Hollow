@@ -127,17 +127,14 @@ export default function QuickNotesScreen({ navigation }: any) {
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                         hitSlop={6}
-                        style={[
-                          styles.dot,
-                          {
-                            height: size,
-                            width: size,
-                            borderRadius: size / 2,
-                            backgroundColor: DOT_COLORS[color],
-                            opacity: selected ? 1 : 0.4,
-                            transform: [{ scale: selected ? 1.12 : 1 }],
-                          },
-                        ]}
+                        style={{
+                          height: size,
+                          width: size,
+                          borderRadius: size / 2,
+                          backgroundColor: DOT_COLORS[color],
+                          opacity: selected ? 1 : 0.4,
+                          transform: [{ scale: selected ? 1.12 : 1 }],
+                        }}
                       />
                     );
                   })}
@@ -250,7 +247,6 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   dots: { flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 10 },
-  dot: {},
   addButton: {
     borderRadius: 10,
     paddingHorizontal: 16,

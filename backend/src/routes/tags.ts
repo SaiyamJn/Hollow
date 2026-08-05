@@ -17,14 +17,6 @@ async function getOwnedPage(pageId: string, userId: string) {
   return page;
 }
 
-router.get("/tags", async (_req: AuthedRequest, res) => {
-  const tags = await prisma.tag.findMany({
-    include: { _count: { select: { pages: true } } },
-    orderBy: { name: "asc" },
-  });
-  res.json(tags.map((t) => ({ id: t.id, name: t.name, pageCount: t._count.pages })));
-});
-
 router.post("/pages/:id/tags", async (req: AuthedRequest, res) => {
   const parsed = nameSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });

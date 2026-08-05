@@ -187,7 +187,6 @@ function Root() {
   const { status } = useAuth();
   const { theme, colors } = useTheme();
   const { fontsReady, fontFamily } = useFont();
-  const statusBarInset = useStatusBarInset();
 
   const navTheme = {
     ...(theme === "dark" ? DarkTheme : DefaultTheme),
@@ -226,10 +225,7 @@ function Root() {
             backgroundColor: Platform.OS === "android" ? colors.surface0 : "transparent",
           },
           headerBackground: () => <GlassChrome />,
-          headerTopInsetEnabled: true,
           statusBarTranslucent: true,
-          // Extra top pad so notebook / page titles never sit under the status bar.
-          headerStatusBarHeight: statusBarInset + 4,
           headerTitleStyle: {
             color: colors.textPrimary,
             fontWeight: "500",

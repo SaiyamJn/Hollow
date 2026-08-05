@@ -43,7 +43,7 @@ export const KEYBIND_DEFS: KeybindDef[] = [
   { id: "escape", label: "Close action / go back in notebooks", always: true },
 ];
 
-export const DEFAULT_KEYBINDS: Record<KeybindId, KeyCombo> = {
+const DEFAULT_KEYBINDS: Record<KeybindId, KeyCombo> = {
   palette: { key: "k", mod: true },
   home: { key: "1", mod: true },
   notebooks: { key: "2", mod: true },
@@ -61,7 +61,7 @@ export const DEFAULT_KEYBINDS: Record<KeybindId, KeyCombo> = {
 const STORAGE_KEY = "hollow-keybinds-v2";
 const isMac = typeof navigator !== "undefined" && /MAC|IPHONE|IPAD/.test(navigator.platform.toUpperCase());
 
-export function normalizeKey(key: string): string {
+function normalizeKey(key: string): string {
   if (key === "Escape") return "escape";
   if (key === ",") return ",";
   if (key === ".") return ".";
@@ -72,7 +72,7 @@ export function normalizeKey(key: string): string {
   return key.toLowerCase();
 }
 
-export function displayKey(key: string): string {
+function displayKey(key: string): string {
   const map: Record<string, string> = {
     escape: "Esc",
     ",": ",",
@@ -121,7 +121,7 @@ export function matchesCombo(e: KeyboardEvent, combo: KeyCombo): boolean {
   return true;
 }
 
-export function comboEquals(a: KeyCombo, b: KeyCombo): boolean {
+function comboEquals(a: KeyCombo, b: KeyCombo): boolean {
   return a.key === b.key && !!a.mod === !!b.mod && !!a.shift === !!b.shift && !!a.alt === !!b.alt;
 }
 
@@ -162,7 +162,3 @@ export const useKeybindsStore = create<KeybindsState>()((set, get) => ({
     set({ binds: { ...DEFAULT_KEYBINDS } });
   },
 }));
-
-export function getKeybindLabel(id: KeybindId): string {
-  return formatCombo(useKeybindsStore.getState().binds[id] ?? DEFAULT_KEYBINDS[id]);
-}

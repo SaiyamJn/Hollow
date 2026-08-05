@@ -1,6 +1,6 @@
 import type { PartialBlock } from "@blocknote/core";
 
-export interface PageTemplate {
+interface PageTemplate {
   id: string;
   name: string;
   blocks: PartialBlock[];

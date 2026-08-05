@@ -67,7 +67,7 @@ function resolveBaseUrl(): string {
   return "http://localhost:4000";
 }
 
-export const API_URL = resolveBaseUrl();
+const API_URL = resolveBaseUrl();
 
 // Release APKs on cellular / flaky Wi‑Fi need more headroom than Expo Go on LAN.
 export const api = axios.create({
@@ -107,7 +107,7 @@ async function enqueue(write: QueuedWrite) {
   await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
-export async function replayQueue() {
+async function replayQueue() {
   const raw = (await AsyncStorage.getItem(QUEUE_KEY)) ?? "[]";
   const queue: QueuedWrite[] = JSON.parse(raw);
   if (queue.length === 0) return;
@@ -152,7 +152,7 @@ function sectionHeaders(password?: string) {
   return password ? { "x-section-password": password } : {};
 }
 
-export interface HealthInfo {
+interface HealthInfo {
   ok: boolean;
   name?: string;
   version?: string;
@@ -248,21 +248,13 @@ export async function fetchOutlinks(pageId: string) {
   return data;
 }
 
-export async function fetchGraph(notebookId: string) {
-  const { data } = await api.get<{
-    nodes: { id: string; title: string }[];
-    edges: { source: string; target: string }[];
-  }>(`/notebooks/${notebookId}/graph`);
-  return data;
-}
-
 export async function fetchRecentPages(limit = 8) {
   const { data } = await api.get<RecentPage[]>("/pages/recent", { params: { limit } });
   return data;
 }
 
 // "en-CA" formats as YYYY-MM-DD in the user's local timezone.
-export function todayISO() {
+function todayISO() {
   return new Date().toLocaleDateString("en-CA");
 }
 

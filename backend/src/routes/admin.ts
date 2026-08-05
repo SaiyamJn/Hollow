@@ -6,10 +6,6 @@ import { prisma } from "../lib/prisma";
 
 const router = Router();
 
-interface AdminRequest extends Request {
-  adminEmail?: string;
-}
-
 function adminConfigured() {
   const email = process.env.ADMIN_EMAIL?.trim();
   const password = process.env.ADMIN_PASSWORD ?? "";
@@ -54,7 +50,7 @@ router.post("/login", async (req, res) => {
   });
 });
 
-async function requireAdmin(req: AdminRequest, res: Response, next: NextFunction) {
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!adminConfigured()) {
     return res.status(403).json({ error: "Admin access is not configured" });
   }
@@ -68,7 +64,6 @@ async function requireAdmin(req: AdminRequest, res: Response, next: NextFunction
     if (payload.role !== "admin" || !payload.email) {
       return res.status(403).json({ error: "Admin access required" });
     }
-    req.adminEmail = payload.email;
     next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -78,7 +73,7 @@ async function requireAdmin(req: AdminRequest, res: Response, next: NextFunction
 router.use(requireAdmin);
 
 // Aggregate stats + per-user details. Never returns note contents or titles.
-router.get("/stats", async (_req: AdminRequest, res) => {
+router.get("/stats", async (_req: Request, res) => {
   const [userCount, notebookCount, sectionCount, pageCount, quickNoteCount, taskCount, linkCount] =
     await Promise.all([
       prisma.user.count(),
@@ -177,7 +172,7 @@ router.get("/stats", async (_req: AdminRequest, res) => {
 });
 
 /** Permanently delete a registered user and all of their data. */
-router.delete("/users/:id", async (req: AdminRequest, res) => {
+router.delete("/users/:id", async (req: Request, res) => {
   const userId = req.params.id;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!user) return res.status(404).json({ error: "User not found" });

@@ -10,18 +10,15 @@ export function useLayout() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isNarrow = width < 360;
-  const isCompact = width < 400;
   const isShort = height < 700;
   const screenPad = isNarrow ? 12 : 16;
   const tabBarBottom = Math.max(insets.bottom, 10) + (isShort ? 10 : TAB_BAR_LIFT);
   const tabBarMarginH = Math.min(48, Math.max(16, (width - 280) / 2));
 
   return {
-    width,
     height,
     insets,
     isNarrow,
-    isCompact,
     isShort,
     screenPad,
     tabBarBottom,

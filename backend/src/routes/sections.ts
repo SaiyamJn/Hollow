@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
-import { generateSalt, deriveKey, encrypt, plaintextForLocking, sealAtRest } from "../lib/encryption";
+import { generateSalt, deriveKey, encrypt, unsealAtRest, sealAtRest } from "../lib/encryption";
 import { publicSection } from "../lib/sanitize";
 
 const router = Router();
@@ -32,13 +32,13 @@ export async function lockSectionWithPassword(sectionId: string, password: strin
       prisma.page.update({
         where: { id: p.id },
         // Unseal server-at-rest ciphertext first so we vault-encrypt plaintext.
-        data: { content: encrypt(plaintextForLocking(p.content), key) },
+        data: { content: encrypt(unsealAtRest(p.content), key) },
       })
     ),
     ...docStates.map((ds) =>
       prisma.pageDocState.update({
         where: { pageId: ds.pageId },
-        data: { state: encrypt(plaintextForLocking(ds.state), key) },
+        data: { state: encrypt(unsealAtRest(ds.state), key) },
       })
     ),
     prisma.section.update({
@@ -57,17 +57,6 @@ async function getOwnedSection(sectionId: string, userId: string) {
   return section;
 }
 
-router.get("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) => {
-  const notebook = await prisma.notebook.findUnique({ where: { id: req.params.notebookId } });
-  if (!notebook || notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
-  const sections = await prisma.section.findMany({
-    where: { notebookId: notebook.id },
-    include: { pages: { select: { id: true, title: true, updatedAt: true }, orderBy: { createdAt: "asc" } } },
-    orderBy: { createdAt: "asc" },
-  });
-  res.json(sections.map((s) => publicSection(s)));
-});
-
 router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) => {
   const parsed = titleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
@@ -76,7 +65,7 @@ router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =
 
   // Locked notebooks: new sections must be vault-encrypted with the same password.
   if (notebook.isLocked) {
-    const password = req.header("x-section-password") || req.header("x-notebook-password");
+    const password = req.header("x-section-password");
     if (!password || !notebook.passwordHash)
       return res.status(423).json({ error: "Notebook is locked — password required to add a section" });
     const ok = await bcrypt.compare(password, notebook.passwordHash);

@@ -22,7 +22,7 @@ import type {
 // POST to /auth/... (SPA) → nginx 405. Always prefer a real base, default /api.
 const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.trim() || "/api";
 
-export const api = axios.create({
+const api = axios.create({
   baseURL: apiBase,
 });
 
@@ -181,7 +181,7 @@ export async function fetchRecentPages(limit = 8) {
 }
 
 // "en-CA" formats as YYYY-MM-DD in the user's local timezone.
-export function todayISO() {
+function todayISO() {
   return new Date().toLocaleDateString("en-CA");
 }
 
@@ -256,7 +256,7 @@ export async function deleteTask(id: string) {
   await api.delete(`/tasks/${id}`);
 }
 
-export interface HealthInfo {
+interface HealthInfo {
   ok: boolean;
   name?: string;
   version?: string;

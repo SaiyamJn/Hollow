@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Hollow mobile client",
   "main": "index.ts",
   "dependencies": {
@@ -48,11 +48,9 @@
     "apk:local": "expo prebuild --platform android && expo run:android --variant release",
     "apk:local:gradle": "expo prebuild --platform android && cd android && gradlew.bat assembleRelease",
     "build:android": "npx eas-cli@latest build --profile production --platform android",
-    "apk": "npx eas-cli@latest build --profile preview --platform android",
     "build:apk": "npx eas-cli@latest build --profile preview --platform android",
     "build:android:local": "npx eas-cli@latest build --profile production --platform android --local",
     "build:ios": "npx eas-cli@latest build --profile production --platform ios",
-    "build:all": "npx eas-cli@latest build --profile production --platform all",
     "build:production": "npx eas-cli@latest build --profile production --platform all",
     "submit:android": "npx eas-cli@latest submit --platform android --latest --profile production"
   },

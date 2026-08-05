@@ -17,8 +17,6 @@ interface KeyboardSafeProps {
   /** When true, wrap children in a ScrollView that can move above the keyboard. */
   scroll?: boolean;
   contentContainerStyle?: StyleProp<ViewStyle>;
-  /** Extra bottom padding beyond the measured keyboard height. */
-  offset?: number;
 }
 
 /**
@@ -31,11 +29,10 @@ export function KeyboardSafe({
   style,
   scroll = false,
   contentContainerStyle,
-  offset = 0,
 }: KeyboardSafeProps) {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardBottomInset();
-  const bottomPad = (keyboardHeight > 0 ? keyboardHeight : 24) + offset + (keyboardHeight > 0 ? 0 : insets.bottom);
+  const bottomPad = (keyboardHeight > 0 ? keyboardHeight : 24) + (keyboardHeight > 0 ? 0 : insets.bottom);
 
   if (scroll) {
     return (

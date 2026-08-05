@@ -185,17 +185,14 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                     setColor(c);
                     scheduleSave(content, c);
                   }}
-                  style={[
-                    styles.dot,
-                    {
-                      height: dotSize,
-                      width: dotSize,
-                      borderRadius: dotSize / 2,
-                      backgroundColor: DOT_COLORS[c],
-                      opacity: selected ? 1 : 0.4,
-                      transform: [{ scale: selected ? 1.12 : 1 }],
-                    },
-                  ]}
+                  style={{
+                    height: dotSize,
+                    width: dotSize,
+                    borderRadius: dotSize / 2,
+                    backgroundColor: DOT_COLORS[c],
+                    opacity: selected ? 1 : 0.4,
+                    transform: [{ scale: selected ? 1.12 : 1 }],
+                  }}
                 />
               );
             })}
@@ -234,6 +231,5 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
   },
-  dot: {},
   actions: { flexDirection: "row", justifyContent: "center", gap: 28, paddingVertical: 4 },
 });

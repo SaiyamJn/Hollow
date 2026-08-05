@@ -9,7 +9,7 @@ export function remindersPref(): boolean {
   return localStorage.getItem(PREF_KEY) === "true";
 }
 
-export function remindersActive(): boolean {
+function remindersActive(): boolean {
   return remindersPref() && "Notification" in window && Notification.permission === "granted";
 }
 

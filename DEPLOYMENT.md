@@ -646,8 +646,7 @@ npm run build:android
 Sideload APK (optional):
 
 ```bash
-npm run apk
-# or: npm run build:apk
+npm run build:apk
 ```
 
 Versioning lives in `mobile/appVersion.js` (`version` + `versionCode`). Sideload

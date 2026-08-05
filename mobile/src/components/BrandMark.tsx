@@ -1,17 +1,15 @@
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../contexts/theme";
 
-type Size = "sm" | "md" | "lg" | "xl";
+type Size = "md" | "lg" | "xl";
 
 const SIZE_PX: Record<Size, number> = {
-  sm: 22,
   md: 28,
   lg: 40,
   xl: 56,
 };
 
 const RADIUS: Record<Size, number> = {
-  sm: 7,
   md: 9,
   lg: 12,
   xl: 16,

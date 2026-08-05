@@ -35,7 +35,7 @@ export function isFontId(value: string | null | undefined): value is FontId {
   return !!value && FONT_OPTIONS.some((f) => f.id === value);
 }
 
-export function fontFamilyFor(id: FontId): string {
+function fontFamilyFor(id: FontId): string {
   return FONT_OPTIONS.find((f) => f.id === id)?.family ?? FONT_OPTIONS[0].family;
 }
 

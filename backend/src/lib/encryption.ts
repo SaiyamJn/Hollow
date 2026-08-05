@@ -119,11 +119,3 @@ export function unsealAtRest(stored: string): string {
   if (!isSealedAtRest(stored)) return stored;
   return decrypt(stored.slice(AT_REST_PREFIX.length), getAtRestKey());
 }
-
-/**
- * Plaintext of a stored page/doc blob before password-locking.
- * Handles both server-sealed and legacy plaintext rows.
- */
-export function plaintextForLocking(stored: string): string {
-  return unsealAtRest(stored);
-}
