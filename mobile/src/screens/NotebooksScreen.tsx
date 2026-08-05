@@ -117,11 +117,8 @@ export default function NotebooksScreen({ navigation }: any) {
         contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
       >
-        <View style={{ marginBottom: 16, alignItems: "center" }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
-            Notebooks
-          </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4 }}>
+        <View style={{ marginBottom: 12, alignItems: "center" }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
             Organize pages — rename anytime.
           </Text>
         </View>

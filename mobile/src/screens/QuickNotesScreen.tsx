@@ -94,10 +94,7 @@ export default function QuickNotesScreen({ navigation }: any) {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
-              Quick notes
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginBottom: 12 }}>
               Capture thoughts — star the keepers.
             </Text>
             {/* Solid panel (no BlurView) — glass blur was casting a halo around the dots/Add. */}

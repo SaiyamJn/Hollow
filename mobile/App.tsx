@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, InteractionManager, Platform, Pressable, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { BlurView } from "expo-blur";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -14,8 +14,9 @@ import { AuthProvider, useAuth } from "./src/contexts/auth";
 import { UnlockProvider } from "./src/contexts/unlock";
 import { initOfflineSync } from "./src/lib/api";
 import { initNotifications } from "./src/lib/notifications";
-import { TAB_BAR_HEIGHT, useLayout } from "./src/lib/layout";
+import { useLayout } from "./src/lib/layout";
 import { SearchModal } from "./src/components/SearchModal";
+import { HollowTabBar } from "./src/components/HollowTabBar";
 import HomeScreen from "./src/screens/HomeScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
@@ -51,31 +52,19 @@ const queryClient = new QueryClient({
   },
 });
 
-/** Blur is expensive on Android first paint — use a solid glass tint instead. */
+/** Frosted header chrome — blur on both platforms when possible. */
 function GlassChrome({ intensity = 50 }: { intensity?: number }) {
   const { theme, colors } = useTheme();
-  if (Platform.OS === "android") {
-    return (
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: theme === "dark" ? "rgba(22, 24, 27, 0.94)" : "rgba(255, 255, 255, 0.94)",
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.glassBorder,
-          },
-        ]}
-      />
-    );
-  }
   return (
     <BlurView
       intensity={intensity}
       tint={theme === "dark" ? "dark" : "light"}
+      experimentalBlurMethod="dimezisBlurView"
       style={[
         StyleSheet.absoluteFill,
         {
-          backgroundColor: colors.glass,
+          backgroundColor:
+            theme === "dark" ? "rgba(15, 16, 18, 0.78)" : "rgba(255, 255, 255, 0.78)",
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.glassBorder,
         },
@@ -84,46 +73,24 @@ function GlassChrome({ intensity = 50 }: { intensity?: number }) {
   );
 }
 
-function TabBarChrome() {
-  const { theme, colors } = useTheme();
-  if (Platform.OS === "android") {
-    return (
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: theme === "dark" ? "rgba(22, 24, 27, 0.96)" : "rgba(255, 255, 255, 0.96)" },
-        ]}
-      />
-    );
-  }
-  return (
-    <BlurView
-      intensity={45}
-      tint={theme === "dark" ? "dark" : "light"}
-      style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
-    />
-  );
-}
-
-const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  Home: "home",
-  Notebooks: "book",
-  "Quick notes": "file-text",
-  Tasks: "check-square",
-  Links: "share-2",
-};
-
 function MainTabs({ navigation }: any) {
-  const { theme, colors } = useTheme();
-  const { isNarrow, tabBarBottom, tabBarMarginH } = useLayout();
+  const { colors } = useTheme();
+  const { isNarrow } = useLayout();
+  const insets = useSafeAreaInsets();
   const [searchOpen, setSearchOpen] = useState(false);
   const headerPad = isNarrow ? 8 : 16;
   return (
     <>
       <Tabs.Navigator
+        tabBar={(props) => <HollowTabBar {...props} />}
         screenOptions={({ route, navigation: tabNav }) => ({
-          headerStyle: { backgroundColor: "transparent" },
+          headerStyle: {
+            backgroundColor: "transparent",
+            elevation: 0,
+            shadowOpacity: 0,
+          },
           headerBackground: () => <GlassChrome />,
+          headerStatusBarHeight: Math.max(insets.top, Platform.OS === "android" ? 0 : insets.top),
           headerTitleStyle: {
             color: colors.textPrimary,
             fontWeight: "500",
@@ -131,7 +98,6 @@ function MainTabs({ navigation }: any) {
           },
           headerTitleAlign: "center",
           headerShadowVisible: false,
-          // Home isn't in the tab bar — every other tab gets a back arrow to it.
           headerLeft:
             route.name === "Home"
               ? undefined
@@ -139,66 +105,31 @@ function MainTabs({ navigation }: any) {
                   <Pressable
                     onPress={() => tabNav.navigate("Home")}
                     style={{ paddingLeft: headerPad, paddingRight: 6 }}
+                    hitSlop={8}
                   >
                     <Feather name="arrow-left" size={20} color={colors.textPrimary} />
                   </Pressable>
                 ),
           headerRight: () => (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Pressable onPress={() => setSearchOpen(true)} style={{ paddingHorizontal: isNarrow ? 8 : 10 }}>
+              <Pressable onPress={() => setSearchOpen(true)} style={{ paddingHorizontal: isNarrow ? 8 : 10 }} hitSlop={8}>
                 <Feather name="search" size={18} color={colors.textSecondary} />
               </Pressable>
               <Pressable
                 onPress={() => navigation.navigate("Settings")}
                 style={{ paddingLeft: isNarrow ? 6 : 10, paddingRight: headerPad }}
+                hitSlop={8}
               >
                 <Feather name="settings" size={18} color={colors.textSecondary} />
               </Pressable>
             </View>
           ),
-          // Floating glass pill — margin scales down on narrow phones.
-          tabBarStyle: {
-            position: "absolute",
-            bottom: tabBarBottom,
-            marginHorizontal: tabBarMarginH,
-            height: TAB_BAR_HEIGHT,
-            borderRadius: TAB_BAR_HEIGHT / 2,
-            borderTopWidth: 0,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: colors.glassBorder,
-            backgroundColor: "transparent",
-            overflow: "hidden",
-            elevation: 0,
-            paddingHorizontal: 6,
-            paddingTop: 0,
-            paddingBottom: 0,
-          },
-          tabBarBackground: () => <TabBarChrome />,
           lazy: true,
-          tabBarShowLabel: false,
-          tabBarItemStyle: {
-            height: TAB_BAR_HEIGHT,
-            paddingTop: 0,
-            paddingBottom: 0,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-          tabBarIconStyle: {
-            marginTop: 0,
-            marginBottom: 0,
-          },
-          tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarIcon: ({ color }) => (
-            <View style={{ height: TAB_BAR_HEIGHT, width: "100%", alignItems: "center", justifyContent: "center" }}>
-              <Feather name={TAB_ICONS[route.name]} size={19} color={color} />
-            </View>
-          ),
         })}
       >
-        <Tabs.Screen name="Home" component={HomeScreen} options={{ tabBarItemStyle: { display: "none" } }} />
+        <Tabs.Screen name="Home" component={HomeScreen} options={{ title: "Hollow" }} />
         <Tabs.Screen name="Notebooks" component={NotebooksScreen} />
-        <Tabs.Screen name="Quick notes" component={QuickNotesScreen} />
+        <Tabs.Screen name="Quick notes" component={QuickNotesScreen} options={{ title: "Notes" }} />
         <Tabs.Screen name="Tasks" component={TasksScreen} />
         <Tabs.Screen name="Links" component={LinksScreen} />
       </Tabs.Navigator>
@@ -234,10 +165,10 @@ function Root() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <StatusBar style={theme === "dark" ? "light" : "dark"} />
+      <StatusBar style={theme === "dark" ? "light" : "dark"} translucent={false} />
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: "transparent" },
+          headerStyle: { backgroundColor: "transparent", elevation: 0, shadowOpacity: 0 },
           headerBackground: () => <GlassChrome />,
           headerTitleStyle: {
             color: colors.textPrimary,
@@ -247,6 +178,7 @@ function Root() {
           },
           headerTintColor: colors.accent,
           headerShadowVisible: false,
+          headerTitleAlign: "center",
         }}
       >
         {status === "signedIn" ? (

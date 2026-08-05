@@ -23,17 +23,20 @@ import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 
-type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
+type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date" | "Completed";
 
-function groupTasks(tasks: Task[]) {
+function groupTasks(tasks: Task[], showCompleted: boolean) {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const starred = tasks.filter((t) => t.starred);
-  const rest = tasks.filter((t) => !t.starred);
-  const groups: Record<Exclude<GroupName, "Starred">, Task[]> = {
+  const open = tasks.filter((t) => !t.done);
+  const completed = tasks.filter((t) => t.done);
+
+  const starred = open.filter((t) => t.starred);
+  const rest = open.filter((t) => !t.starred);
+  const groups: Record<Exclude<GroupName, "Starred" | "Completed">, Task[]> = {
     Overdue: [],
     Today: [],
     Upcoming: [],
@@ -49,10 +52,17 @@ function groupTasks(tasks: Task[]) {
     }
   }
 
-  const sections: { title: GroupName; data: Task[] }[] = [];
+  const sections: { title: GroupName; data: Task[]; completedCount?: number }[] = [];
   if (starred.length) sections.push({ title: "Starred", data: starred });
   for (const name of ["Overdue", "Today", "Upcoming", "No date"] as const) {
     if (groups[name].length) sections.push({ title: name, data: groups[name] });
+  }
+  if (completed.length) {
+    sections.push({
+      title: "Completed",
+      data: showCompleted ? completed : [],
+      completedCount: completed.length,
+    });
   }
   return sections;
 }
@@ -75,6 +85,7 @@ export default function TasksScreen() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
+  const [showCompleted, setShowCompleted] = useState(false);
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
@@ -145,22 +156,18 @@ export default function TasksScreen() {
         ? colors.accent
         : colors.textSecondary;
 
+  const sections = groupTasks(tasks ?? [], showCompleted);
+
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <SectionList
-        sections={groupTasks(tasks ?? [])}
+        sections={sections}
         keyExtractor={(t) => t.id}
         contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) + keyboardInset }}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ marginBottom: 16, alignItems: "center" }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
-              Tasks
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}>
-              Plan the day — star what matters.
-            </Text>
+          <View style={{ marginBottom: 12 }}>
             <GlassCard style={{ alignSelf: "stretch" }} contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}>
               <TextInput
                 ref={quickAddRef}
@@ -176,11 +183,32 @@ export default function TasksScreen() {
             </GlassCard>
           </View>
         }
-        renderSectionHeader={({ section }) => (
-          <Text style={[styles.groupHeader, { color: groupColor(section.title) }]}>
-            {section.title.toUpperCase()}
-          </Text>
-        )}
+        renderSectionHeader={({ section }) => {
+          if (section.title === "Completed") {
+            const count = section.completedCount ?? section.data.length;
+            return (
+              <Pressable
+                onPress={() => setShowCompleted((v) => !v)}
+                style={styles.completedHeader}
+                hitSlop={6}
+              >
+                <Feather
+                  name={showCompleted ? "chevron-down" : "chevron-right"}
+                  size={15}
+                  color={colors.textSecondary}
+                />
+                <Text style={[styles.groupHeader, { color: colors.textSecondary, marginTop: 0, marginBottom: 0 }]}>
+                  COMPLETED ({count})
+                </Text>
+              </Pressable>
+            );
+          }
+          return (
+            <Text style={[styles.groupHeader, { color: groupColor(section.title) }]}>
+              {section.title.toUpperCase()}
+            </Text>
+          );
+        }}
         renderItem={({ item: task }) => {
           const isOpen = expanded.has(task.id);
           const subtasks = task.subtasks ?? [];
@@ -447,6 +475,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 8,
     textAlign: "center",
+  },
+  completedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingVertical: 4,
   },
   taskCard: { paddingHorizontal: 12, paddingVertical: 4 },
   taskRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },

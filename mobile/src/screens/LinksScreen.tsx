@@ -40,11 +40,8 @@ export default function LinksScreen({ navigation }: any) {
       style={{ flex: 1, backgroundColor: colors.surface0 }}
       contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(false) }}
     >
-      <View style={{ marginBottom: 14, alignItems: "center" }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
-          Links
-        </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4 }}>
+      <View style={{ marginBottom: 10, alignItems: "center" }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
           Type [[Page Title]] in a note to connect pages.
         </Text>
       </View>

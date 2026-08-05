@@ -48,6 +48,12 @@ const config = {
     // Shrink the window when the keyboard opens so inputs aren't covered.
     softwareKeyboardLayoutMode: "resize",
   },
+  androidStatusBar: {
+    // Keep status bar from covering headers / content on small phones.
+    translucent: false,
+    backgroundColor: "#0f1012",
+    barStyle: "light-content",
+  },
   web: {
     favicon: "./assets/favicon.png",
   },
@@ -59,6 +65,7 @@ const config = {
       "expo-notifications",
       {
         color: "#62d9ae",
+        defaultChannel: "reminders",
       },
     ],
     "./plugins/withHollowAndroid",

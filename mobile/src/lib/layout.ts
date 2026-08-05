@@ -1,9 +1,9 @@
 import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/** Floating tab pill metrics — keep in sync with App.tsx tabBarStyle. */
-export const TAB_BAR_HEIGHT = 50;
-export const TAB_BAR_LIFT = 28;
+/** Floating tab pill metrics — keep in sync with HollowTabBar. */
+export const TAB_BAR_HEIGHT = 56;
+export const TAB_BAR_LIFT = 16;
 export const FAB_SIZE = 52;
 
 export function useLayout() {
@@ -13,8 +13,8 @@ export function useLayout() {
   const isCompact = width < 400;
   const isShort = height < 700;
   const screenPad = isNarrow ? 12 : 16;
-  const tabBarBottom = Math.max(insets.bottom, 8) + TAB_BAR_LIFT;
-  const tabBarMarginH = Math.min(56, Math.max(12, (width - 220) / 2));
+  const tabBarBottom = Math.max(insets.bottom, 10) + (isShort ? 10 : TAB_BAR_LIFT);
+  const tabBarMarginH = Math.min(48, Math.max(16, (width - 280) / 2));
 
   return {
     width,

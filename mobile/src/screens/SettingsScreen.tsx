@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
 import { useFont } from "../contexts/font";
 import { useUnlock } from "../contexts/unlock";
-import { API_URL, fetchHealth } from "../lib/api";
+import { fetchHealth } from "../lib/api";
 import {
   APP_BUILD,
   APP_COPYRIGHT,
@@ -165,7 +165,7 @@ export default function SettingsScreen() {
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={{ color: colors.textPrimary, fontSize: 14 }}>Task reminders</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-            Get notified when a task with a due time is due
+            Notify at each task’s due date/time. Tasks without a due date notify once when added.
           </Text>
         </View>
         <Switch
@@ -174,16 +174,6 @@ export default function SettingsScreen() {
           trackColor={{ true: colors.accent, false: colors.surface2 }}
           thumbColor={colors.surface0}
         />
-      </GlassCard>
-
-      <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>SERVER</Text>
-      <GlassCard contentStyle={[styles.card, styles.centered]}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }} selectable numberOfLines={3}>
-          {API_URL}
-        </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4, textAlign: "center" }}>
-          Override with EXPO_PUBLIC_API_URL in mobile/.env
-        </Text>
       </GlassCard>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>ABOUT</Text>
