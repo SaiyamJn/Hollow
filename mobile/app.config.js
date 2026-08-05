@@ -14,15 +14,15 @@ const config = {
   slug: "hollow",
   version,
   orientation: "portrait",
-  // Sized like WallyMobile: mark ~43% of canvas with safe-zone padding.
-  icon: "./assets/icon.png",
+  // Same rounded Hollow mark everywhere (web BrandMark uses the same asset).
+  icon: "./assets/hollow-logo.png",
   scheme: "hollow",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   splash: {
-    image: "./assets/splash-icon.png",
+    image: "./assets/hollow-logo.png",
     resizeMode: "contain",
-    backgroundColor: "#0f1012",
+    backgroundColor: "#ffffff",
   },
   ios: {
     supportsTablet: true,
@@ -40,8 +40,8 @@ const config = {
     package: "com.hollow.notes",
     versionCode,
     adaptiveIcon: {
-      backgroundColor: "#0f1012",
-      foregroundImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#ffffff",
+      foregroundImage: "./assets/hollow-logo.png",
     },
     predictiveBackGestureEnabled: false,
     // Required for http:// API hosts on release builds.
@@ -56,7 +56,7 @@ const config = {
     barStyle: "light-content",
   },
   web: {
-    favicon: "./assets/favicon.png",
+    favicon: "./assets/hollow-logo.png",
   },
   plugins: [
     "expo-secure-store",
