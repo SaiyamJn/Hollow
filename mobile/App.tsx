@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, InteractionManager, Platform, Pressable, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  InteractionManager,
+  Platform,
+  Pressable,
+  StatusBar as RNStatusBar,
+  StyleSheet,
+  View,
+} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { BlurView } from "expo-blur";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -52,19 +60,41 @@ const queryClient = new QueryClient({
   },
 });
 
-/** Frosted header chrome — blur on both platforms when possible. */
-function GlassChrome({ intensity = 50 }: { intensity?: number }) {
+/** Top inset that clears the system status bar on all Android variants. */
+function useStatusBarInset() {
+  const insets = useSafeAreaInsets();
+  if (Platform.OS !== "android") return insets.top;
+  return Math.max(insets.top, RNStatusBar.currentHeight ?? 0, 24);
+}
+
+/**
+ * Header chrome. Android BlurView (dimezis) can ghost previous frames into the
+ * header (e.g. calendar "August 2026") — use a solid bar there instead.
+ */
+function GlassChrome() {
   const { theme, colors } = useTheme();
+  if (Platform.OS === "android") {
+    return (
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: theme === "dark" ? "#0f1012" : "#f4f5f7",
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.glassBorder,
+          },
+        ]}
+      />
+    );
+  }
   return (
     <BlurView
-      intensity={intensity}
+      intensity={50}
       tint={theme === "dark" ? "dark" : "light"}
-      experimentalBlurMethod="dimezisBlurView"
       style={[
         StyleSheet.absoluteFill,
         {
-          backgroundColor:
-            theme === "dark" ? "rgba(15, 16, 18, 0.78)" : "rgba(255, 255, 255, 0.78)",
+          backgroundColor: colors.glass,
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.glassBorder,
         },
@@ -76,21 +106,27 @@ function GlassChrome({ intensity = 50 }: { intensity?: number }) {
 function MainTabs({ navigation }: any) {
   const { colors } = useTheme();
   const { isNarrow } = useLayout();
-  const insets = useSafeAreaInsets();
+  const statusBarInset = useStatusBarInset();
   const [searchOpen, setSearchOpen] = useState(false);
   const headerPad = isNarrow ? 8 : 16;
+
   return (
     <>
       <Tabs.Navigator
         tabBar={(props) => <HollowTabBar {...props} />}
         screenOptions={({ route, navigation: tabNav }) => ({
           headerStyle: {
-            backgroundColor: "transparent",
+            backgroundColor: Platform.OS === "android" ? (colors.surface0 as string) : "transparent",
+            // Extra room so title/icons never sit under the status bar.
+            height: statusBarInset + 56,
             elevation: 0,
             shadowOpacity: 0,
           },
           headerBackground: () => <GlassChrome />,
-          headerStatusBarHeight: Math.max(insets.top, Platform.OS === "android" ? 0 : insets.top),
+          headerStatusBarHeight: statusBarInset + 4,
+          headerTitleContainerStyle: {
+            paddingVertical: 0,
+          },
           headerTitleStyle: {
             color: colors.textPrimary,
             fontWeight: "500",
@@ -104,20 +140,29 @@ function MainTabs({ navigation }: any) {
               : () => (
                   <Pressable
                     onPress={() => tabNav.navigate("Home")}
-                    style={{ paddingLeft: headerPad, paddingRight: 6 }}
+                    style={{ paddingLeft: headerPad, paddingRight: 6, height: 44, justifyContent: "center" }}
                     hitSlop={8}
                   >
                     <Feather name="arrow-left" size={20} color={colors.textPrimary} />
                   </Pressable>
                 ),
           headerRight: () => (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Pressable onPress={() => setSearchOpen(true)} style={{ paddingHorizontal: isNarrow ? 8 : 10 }} hitSlop={8}>
+            <View style={{ flexDirection: "row", alignItems: "center", height: 44 }}>
+              <Pressable
+                onPress={() => setSearchOpen(true)}
+                style={{ paddingHorizontal: isNarrow ? 8 : 10, height: 44, justifyContent: "center" }}
+                hitSlop={8}
+              >
                 <Feather name="search" size={18} color={colors.textSecondary} />
               </Pressable>
               <Pressable
                 onPress={() => navigation.navigate("Settings")}
-                style={{ paddingLeft: isNarrow ? 6 : 10, paddingRight: headerPad }}
+                style={{
+                  paddingLeft: isNarrow ? 6 : 10,
+                  paddingRight: headerPad,
+                  height: 44,
+                  justifyContent: "center",
+                }}
                 hitSlop={8}
               >
                 <Feather name="settings" size={18} color={colors.textSecondary} />
@@ -142,6 +187,7 @@ function Root() {
   const { status } = useAuth();
   const { theme, colors } = useTheme();
   const { fontsReady, fontFamily } = useFont();
+  const statusBarInset = useStatusBarInset();
 
   const navTheme = {
     ...(theme === "dark" ? DarkTheme : DefaultTheme),
@@ -165,11 +211,25 @@ function Root() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <StatusBar style={theme === "dark" ? "light" : "dark"} translucent={false} />
+      <StatusBar style={theme === "dark" ? "light" : "dark"} translucent backgroundColor="transparent" />
+      {Platform.OS === "android" && (
+        <RNStatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={theme === "dark" ? "light-content" : "dark-content"}
+        />
+      )}
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: "transparent", elevation: 0, shadowOpacity: 0 },
+          contentStyle: { backgroundColor: colors.surface0 },
+          headerStyle: {
+            backgroundColor: Platform.OS === "android" ? colors.surface0 : "transparent",
+          },
           headerBackground: () => <GlassChrome />,
+          headerTopInsetEnabled: true,
+          statusBarTranslucent: true,
+          // Extra top pad so notebook / page titles never sit under the status bar.
+          headerStatusBarHeight: statusBarInset + 4,
           headerTitleStyle: {
             color: colors.textPrimary,
             fontWeight: "500",
@@ -184,8 +244,16 @@ function Root() {
         {status === "signedIn" ? (
           <>
             <Stack.Screen name="Tabs" component={MainTabs} options={{ headerShown: false }} />
-            <Stack.Screen name="Notebook" component={NotebookScreen} options={({ route }: any) => ({ title: route.params.title })} />
-            <Stack.Screen name="Page" component={PageEditorScreen} options={({ route }: any) => ({ title: route.params.title })} />
+            <Stack.Screen
+              name="Notebook"
+              component={NotebookScreen}
+              options={({ route }: any) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              name="Page"
+              component={PageEditorScreen}
+              options={({ route }: any) => ({ title: route.params.title })}
+            />
             <Stack.Screen name="QuickNote" component={QuickNoteDetailScreen} options={{ title: "Note" }} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
           </>
@@ -201,8 +269,6 @@ function Root() {
 }
 
 export default function App() {
-  // Defer offline replay + notifications until after first interactions so
-  // they don't compete with auth restore / Home queries on cold start.
   useEffect(() => {
     const handle = InteractionManager.runAfterInteractions(() => {
       initOfflineSync();

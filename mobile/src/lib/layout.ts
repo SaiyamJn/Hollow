@@ -2,7 +2,7 @@ import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** Floating tab pill metrics — keep in sync with HollowTabBar. */
-export const TAB_BAR_HEIGHT = 56;
+export const TAB_BAR_HEIGHT = 58;
 export const TAB_BAR_LIFT = 16;
 export const FAB_SIZE = 52;
 

@@ -49,9 +49,9 @@ const config = {
     softwareKeyboardLayoutMode: "resize",
   },
   androidStatusBar: {
-    // Keep status bar from covering headers / content on small phones.
-    translucent: false,
-    backgroundColor: "#0f1012",
+    // Edge-to-edge: headers pad with StatusBar.currentHeight / safe-area insets.
+    translucent: true,
+    backgroundColor: "#00000000",
     barStyle: "light-content",
   },
   web: {

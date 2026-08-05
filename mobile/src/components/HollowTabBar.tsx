@@ -12,10 +12,11 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Links: "share-2",
 };
 
-/** Floating glass pill — only the four visible tabs, evenly spaced (Home is hidden). */
+/** Minimal floating pill — evenly spaced, centered icons, pill-shaped active state. */
 export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { theme, colors } = useTheme();
   const { tabBarBottom, tabBarMarginH, isNarrow } = useLayout();
+  const iconSize = isNarrow ? 18 : 20;
 
   const visible = state.routes
     .map((route, index) => ({ route, index }))
@@ -33,40 +34,22 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
           height: TAB_BAR_HEIGHT,
           borderRadius: TAB_BAR_HEIGHT / 2,
           borderColor: colors.glassBorder,
+          backgroundColor:
+            Platform.OS === "android"
+              ? theme === "dark"
+                ? "rgba(22, 24, 27, 0.92)"
+                : "rgba(255, 255, 255, 0.92)"
+              : "transparent",
         },
       ]}
     >
-      {Platform.OS === "ios" ? (
+      {Platform.OS === "ios" && (
         <BlurView
-          intensity={55}
+          intensity={50}
           tint={theme === "dark" ? "dark" : "light"}
           style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
         />
-      ) : (
-        <BlurView
-          intensity={40}
-          tint={theme === "dark" ? "dark" : "light"}
-          experimentalBlurMethod="dimezisBlurView"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              backgroundColor:
-                theme === "dark" ? "rgba(22, 24, 27, 0.72)" : "rgba(255, 255, 255, 0.72)",
-            },
-          ]}
-        />
       )}
-      {/* Soft top highlight for glass edge */}
-      <View
-        pointerEvents="none"
-        style={[
-          styles.sheen,
-          {
-            backgroundColor:
-              theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.45)",
-          },
-        ]}
-      />
 
       <View style={styles.row}>
         {visible.map(({ route, index }) => {
@@ -90,15 +73,22 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
               accessibilityState={focused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
               onPress={onPress}
+              // Kill Android square ripple — selection is the soft pill fill only.
+              android_ripple={{ color: "transparent" }}
               style={styles.item}
-              hitSlop={6}
+              hitSlop={8}
             >
-              <View style={[styles.iconHit, focused && { backgroundColor: colors.accentSoft }]}>
-                <Feather
-                  name={TAB_ICONS[route.name] ?? "circle"}
-                  size={isNarrow ? 18 : 20}
-                  color={color}
-                />
+              <View
+                style={[
+                  styles.iconPill,
+                  focused && {
+                    backgroundColor: colors.accentSoft,
+                  },
+                ]}
+              >
+                <View style={styles.iconSlot}>
+                  <Feather name={TAB_ICONS[route.name] ?? "circle"} size={iconSize} color={color} />
+                </View>
               </View>
             </Pressable>
           );
@@ -113,28 +103,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
-    elevation: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  sheen: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "45%",
   },
   row: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-evenly",
-    paddingHorizontal: 4,
-    // Feather glyphs sit optically high — nudge the row down into the pill center.
-    paddingTop: 3,
-    paddingBottom: 1,
+    paddingHorizontal: 8,
   },
   item: {
     flex: 1,
@@ -142,13 +117,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  iconHit: {
-    height: 36,
-    width: 36,
-    borderRadius: 18,
+  /** Capsule active indicator — full pill, never a square. */
+  iconPill: {
+    height: 34,
+    minWidth: 56,
+    paddingHorizontal: 18,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    // Extra optical center for vector icons inside the hit target.
-    paddingTop: 2,
+  },
+  /** Fixed box so Feather glyphs share one optical center. */
+  iconSlot: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

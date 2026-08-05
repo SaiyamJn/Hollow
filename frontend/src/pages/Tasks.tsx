@@ -11,14 +11,15 @@ import { DateTimePicker, formatDueLabel } from "../components/DateTimePicker";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
-function groupTasks(tasks: Task[]): [GroupName, Task[]][] {
+function groupOpenTasks(tasks: Task[]): [GroupName, Task[]][] {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const starred = tasks.filter((t) => t.starred);
-  const rest = tasks.filter((t) => !t.starred);
+  const open = tasks.filter((t) => !t.done);
+  const starred = open.filter((t) => t.starred);
+  const rest = open.filter((t) => !t.starred);
 
   const groups: Record<Exclude<GroupName, "Starred">, Task[]> = {
     Overdue: [],
@@ -66,6 +67,7 @@ export default function Tasks() {
   const [quickAdd, setQuickAdd] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -148,6 +150,9 @@ export default function Tasks() {
   const editError =
     (saveEdit.error as any)?.response?.data?.error ?? (saveEdit.error ? "Couldn't save." : null);
 
+  const openGroups = groupOpenTasks(tasks ?? []);
+  const completed = (tasks ?? []).filter((t) => t.done);
+
   return (
     <div className="max-w-2xl mx-auto px-7 py-10">
       <div className="text-center mb-6">
@@ -168,7 +173,7 @@ export default function Tasks() {
       )}
 
       <div className="space-y-6">
-        {groupTasks(tasks ?? []).map(([name, list]) => (
+        {openGroups.map(([name, list]) => (
           <section key={name}>
             <h2
               className={clsx("text-xs font-medium uppercase tracking-wide mb-2 text-center", {
@@ -201,6 +206,42 @@ export default function Tasks() {
             </div>
           </section>
         ))}
+
+        {completed.length > 0 && (
+          <section>
+            <button
+              type="button"
+              onClick={() => setShowCompleted((v) => !v)}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium uppercase tracking-wide
+                         text-secondary hover:text-primary mb-2 py-1"
+            >
+              {showCompleted ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              Completed ({completed.length})
+            </button>
+            {showCompleted && (
+              <div className="rounded-xl border border-border glass shadow-card divide-y divide-[var(--border)] overflow-hidden">
+                {completed.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onPatch={(id, patch) => update.mutate({ id, patch })}
+                    onDelete={(id) => remove.mutate(id)}
+                    onEdit={() => {
+                      saveEdit.reset();
+                      setEditing({
+                        id: task.id,
+                        title: task.title,
+                        description: task.description ?? "",
+                        due: task.dueAt ? new Date(task.dueAt) : null,
+                      });
+                    }}
+                    onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       <Dialog

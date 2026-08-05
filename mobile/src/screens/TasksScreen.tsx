@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   SectionList,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
@@ -395,16 +398,41 @@ function TaskFormModal({
   onSubmit: () => void;
 }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   if (!draft) return null;
+
+  // Keep modal clear of status bar / home indicator; scroll when the
+  // calendar makes the sheet taller than the screen.
+  const padTop = Math.max(insets.top, 28) + 20;
+  const padBottom = Math.max(insets.bottom, 16) + 16;
+  const maxCardH = Math.max(280, height - padTop - padBottom);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior="padding" style={styles.draftOverlay}>
-        <GlassCard strong style={{ maxHeight: "90%" }} contentStyle={styles.draftCard}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={[
+          styles.draftOverlay,
+          {
+            paddingTop: padTop,
+            paddingBottom: padBottom,
+            paddingHorizontal: 16,
+          },
+        ]}
+      >
+        <GlassCard
+          strong
+          style={{ maxHeight: maxCardH, width: "100%", overflow: "hidden" }}
+          contentStyle={[styles.draftCard, { maxHeight: maxCardH }]}
+        >
           <ScrollView
+            style={{ maxHeight: maxCardH - 8 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             automaticallyAdjustKeyboardInsets
+            bounces={false}
+            contentContainerStyle={{ paddingBottom: 8 }}
           >
             <Text
               style={{
@@ -490,7 +518,11 @@ const styles = StyleSheet.create({
   taskTitle: { fontSize: 14, minWidth: 0 },
   strike: { textDecorationLine: "line-through" },
   subtasks: { marginLeft: 16, paddingBottom: 6 },
-  draftOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 16 },
+  draftOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-start",
+  },
   draftCard: { padding: 20 },
   draftInput: {
     borderRadius: 12,

@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/theme";
 import { useLayout } from "../lib/layout";
 import { GlassCard } from "./GlassCard";
@@ -31,6 +43,8 @@ export function PromptModal({
 }: PromptModalProps) {
   const { colors } = useTheme();
   const { isNarrow } = useLayout();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,45 +65,64 @@ export function PromptModal({
     else onClose();
   }
 
+  const padH = isNarrow ? 16 : 28;
+  const padTop = Math.max(insets.top, 28) + 20;
+  const padBottom = Math.max(insets.bottom, 16) + 16;
+  const maxCardH = Math.max(200, height - padTop - padBottom);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior="padding"
-        style={[styles.overlay, { padding: isNarrow ? 16 : 28 }]}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={[
+          styles.overlay,
+          {
+            paddingHorizontal: padH,
+            paddingTop: padTop,
+            paddingBottom: padBottom,
+          },
+        ]}
       >
         <GlassCard
           strong
-          style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}
-          contentStyle={styles.card}
+          style={{ width: "100%", maxWidth: 400, alignSelf: "center", maxHeight: maxCardH }}
+          contentStyle={[styles.card, { maxHeight: maxCardH }]}
         >
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
-            {title}
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary },
-            ]}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry={secure}
-            autoFocus
-            value={value}
-            onChangeText={setValue}
-            onSubmitEditing={handleSubmit}
-          />
-          {error && <Text style={styles.error}>{error}</Text>}
-          <View style={styles.actions}>
-            <Pressable onPress={onClose} style={styles.button}>
-              <Text style={{ color: colors.textSecondary, fontWeight: "500" }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleSubmit}
-              style={[styles.button, { backgroundColor: colors.accent, borderRadius: 12 }]}
-            >
-              <Text style={{ color: colors.surface0, fontWeight: "500" }}>{busy ? "…" : submitLabel}</Text>
-            </Pressable>
-          </View>
+          <ScrollView
+            style={{ maxHeight: maxCardH - 8 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={3}>
+              {title}
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                { backgroundColor: colors.glass, borderColor: colors.glassBorder, color: colors.textPrimary },
+              ]}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textSecondary}
+              secureTextEntry={secure}
+              autoFocus
+              value={value}
+              onChangeText={setValue}
+              onSubmitEditing={handleSubmit}
+            />
+            {error && <Text style={styles.error}>{error}</Text>}
+            <View style={styles.actions}>
+              <Pressable onPress={onClose} style={styles.button}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "500" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSubmit}
+                style={[styles.button, { backgroundColor: colors.accent, borderRadius: 12 }]}
+              >
+                <Text style={{ color: colors.surface0, fontWeight: "500" }}>{busy ? "…" : submitLabel}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
         </GlassCard>
       </KeyboardAvoidingView>
     </Modal>
@@ -97,7 +130,11 @@ export function PromptModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center" },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-start",
+  },
   card: { padding: 20 },
   title: { fontSize: 15, fontWeight: "500", marginBottom: 14 },
   input: {

@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { fetchNotebooks, openDailyNote } from "../lib/api";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
@@ -134,17 +133,21 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
               styles.panel,
               {
                 borderColor: colors.glassBorder,
-                marginTop: insets.top + 12,
+                marginTop: Math.max(insets.top, 28) + 20,
                 marginHorizontal: screenPad,
+                marginBottom: Math.max(insets.bottom, 12),
               },
             ]}
             onPress={(e) => e.stopPropagation()}
           >
-            <BlurView
-              intensity={60}
-              tint={theme === "dark" ? "dark" : "light"}
-              experimentalBlurMethod="dimezisBlurView"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor:
+                    theme === "dark" ? "rgba(22, 24, 27, 0.96)" : "rgba(255, 255, 255, 0.96)",
+                },
+              ]}
             />
             <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
               <Feather name="search" size={15} color={colors.textSecondary} />
