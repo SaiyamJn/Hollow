@@ -632,17 +632,24 @@ npx expo run:android
 
 (`android/` is gitignored; regenerating with `prebuild` is normal.)
 
-### 11.3 Optional: EAS cloud build (not required)
+### 11.3 EAS cloud build (APK)
 
-Only if you prefer Expo’s servers to compile the APK (still **not** your
-Ubuntu host). Needs a free Expo account:
+On your PC (not the Ubuntu host):
 
 ```bash
 cd mobile
 npx eas-cli@latest login
-npx eas-cli@latest init
+# projectId already in app.config.js after first init
 npm run build:android
 ```
+
+Versioning lives in `mobile/appVersion.js` (`version` + `versionCode`). Each
+release APK is named **`Hollow Ver-{version}.apk`** (e.g. `Hollow Ver-1.0.1.apk`).
+Bump both fields before every new build.
+
+`eas.json` bakes `EXPO_PUBLIC_API_URL=http://203.192.206.63/api`. If Hollow is
+on **`HOST_PORT=8080`**, change that to `http://203.192.206.63:8080/api` and
+rebuild. Release builds allow cleartext HTTP via `plugins/withHollowAndroid.js`.
 
 To use EAS tooling but compile **on your PC** (needs Docker Desktop):
 
@@ -657,10 +664,6 @@ Profiles in `eas.json`:
 | `preview` | Android **APK**, internal iOS | Sideload |
 | `production` | Android **AAB**, store iOS | Play Store / App Store |
 | `development` | Dev client | Optional native debugging |
-
-Cleartext HTTP is enabled in `app.config.js` so `http://…` APIs work on device.
-If you change the server URL later, update `mobile/.env` / `eas.json` and
-rebuild the APK.
 
 ---
 

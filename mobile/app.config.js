@@ -1,13 +1,18 @@
 // Expo app config. EXPO_PUBLIC_API_URL is inlined at build time (Metro / EAS).
 // For production builds set it in eas.json → build.<profile>.env (must end with /api).
 
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim().replace(/\/$/, "");
+const { version, versionCode } = require("./appVersion");
+
+/** Production Hollow API — used when env is unset so release builds never ship empty. */
+const DEFAULT_API_URL = "http://203.192.206.63/api";
+
+const apiUrl = (process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL).trim().replace(/\/$/, "");
 
 /** @type {import('expo/config').ExpoConfig} */
 const config = {
   name: "Hollow",
   slug: "hollow",
-  version: "1.0.0",
+  version,
   orientation: "portrait",
   icon: "./assets/hollow-logo.png",
   scheme: "hollow",
@@ -21,6 +26,7 @@ const config = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.hollow.notes",
+    buildNumber: String(versionCode),
     infoPlist: {
       // Required while the API is served over plain HTTP (public IP / LAN).
       // Remove when you switch to HTTPS (Cloudflare Tunnel, reverse proxy TLS, etc.).
@@ -31,6 +37,7 @@ const config = {
   },
   android: {
     package: "com.hollow.notes",
+    versionCode,
     adaptiveIcon: {
       backgroundColor: "#0f1012",
       foregroundImage: "./assets/hollow-logo.png",
@@ -54,6 +61,7 @@ const config = {
         color: "#62d9ae",
       },
     ],
+    "./plugins/withHollowAndroid",
   ],
   extra: {
     apiUrl,

@@ -69,7 +69,12 @@ function resolveBaseUrl(): string {
 
 export const API_URL = resolveBaseUrl();
 
-export const api = axios.create({ baseURL: API_URL, timeout: 10_000 });
+// Release APKs on cellular / flaky Wi‑Fi need more headroom than Expo Go on LAN.
+export const api = axios.create({
+  baseURL: API_URL,
+  timeout: 20_000,
+  headers: { Accept: "application/json" },
+});
 
 // The auth context sets this once the token is loaded from SecureStore.
 let authToken: string | null = null;
