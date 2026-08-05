@@ -15,6 +15,7 @@ import { BlurView } from "expo-blur";
 import { fetchNotebooks, openDailyNote } from "../lib/api";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
+import { useLayout } from "../lib/layout";
 
 interface SearchItem {
   id: string;
@@ -38,6 +39,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
   const { theme, colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
+  const { insets, height, isNarrow, screenPad } = useLayout();
   const [query, setQuery] = useState("");
 
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks, enabled: visible });
@@ -127,7 +129,17 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
     <Modal visible={visible} animationType="fade" transparent onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-          <Pressable style={[styles.panel, { borderColor: colors.glassBorder }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={[
+              styles.panel,
+              {
+                borderColor: colors.glassBorder,
+                marginTop: insets.top + 12,
+                marginHorizontal: screenPad,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
             <BlurView
               intensity={60}
               tint={theme === "dark" ? "dark" : "light"}
@@ -138,7 +150,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
               <Feather name="search" size={15} color={colors.textSecondary} />
               <TextInput
                 style={[styles.input, { color: colors.textPrimary }]}
-                placeholder="Search pages, or run a command…"
+                placeholder={isNarrow ? "Search or run a command…" : "Search pages, or run a command…"}
                 placeholderTextColor={colors.textSecondary}
                 value={query}
                 onChangeText={setQuery}
@@ -153,7 +165,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
               data={filtered}
               keyExtractor={(item) => item.id}
               keyboardShouldPersistTaps="handled"
-              style={{ maxHeight: 380 }}
+              style={{ maxHeight: Math.min(380, height * 0.5) }}
               ListEmptyComponent={
                 <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", padding: 20 }}>
                   No matches.
@@ -162,12 +174,23 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
               renderItem={({ item }) => (
                 <Pressable style={styles.itemRow} onPress={item.run}>
                   <Feather name={item.icon} size={15} color={colors.textSecondary} />
-                  <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1 }} numberOfLines={1}>
+                  <Text
+                    style={{ color: colors.textPrimary, fontSize: 14, flex: 1, minWidth: 0 }}
+                    numberOfLines={1}
+                  >
                     {item.label}
                   </Text>
                   {item.locked && <Feather name="lock" size={12} color={colors.textSecondary} />}
                   {item.hint && (
-                    <Text style={{ color: colors.textSecondary, fontSize: 12, maxWidth: "40%" }} numberOfLines={1}>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        maxWidth: "40%",
+                        flexShrink: 1,
+                      }}
+                      numberOfLines={1}
+                    >
                       {item.hint}
                     </Text>
                   )}
@@ -184,8 +207,6 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
   panel: {
-    marginTop: 70,
-    marginHorizontal: 16,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",

@@ -632,37 +632,47 @@ npx expo run:android
 
 (`android/` is gitignored; regenerating with `prebuild` is normal.)
 
-### 11.3 EAS cloud build (APK)
+### 11.3 EAS cloud build (Play Store AAB)
 
 On your PC (not the Ubuntu host):
 
 ```bash
 cd mobile
 npx eas-cli@latest login
-# projectId already in app.config.js after first init
 npm run build:android
+# → production profile → Android App Bundle (.aab) for Google Play
 ```
 
-Versioning lives in `mobile/appVersion.js` (`version` + `versionCode`). Each
-release APK is named **`Hollow Ver-{version}.apk`** (e.g. `Hollow Ver-1.0.1.apk`).
-Bump both fields before every new build.
+Sideload APK (optional):
+
+```bash
+npm run apk
+# or: npm run build:apk
+```
+
+Versioning lives in `mobile/appVersion.js` (`version` + `versionCode`). Sideload
+APKs are named **`Hollow Ver-{version}.apk`**. Bump both fields before every
+new release. Production builds also auto-increment `versionCode` on EAS.
+
+Upload to Play Console (draft / internal testing track):
+
+```bash
+npm run submit:android
+```
+
+You need a Google Play Developer account and a created app listing the first
+time. `eas submit` walks you through service-account / keystore linking.
 
 `eas.json` bakes `EXPO_PUBLIC_API_URL=http://203.192.206.63/api`. If Hollow is
 on **`HOST_PORT=8080`**, change that to `http://203.192.206.63:8080/api` and
 rebuild. Release builds allow cleartext HTTP via `plugins/withHollowAndroid.js`.
 
-To use EAS tooling but compile **on your PC** (needs Docker Desktop):
-
-```bash
-npm run build:android:local
-```
-
 Profiles in `eas.json`:
 
 | Profile | Output | Use |
 |---|---|---|
-| `preview` | Android **APK**, internal iOS | Sideload |
-| `production` | Android **AAB**, store iOS | Play Store / App Store |
+| `production` (default `build:android`) | Android **AAB** | Google Play |
+| `preview` (`build:apk`) | Android **APK** | Sideload / testing |
 | `development` | Dev client | Optional native debugging |
 
 ---

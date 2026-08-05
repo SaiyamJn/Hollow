@@ -28,6 +28,7 @@ import { PromptModal } from "../components/PromptModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
+import { useLayout } from "../lib/layout";
 
 function greeting() {
   const h = new Date().getHours();
@@ -61,6 +62,7 @@ export default function HomeScreen({ navigation }: any) {
   const [prompt, setPrompt] = useState<"notebook" | "task" | null>(null);
   const captureRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
+  const { isNarrow, screenPad, listBottomClearance } = useLayout();
 
   const {
     data: recent,
@@ -126,28 +128,34 @@ export default function HomeScreen({ navigation }: any) {
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 170 + keyboardInset }}
+      contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) + keyboardInset }}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
     >
       {/* greeting + daily note */}
-      <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.greeting, { color: colors.textPrimary }]}>
+      <View style={[styles.headerRow, isNarrow && styles.headerStacked]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.greeting, { color: colors.textPrimary, fontSize: isNarrow ? 18 : 20 }]} numberOfLines={1}>
             {greeting()}
             {user?.name ? `, ${user.name.split(" ")[0]}` : ""}
           </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-            {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+            {new Date().toLocaleDateString(undefined, {
+              weekday: isNarrow ? "short" : "long",
+              month: "long",
+              day: "numeric",
+            })}
           </Text>
         </View>
         <Pressable
-          style={[styles.dailyBtn, { backgroundColor: colors.accentSoft }]}
+          style={[styles.dailyBtn, { backgroundColor: colors.accentSoft }, isNarrow && { alignSelf: "flex-start" }]}
           onPress={() => daily.mutate()}
           disabled={daily.isPending}
         >
           <Feather name="calendar" size={14} color={colors.accent} />
-          <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "500" }}>Today's note</Text>
+          <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "500" }}>
+            {isNarrow ? "Today" : "Today's note"}
+          </Text>
         </Pressable>
       </View>
       {daily.isError && (
@@ -195,7 +203,11 @@ export default function HomeScreen({ navigation }: any) {
             onPress={() => navigation.navigate(item.tab)}
           >
             <Feather name={item.icon} size={15} color={colors.textSecondary} />
-            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500", textAlign: "center" }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: isNarrow ? 11 : 12, fontWeight: "500", textAlign: "center" }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               {item.label}
             </Text>
           </Pressable>
@@ -223,7 +235,9 @@ export default function HomeScreen({ navigation }: any) {
                       {p.section.notebook.title} / {p.section.title}
                     </Text>
                   </View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{relativeTime(p.updatedAt)}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
+                    {relativeTime(p.updatedAt)}
+                  </Text>
                 </View>
               </GlassCard>
             </Pressable>
@@ -237,7 +251,9 @@ export default function HomeScreen({ navigation }: any) {
                 {p.title}
               </Text>
             </View>
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{relativeTime(p.updatedAt)}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
+              {relativeTime(p.updatedAt)}
+            </Text>
           </Pressable>
         );
       })}
@@ -254,10 +270,12 @@ export default function HomeScreen({ navigation }: any) {
           <Pressable onPress={() => toggleTask.mutate(task.id)} hitSlop={8}>
             <Feather name="square" size={16} color={colors.textSecondary} />
           </Pressable>
-          <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1 }} numberOfLines={1}>
+          <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1, minWidth: 0 }} numberOfLines={1}>
             {task.title}
           </Text>
-          {isOverdue && <Text style={{ color: colors.danger, fontSize: 12 }}>overdue</Text>}
+          {isOverdue && (
+            <Text style={{ color: colors.danger, fontSize: 12, flexShrink: 0 }}>overdue</Text>
+          )}
         </View>
       ))}
     </ScrollView>
@@ -298,7 +316,8 @@ export default function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  greeting: { fontSize: 20, fontWeight: "500" },
+  headerStacked: { flexDirection: "column", alignItems: "stretch", gap: 10 },
+  greeting: { fontWeight: "500" },
   dailyBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -306,6 +325,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
+    flexShrink: 0,
   },
   capture: {
     flexDirection: "row",

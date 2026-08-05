@@ -19,6 +19,7 @@ import { getNotificationsEnabled, setNotificationsEnabled, syncTaskReminders } f
 import type { Task } from "../lib/types";
 import { BrandMark } from "../components/BrandMark";
 import { GlassCard } from "../components/GlassCard";
+import { useLayout } from "../lib/layout";
 
 function DetailRow({
   label,
@@ -31,8 +32,18 @@ function DetailRow({
 }) {
   return (
     <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
-      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{label}</Text>
-      <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "500", textAlign: "right", flexShrink: 1 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: 13, flexShrink: 0 }}>{label}</Text>
+      <Text
+        style={{
+          color: colors.textPrimary,
+          fontSize: 13,
+          fontWeight: "500",
+          textAlign: "right",
+          flex: 1,
+          minWidth: 0,
+        }}
+        numberOfLines={2}
+      >
         {value}
       </Text>
     </View>
@@ -45,6 +56,7 @@ export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
+  const { screenPad, stackBottomClearance } = useLayout();
   const [notifOn, setNotifOn] = useState(false);
 
   const { data: health } = useQuery({
@@ -78,23 +90,33 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface0 }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+      contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(false) }}
     >
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>ACCOUNT</Text>
       <GlassCard contentStyle={[styles.card, styles.centered]}>
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", textAlign: "center" }}>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+          numberOfLines={1}
+        >
           {user?.name ?? "—"}
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }}>
-          {user?.username ? `@${user.username}` : ""}
-          {user?.username && user?.email ? " · " : ""}
-          {user?.email ?? ""}
-        </Text>
+        {!!user?.username && (
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }} numberOfLines={1}>
+            @{user.username}
+          </Text>
+        )}
+        {!!user?.email && (
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }} numberOfLines={2}>
+            {user.email}
+          </Text>
+        )}
       </GlassCard>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>APPEARANCE</Text>
       <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
-        <Text style={{ color: colors.textPrimary, fontSize: 14 }}>Dark theme</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1, flexShrink: 1, paddingRight: 12 }}>
+          Dark theme
+        </Text>
         <Switch
           value={theme === "dark"}
           onValueChange={toggle}
@@ -118,11 +140,17 @@ export default function SettingsScreen() {
                 active && { backgroundColor: colors.accentSoft },
               ]}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", fontFamily: face }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", fontFamily: face }}
+                  numberOfLines={1}
+                >
                   {opt.label}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: face }}>
+                <Text
+                  style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: face }}
+                  numberOfLines={1}
+                >
                   {opt.sample}
                 </Text>
               </View>
@@ -150,7 +178,9 @@ export default function SettingsScreen() {
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>SERVER</Text>
       <GlassCard contentStyle={[styles.card, styles.centered]}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>{API_URL}</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }} selectable numberOfLines={3}>
+          {API_URL}
+        </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4, textAlign: "center" }}>
           Override with EXPO_PUBLIC_API_URL in mobile/.env
         </Text>

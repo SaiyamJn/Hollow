@@ -327,7 +327,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
           {wikiSuggestions.map((p) => (
             <Pressable key={p.id} style={styles.wikiItem} onPress={() => insertWikiLink(p.title)}>
               <Feather name="link" size={13} color={colors.accent} />
-              <Text style={{ color: colors.textPrimary, fontSize: 13 }}>{p.title}</Text>
+              <Text style={{ color: colors.textPrimary, fontSize: 13, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                {p.title}
+              </Text>
             </Pressable>
           ))}
         </GlassCard>

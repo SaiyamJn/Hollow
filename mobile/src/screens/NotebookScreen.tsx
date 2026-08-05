@@ -10,6 +10,7 @@ import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
 import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
+import { truncateLabel, useLayout } from "../lib/layout";
 
 type Prompt =
   | { kind: "new-section" }
@@ -23,6 +24,7 @@ export default function NotebookScreen({ route, navigation }: any) {
   const { colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
+  const { screenPad, stackBottomClearance, fabBottomStack } = useLayout();
   const { data: notebooks, isLoading, refetch } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebook = notebooks?.find((nb) => nb.id === notebookId);
 
@@ -105,7 +107,7 @@ export default function NotebookScreen({ route, navigation }: any) {
     if (target) {
       actions.push({
         key: "page",
-        label: `New page in "${target.title}"`,
+        label: `New page in "${truncateLabel(target.title)}"`,
         icon: "file-text",
         onPress: () => {
           if (target.isLocked && !unlock.sectionPasswords[target.id]) {
@@ -123,7 +125,7 @@ export default function NotebookScreen({ route, navigation }: any) {
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
       >
         {(notebook?.sections ?? []).map((sec) => {
@@ -139,6 +141,7 @@ export default function NotebookScreen({ route, navigation }: any) {
                     fontSize: 15,
                     fontWeight: "500",
                     flex: 1,
+                    minWidth: 0,
                   }}
                   numberOfLines={1}
                 >
@@ -149,9 +152,10 @@ export default function NotebookScreen({ route, navigation }: any) {
                     name={sealed ? "lock" : "unlock"}
                     size={13}
                     color={sealed ? colors.textSecondary : colors.accent}
+                    style={{ flexShrink: 0 }}
                   />
                 )}
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{sec.pages.length}</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{sec.pages.length}</Text>
               </Pressable>
 
               {isOpen && (
@@ -159,7 +163,10 @@ export default function NotebookScreen({ route, navigation }: any) {
                   {sec.pages.map((page) => (
                     <Pressable key={page.id} style={styles.pageRow} onPress={() => openPage(sec, page.id, page.title)}>
                       <Feather name="file-text" size={13} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 14, flex: 1 }} numberOfLines={1}>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 14, flex: 1, minWidth: 0 }}
+                        numberOfLines={1}
+                      >
                         {page.title}
                       </Text>
                     </Pressable>
@@ -181,7 +188,7 @@ export default function NotebookScreen({ route, navigation }: any) {
         )}
       </ScrollView>
 
-      <Fab actions={fabActions()} bottom={28} />
+      <Fab actions={fabActions()} bottom={fabBottomStack} />
 
       <PromptModal
         visible={prompt !== null}
@@ -189,9 +196,9 @@ export default function NotebookScreen({ route, navigation }: any) {
           prompt?.kind === "new-section"
             ? "New section"
             : prompt?.kind === "new-page"
-              ? `New page in "${prompt.section.title}"`
+              ? `New page in "${truncateLabel(prompt.section.title, 28)}"`
               : prompt?.kind === "unlock-section"
-                ? `Unlock "${prompt.section.title}"`
+                ? `Unlock "${truncateLabel(prompt.section.title, 28)}"`
                 : ""
         }
         placeholder={prompt?.kind === "unlock-section" ? "Password" : "Title"}

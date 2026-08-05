@@ -6,6 +6,7 @@ import { GlassCard } from "../components/GlassCard";
 import { BrandMark } from "../components/BrandMark";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { API_URL } from "../lib/api";
+import { useLayout } from "../lib/layout";
 
 function authErrorMessage(err: any): string {
   const fromApi = err?.response?.data?.error;
@@ -18,6 +19,7 @@ function authErrorMessage(err: any): string {
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuth();
   const { colors } = useTheme();
+  const { isNarrow } = useLayout();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,9 +41,13 @@ export default function LoginScreen({ navigation }: any) {
     <KeyboardSafe
       scroll
       style={{ backgroundColor: colors.surface0 }}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { padding: isNarrow ? 16 : 24 }]}
     >
-      <GlassCard strong contentStyle={styles.card}>
+      <GlassCard
+        strong
+        style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}
+        contentStyle={[styles.card, isNarrow && { padding: 18 }]}
+      >
         <BrandMark size="lg" wordmark style={{ marginBottom: 4 }} />
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Sign in to your notes</Text>
         <TextInput
@@ -75,13 +81,16 @@ export default function LoginScreen({ navigation }: any) {
             No account? <Text style={{ color: colors.accent }}>Register</Text>
           </Text>
         </Pressable>
+        <Text style={[styles.apiHint, { color: colors.textSecondary }]} selectable numberOfLines={2}>
+          API: {API_URL}
+        </Text>
       </GlassCard>
     </KeyboardSafe>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, justifyContent: "center", padding: 24 },
+  container: { flexGrow: 1, justifyContent: "center" },
   card: { padding: 24 },
   subtitle: { fontSize: 13, marginTop: 2, marginBottom: 18 },
   input: {

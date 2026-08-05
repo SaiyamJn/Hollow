@@ -1,11 +1,11 @@
 /**
  * Single source of truth for Hollow mobile releases.
- * Bump BOTH fields when shipping a new APK (ask: "bump version" / "build apk").
+ * Bump BOTH fields when shipping a new build (Play Store AAB or sideload APK).
  *
- * - version     → user-facing (SemVer). APK file: `Hollow Ver-{version}.apk`
- * - versionCode → Android integer; must increase every release (Play / sideload).
+ * - version     → user-facing (SemVer). Sideload APK: `Hollow Ver-{version}.apk`
+ * - versionCode → Android integer; must increase every Play upload.
  */
 module.exports = {
-  version: "1.0.1",
-  versionCode: 2,
+  version: "1.0.2",
+  versionCode: 3,
 };

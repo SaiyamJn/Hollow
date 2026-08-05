@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../contexts/theme";
+import { useLayout, FAB_SIZE } from "../lib/layout";
 import { GlassCard } from "./GlassCard";
 
 export interface FabAction {
@@ -13,9 +14,21 @@ export interface FabAction {
 
 // Floating "+" button. One action fires directly; multiple actions open a
 // small stacked menu above the button.
-export function Fab({ actions, bottom = 100 }: { actions: FabAction[]; bottom?: number }) {
+export function Fab({
+  actions,
+  bottom,
+}: {
+  actions: FabAction[];
+  /** Override bottom offset; defaults to above the floating tab bar. */
+  bottom?: number;
+}) {
   const { colors } = useTheme();
+  const { fabBottom, isNarrow } = useLayout();
+  const { width } = useWindowDimensions();
   const [open, setOpen] = useState(false);
+  const resolvedBottom = bottom ?? fabBottom;
+  const size = isNarrow ? 48 : FAB_SIZE;
+  const menuMaxWidth = Math.max(160, width - 48);
 
   if (actions.length === 0) return null;
 
@@ -27,16 +40,26 @@ export function Fab({ actions, bottom = 100 }: { actions: FabAction[]; bottom?: 
   return (
     <>
       <Pressable
-        style={[styles.fab, { bottom, backgroundColor: colors.accent }]}
+        style={[
+          styles.fab,
+          {
+            bottom: resolvedBottom,
+            right: isNarrow ? 14 : 20,
+            height: size,
+            width: size,
+            borderRadius: size / 2,
+            backgroundColor: colors.accent,
+          },
+        ]}
         onPress={onPress}
         accessibilityLabel="Add"
       >
-        <Feather name="plus" size={22} color={colors.surface0} />
+        <Feather name="plus" size={isNarrow ? 20 : 22} color={colors.surface0} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={[styles.menu, { bottom: bottom + 62 }]}>
+          <View style={[styles.menu, { bottom: resolvedBottom + size + 10, right: isNarrow ? 14 : 20 }]}>
             {actions.map((action) => (
               <Pressable
                 key={action.key}
@@ -45,8 +68,13 @@ export function Fab({ actions, bottom = 100 }: { actions: FabAction[]; bottom?: 
                   action.onPress();
                 }}
               >
-                <GlassCard style={{ borderRadius: 999 }} contentStyle={styles.menuItem}>
-                  <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{action.label}</Text>
+                <GlassCard style={{ borderRadius: 999, maxWidth: menuMaxWidth }} contentStyle={styles.menuItem}>
+                  <Text
+                    style={{ color: colors.textPrimary, fontSize: 14, flexShrink: 1 }}
+                    numberOfLines={1}
+                  >
+                    {action.label}
+                  </Text>
                   <View style={[styles.menuIcon, { backgroundColor: colors.accentSoft }]}>
                     <Feather name={action.icon} size={15} color={colors.accent} />
                   </View>
@@ -63,10 +91,6 @@ export function Fab({ actions, bottom = 100 }: { actions: FabAction[]; bottom?: 
 const styles = StyleSheet.create({
   fab: {
     position: "absolute",
-    right: 20,
-    height: 52,
-    width: 52,
-    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
     elevation: 4,
@@ -76,7 +100,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  menu: { position: "absolute", right: 20, gap: 8, alignItems: "flex-end" },
+  menu: { position: "absolute", gap: 8, alignItems: "flex-end" },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -85,5 +109,5 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 6,
   },
-  menuIcon: { height: 30, width: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  menuIcon: { height: 30, width: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", flexShrink: 0 },
 });

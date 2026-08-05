@@ -21,6 +21,7 @@ import { GlassCard } from "../components/GlassCard";
 import { GlassDateTimePicker, formatDueLabel } from "../components/GlassDateTimePicker";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
+import { useLayout } from "../lib/layout";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
@@ -76,6 +77,7 @@ export default function TasksScreen() {
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
+  const { isNarrow, screenPad, listBottomClearance } = useLayout();
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -148,7 +150,7 @@ export default function TasksScreen() {
       <SectionList
         sections={groupTasks(tasks ?? [])}
         keyExtractor={(t) => t.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 170 + keyboardInset }}
+        contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) + keyboardInset }}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
@@ -163,7 +165,7 @@ export default function TasksScreen() {
               <TextInput
                 ref={quickAddRef}
                 style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "center" }]}
-                placeholder="Add a task, press return"
+                placeholder={isNarrow ? "Add a task…" : "Add a task, press return"}
                 placeholderTextColor={colors.textSecondary}
                 value={quickAdd}
                 onChangeText={setQuickAdd}
@@ -184,8 +186,9 @@ export default function TasksScreen() {
           const subtasks = task.subtasks ?? [];
           return (
             <GlassCard style={{ marginBottom: 8 }} contentStyle={styles.taskCard}>
-              <View style={styles.taskRow}>
+              <View style={[styles.taskRow, isNarrow && { gap: 8 }]}>
                 <Pressable
+                  style={{ flexShrink: 0 }}
                   onPress={() =>
                     setExpanded((prev) => {
                       const next = new Set(prev);
@@ -196,7 +199,10 @@ export default function TasksScreen() {
                 >
                   <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={15} color={colors.textSecondary} />
                 </Pressable>
-                <Pressable onPress={() => update.mutate({ id: task.id, patch: { done: !task.done } })}>
+                <Pressable
+                  style={{ flexShrink: 0 }}
+                  onPress={() => update.mutate({ id: task.id, patch: { done: !task.done } })}
+                >
                   <Feather
                     name={task.done ? "check-square" : "square"}
                     size={17}
@@ -220,18 +226,23 @@ export default function TasksScreen() {
                     </Text>
                   )}
                   {!!task.dueAt && (
-                    <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }}>
+                    <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
                       {formatDueLabel(task.dueAt)}
                     </Text>
                   )}
                 </Pressable>
-                <Pressable onPress={() => openEdit(task)} hitSlop={6}>
-                  <Feather name="edit-2" size={14} color={colors.textSecondary} />
-                </Pressable>
-                <Pressable onPress={() => update.mutate({ id: task.id, patch: { starred: !task.starred } })}>
+                {!isNarrow && (
+                  <Pressable style={{ flexShrink: 0 }} onPress={() => openEdit(task)} hitSlop={6}>
+                    <Feather name="edit-2" size={14} color={colors.textSecondary} />
+                  </Pressable>
+                )}
+                <Pressable
+                  style={{ flexShrink: 0 }}
+                  onPress={() => update.mutate({ id: task.id, patch: { starred: !task.starred } })}
+                >
                   <Feather name="star" size={14} color={task.starred ? colors.accent : colors.textSecondary} />
                 </Pressable>
-                <Pressable onPress={() => remove.mutate(task.id)}>
+                <Pressable style={{ flexShrink: 0 }} onPress={() => remove.mutate(task.id)}>
                   <Feather name="trash-2" size={14} color={colors.textSecondary} />
                 </Pressable>
               </View>
@@ -439,10 +450,10 @@ const styles = StyleSheet.create({
   },
   taskCard: { paddingHorizontal: 12, paddingVertical: 4 },
   taskRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
-  taskTitle: { fontSize: 14 },
+  taskTitle: { fontSize: 14, minWidth: 0 },
   strike: { textDecorationLine: "line-through" },
-  subtasks: { marginLeft: 26, paddingBottom: 6 },
-  draftOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 24 },
+  subtasks: { marginLeft: 16, paddingBottom: 6 },
+  draftOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 16 },
   draftCard: { padding: 20 },
   draftInput: {
     borderRadius: 12,

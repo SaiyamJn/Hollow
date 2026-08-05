@@ -7,6 +7,7 @@ import type { Section } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { GlassCard } from "../components/GlassCard";
+import { useLayout } from "../lib/layout";
 
 // Simplified backlinks list (vs web graph): pick a notebook, expand a page,
 // see what it links to and what links here. Create links by typing [[Title]]
@@ -14,6 +15,7 @@ import { GlassCard } from "../components/GlassCard";
 export default function LinksScreen({ navigation }: any) {
   const { colors } = useTheme();
   const unlock = useUnlock();
+  const { screenPad, listBottomClearance } = useLayout();
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
   const [expandedPageId, setExpandedPageId] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export default function LinksScreen({ navigation }: any) {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface0 }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 110 }}
+      contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(false) }}
     >
       <View style={{ marginBottom: 14, alignItems: "center" }}>
         <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
@@ -66,7 +68,14 @@ export default function LinksScreen({ navigation }: any) {
                   setExpandedPageId(null);
                 }}
               >
-                <Text style={{ color: selected ? colors.textPrimary : colors.textSecondary, fontSize: 13 }}>
+                <Text
+                  style={{
+                    color: selected ? colors.textPrimary : colors.textSecondary,
+                    fontSize: 13,
+                    maxWidth: 160,
+                  }}
+                  numberOfLines={1}
+                >
                   {nb.title}
                 </Text>
               </Pressable>
@@ -121,7 +130,10 @@ function SectionLinks({
               size={15}
               color={colors.textSecondary}
             />
-            <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1, textAlign: "center" }} numberOfLines={1}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: 14, flex: 1, minWidth: 0, textAlign: "left" }}
+              numberOfLines={1}
+            >
               {page.title}
             </Text>
             <Pressable onPress={() => onOpenPage(page.id, page.title)} hitSlop={8}>
@@ -175,7 +187,9 @@ function PageConnections({
                 onPress={() => onOpen(ol.id, ol.sectionId, ol.title)}
               >
                 <Feather name="arrow-right" size={12} color={colors.textSecondary} />
-                <Text style={{ color: colors.accent, fontSize: 13 }}>{ol.title}</Text>
+                <Text style={{ color: colors.accent, fontSize: 13, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                  {ol.title}
+                </Text>
               </Pressable>
             ))
           )}
@@ -192,7 +206,9 @@ function PageConnections({
                 onPress={() => onOpen(bl.id, bl.sectionId, bl.title)}
               >
                 <Feather name="corner-down-right" size={12} color={colors.textSecondary} />
-                <Text style={{ color: colors.accent, fontSize: 13 }}>{bl.title}</Text>
+                <Text style={{ color: colors.accent, fontSize: 13, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                  {bl.title}
+                </Text>
               </Pressable>
             ))
           )}
@@ -208,6 +224,6 @@ const styles = StyleSheet.create({
   pageCard: { paddingHorizontal: 12 },
   pageRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11 },
   backlinks: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10, gap: 8 },
-  backlinkRow: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  backlinkRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   connLabel: { fontSize: 10, fontWeight: "500", letterSpacing: 0.7, textAlign: "center" },
 });

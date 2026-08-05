@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, InteractionManager, Platform, Pressable, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { BlurView } from "expo-blur";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from "./src/contexts/auth";
 import { UnlockProvider } from "./src/contexts/unlock";
 import { initOfflineSync } from "./src/lib/api";
 import { initNotifications } from "./src/lib/notifications";
+import { TAB_BAR_HEIGHT, useLayout } from "./src/lib/layout";
 import { SearchModal } from "./src/components/SearchModal";
 import HomeScreen from "./src/screens/HomeScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -114,42 +115,54 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 
 function MainTabs({ navigation }: any) {
   const { theme, colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { isNarrow, tabBarBottom, tabBarMarginH } = useLayout();
   const [searchOpen, setSearchOpen] = useState(false);
+  const headerPad = isNarrow ? 8 : 16;
   return (
     <>
       <Tabs.Navigator
         screenOptions={({ route, navigation: tabNav }) => ({
           headerStyle: { backgroundColor: "transparent" },
           headerBackground: () => <GlassChrome />,
-          headerTitleStyle: { color: colors.textPrimary, fontWeight: "500", fontSize: 16 },
+          headerTitleStyle: {
+            color: colors.textPrimary,
+            fontWeight: "500",
+            fontSize: isNarrow ? 15 : 16,
+          },
+          headerTitleAlign: "center",
           headerShadowVisible: false,
           // Home isn't in the tab bar — every other tab gets a back arrow to it.
           headerLeft:
             route.name === "Home"
               ? undefined
               : () => (
-                  <Pressable onPress={() => tabNav.navigate("Home")} style={{ paddingLeft: 16, paddingRight: 6 }}>
+                  <Pressable
+                    onPress={() => tabNav.navigate("Home")}
+                    style={{ paddingLeft: headerPad, paddingRight: 6 }}
+                  >
                     <Feather name="arrow-left" size={20} color={colors.textPrimary} />
                   </Pressable>
                 ),
           headerRight: () => (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Pressable onPress={() => setSearchOpen(true)} style={{ paddingHorizontal: 10 }}>
+              <Pressable onPress={() => setSearchOpen(true)} style={{ paddingHorizontal: isNarrow ? 8 : 10 }}>
                 <Feather name="search" size={18} color={colors.textSecondary} />
               </Pressable>
-              <Pressable onPress={() => navigation.navigate("Settings")} style={{ paddingLeft: 10, paddingRight: 16 }}>
+              <Pressable
+                onPress={() => navigation.navigate("Settings")}
+                style={{ paddingLeft: isNarrow ? 6 : 10, paddingRight: headerPad }}
+              >
                 <Feather name="settings" size={18} color={colors.textSecondary} />
               </Pressable>
             </View>
           ),
-          // Floating glass pill — lifted, compact, icons centered.
+          // Floating glass pill — margin scales down on narrow phones.
           tabBarStyle: {
             position: "absolute",
-            bottom: Math.max(insets.bottom, 8) + 28,
-            marginHorizontal: 56,
-            height: 50,
-            borderRadius: 25,
+            bottom: tabBarBottom,
+            marginHorizontal: tabBarMarginH,
+            height: TAB_BAR_HEIGHT,
+            borderRadius: TAB_BAR_HEIGHT / 2,
             borderTopWidth: 0,
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: colors.glassBorder,
@@ -164,7 +177,7 @@ function MainTabs({ navigation }: any) {
           lazy: true,
           tabBarShowLabel: false,
           tabBarItemStyle: {
-            height: 50,
+            height: TAB_BAR_HEIGHT,
             paddingTop: 0,
             paddingBottom: 0,
             justifyContent: "center",
@@ -177,7 +190,7 @@ function MainTabs({ navigation }: any) {
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textSecondary,
           tabBarIcon: ({ color }) => (
-            <View style={{ height: 50, width: "100%", alignItems: "center", justifyContent: "center" }}>
+            <View style={{ height: TAB_BAR_HEIGHT, width: "100%", alignItems: "center", justifyContent: "center" }}>
               <Feather name={TAB_ICONS[route.name]} size={19} color={color} />
             </View>
           ),

@@ -10,6 +10,7 @@ import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
 import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
+import { truncateLabel, useLayout } from "../lib/layout";
 
 type Prompt =
   | { kind: "new-notebook" }
@@ -23,6 +24,7 @@ export default function NotebooksScreen({ navigation }: any) {
   const { colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
+  const { screenPad, listBottomClearance, isNarrow } = useLayout();
   const { data: notebooks, isLoading, refetch } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const [prompt, setPrompt] = useState<Prompt>(null);
 
@@ -91,7 +93,7 @@ export default function NotebooksScreen({ navigation }: any) {
       const nb = memory.notebook;
       actions.push({
         key: "section",
-        label: `New section in "${nb.title}"`,
+        label: `New section in "${truncateLabel(nb.title)}"`,
         icon: "layers",
         onPress: () => setPrompt({ kind: "new-section", notebookId: nb.id, notebookTitle: nb.title }),
       });
@@ -100,7 +102,7 @@ export default function NotebooksScreen({ navigation }: any) {
       const sec = memory.section;
       actions.push({
         key: "page",
-        label: `New page in "${sec.title}"`,
+        label: `New page in "${truncateLabel(sec.title)}"`,
         icon: "file-text",
         onPress: () => setPrompt({ kind: "new-page", sectionId: sec.id, notebookId: sec.notebookId }),
       });
@@ -112,7 +114,7 @@ export default function NotebooksScreen({ navigation }: any) {
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 170 }}
+        contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
       >
         <View style={{ marginBottom: 16, alignItems: "center" }}>
@@ -128,7 +130,7 @@ export default function NotebooksScreen({ navigation }: any) {
           const pageCount = nb.sections.reduce((n, s) => n + s.pages.length, 0);
           return (
             <Pressable key={nb.id} onPress={() => openNotebook(nb)} style={{ marginBottom: 10 }}>
-              <GlassCard contentStyle={styles.card}>
+              <GlassCard contentStyle={[styles.card, isNarrow && { gap: 8, padding: 12 }]}>
                 <View style={[styles.iconBox, { backgroundColor: colors.accentSoft }]}>
                   <Feather name={sealed ? "lock" : "book"} size={17} color={sealed ? colors.textSecondary : colors.accent} />
                 </View>
@@ -139,18 +141,27 @@ export default function NotebooksScreen({ navigation }: any) {
                   >
                     {nb.title}
                   </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
                     {sealed
                       ? "Sealed · encrypted"
                       : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
                   </Text>
                 </View>
-                {nb.isLocked && !sealed && <Feather name="unlock" size={13} color={colors.accent} />}
-                <Pressable hitSlop={8} onPress={() => setPrompt({ kind: "rename-notebook", notebook: nb })}>
+                {nb.isLocked && !sealed && (
+                  <View style={{ flexShrink: 0 }}>
+                    <Feather name="unlock" size={13} color={colors.accent} />
+                  </View>
+                )}
+                <Pressable
+                  hitSlop={8}
+                  style={{ flexShrink: 0 }}
+                  onPress={() => setPrompt({ kind: "rename-notebook", notebook: nb })}
+                >
                   <Feather name="edit-2" size={15} color={colors.textSecondary} />
                 </Pressable>
                 <Pressable
                   hitSlop={8}
+                  style={{ flexShrink: 0 }}
                   onPress={() =>
                     Alert.alert("Delete notebook", `Delete “${nb.title}”? All sections and pages will be removed.`, [
                       { text: "Cancel", style: "cancel" },

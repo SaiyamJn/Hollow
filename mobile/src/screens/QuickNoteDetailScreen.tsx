@@ -13,6 +13,7 @@ import { deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
 import { useTheme } from "../contexts/theme";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
+import { useLayout } from "../lib/layout";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -132,10 +133,20 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
 
   const pinned = note?.pinned ?? false;
   const archived = note?.archived ?? false;
+  const { isNarrow, isShort, screenPad, insets } = useLayout();
+  const dotSize = isNarrow ? 20 : 24;
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
-      <View style={styles.body}>
+      <View
+        style={[
+          styles.body,
+          {
+            padding: screenPad,
+            paddingBottom: Math.max(insets.bottom, 16),
+          },
+        ]}
+      >
         <GlassCard
           style={{ flex: 1 }}
           contentStyle={[
@@ -144,7 +155,10 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
           ]}
         >
           <TextInput
-            style={[styles.editor, { color: colors.textPrimary }]}
+            style={[
+              styles.editor,
+              { color: colors.textPrimary, minHeight: isShort ? 160 : 240 },
+            ]}
             multiline
             textAlignVertical="top"
             autoFocus
@@ -159,7 +173,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
         </GlassCard>
 
         <View style={styles.toolbar}>
-          <View style={styles.dots}>
+          <View style={[styles.dots, isNarrow && { gap: 8 }]}>
             {Object.keys(PALETTE).map((c) => {
               const selected = color === c;
               return (
@@ -174,6 +188,9 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                   style={[
                     styles.dot,
                     {
+                      height: dotSize,
+                      width: dotSize,
+                      borderRadius: dotSize / 2,
                       backgroundColor: DOT_COLORS[c],
                       opacity: selected ? 1 : 0.4,
                       transform: [{ scale: selected ? 1.12 : 1 }],
@@ -183,7 +200,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
               );
             })}
           </View>
-          <View style={styles.actions}>
+          <View style={[styles.actions, isNarrow && { gap: 20 }]}>
             <Pressable onPress={() => togglePin.mutate()} hitSlop={8}>
               <Feather name="star" size={18} color={pinned ? colors.accent : colors.textSecondary} />
             </Pressable>
@@ -206,15 +223,17 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  body: { flex: 1, padding: 16, paddingBottom: 24, gap: 12 },
+  body: { flex: 1, gap: 12 },
   editorCard: { flex: 1, padding: 16 },
-  editor: { flex: 1, fontSize: 16, lineHeight: 24, minHeight: 280 },
+  editor: { flex: 1, fontSize: 16, lineHeight: 24 },
   toolbar: { gap: 12, alignItems: "center" },
-  dots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12 },
-  dot: {
-    height: 24,
-    width: 24,
-    borderRadius: 12,
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 12,
   },
+  dot: {},
   actions: { flexDirection: "row", justifyContent: "center", gap: 28, paddingVertical: 4 },
 });

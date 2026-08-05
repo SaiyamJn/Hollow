@@ -9,6 +9,7 @@ import { Fab } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
+import { useLayout } from "../lib/layout";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -37,6 +38,8 @@ export default function QuickNotesScreen({ navigation }: any) {
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
+  const { isNarrow, screenPad, listBottomClearance } = useLayout();
+  const numColumns = isNarrow ? 1 : 2;
 
   const { data: notes } = useQuery({
     queryKey: ["quicknotes", showArchived],
@@ -73,12 +76,24 @@ export default function QuickNotesScreen({ navigation }: any) {
         ref={listRef}
         data={notes ?? []}
         keyExtractor={(n) => n.id}
-        numColumns={2}
-        columnWrapperStyle={{ gap: 10, paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: 170 + keyboardInset, gap: 10 }}
+        key={`cols-${numColumns}`}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? { gap: 10, paddingHorizontal: screenPad } : undefined}
+        contentContainerStyle={{
+          paddingTop: screenPad,
+          paddingHorizontal: numColumns === 1 ? screenPad : 0,
+          paddingBottom: listBottomClearance(true) + keyboardInset,
+          gap: 10,
+        }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ paddingHorizontal: 16, marginBottom: 12, alignItems: "center" }}>
+          <View
+            style={{
+              paddingHorizontal: numColumns > 1 ? screenPad : 0,
+              marginBottom: 12,
+              alignItems: "center",
+            }}
+          >
             <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "500", textAlign: "center" }}>
               Quick notes
             </Text>
@@ -103,9 +118,10 @@ export default function QuickNotesScreen({ navigation }: any) {
                 onFocus={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
               />
               <View style={styles.composerRow}>
-                <View style={styles.dots}>
+                <View style={[styles.dots, isNarrow && { gap: 8 }]}>
                   {Object.keys(PALETTE).map((color) => {
                     const selected = draftColor === color;
+                    const size = isNarrow ? 20 : 24;
                     return (
                       <TouchableOpacity
                         key={color}
@@ -117,6 +133,9 @@ export default function QuickNotesScreen({ navigation }: any) {
                         style={[
                           styles.dot,
                           {
+                            height: size,
+                            width: size,
+                            borderRadius: size / 2,
                             backgroundColor: DOT_COLORS[color],
                             opacity: selected ? 1 : 0.4,
                             transform: [{ scale: selected ? 1.12 : 1 }],
@@ -233,12 +252,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 16,
   },
-  dots: { flexDirection: "row", alignItems: "center", gap: 10 },
-  dot: {
-    height: 24,
-    width: 24,
-    borderRadius: 12,
-  },
+  dots: { flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 10 },
+  dot: {},
   addButton: {
     borderRadius: 10,
     paddingHorizontal: 16,
