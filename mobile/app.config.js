@@ -57,10 +57,9 @@ const config = {
   ],
   extra: {
     apiUrl,
-    // `npx eas-cli init` will add extra.eas.projectId — keep that change committed.
-    ...(process.env.EAS_PROJECT_ID
-      ? { eas: { projectId: process.env.EAS_PROJECT_ID } }
-      : {}),
+    eas: {
+      projectId: "6e1ac3c1-8713-453d-8d2a-888553fa49f4",
+    },
   },
 };
 
