@@ -547,11 +547,14 @@ curl -s http://127.0.0.1/api/health    # or :8080 if HOST_PORT=8080
 
 ---
 
-## 11. Mobile app (same users as web + EAS Build)
+## 11. Mobile app (same users as web)
 
 The Expo app talks to the **same** Hollow API and PostgreSQL as the web UI.
 Register or log in with the same email/password on phone or desktop — notebooks,
 pages, tasks, and quick notes are shared.
+
+**You do not build the APK on the Ubuntu server.** Build on your Windows/Mac PC;
+the installable app only *connects* to the server over the network.
 
 | How you access the server | `EXPO_PUBLIC_API_URL` |
 |---|---|
@@ -565,7 +568,7 @@ at build time (not changeable later without rebuilding).
 
 ### 11.1 Dev against production (Expo Go)
 
-On your PC:
+On your PC (not the server):
 
 ```bash
 cd mobile
@@ -578,49 +581,86 @@ npx expo start
 Scan the QR code with Expo Go (SDK 54). Confirm Settings shows the API URL and
 `/health` is OK.
 
-### 11.2 Build installable apps with Expo.dev (EAS)
+### 11.2 Build an APK on your PC (recommended)
 
-One-time setup (Expo account required — free tier is enough for APKs):
+Runs entirely on your laptop. The APK talks to Hollow at
+`EXPO_PUBLIC_API_URL` (already set to `http://203.192.206.63/api` in
+`mobile/.env.example` and `mobile/eas.json`).
+
+**One-time setup on Windows**
+
+1. Install [Android Studio](https://developer.android.com/studio).
+2. In Android Studio → SDK Manager, install an Android SDK (API 35 is fine) and
+   accept licenses.
+3. Set env vars (System → Environment Variables), then open a **new** terminal:
+
+   - `ANDROID_HOME` = `%LOCALAPPDATA%\Android\Sdk`
+   - Add to `Path`: `%ANDROID_HOME%\platform-tools` and `%ANDROID_HOME%\emulator`
+
+4. Install a JDK 17 (Android Studio’s bundled JDK is enough if `JAVA_HOME`
+   points at it).
+
+**Build**
 
 ```bash
 cd mobile
+cp .env.example .env
+# confirm: EXPO_PUBLIC_API_URL=http://203.192.206.63/api
 npm install
+npm run apk:local
+```
+
+Or Gradle-only after prebuild (Windows):
+
+```bash
+npm run apk:local:gradle
+```
+
+APK path:
+
+`mobile/android/app/build/outputs/apk/release/app-release.apk`
+
+Copy that file to your phone and install it (allow “install unknown apps”).
+Log in with the same account as the web app — data lives on the server.
+
+If the release build asks for a signing key, use a debug install instead:
+
+```bash
+npx expo prebuild --platform android
+npx expo run:android
+```
+
+(`android/` is gitignored; regenerating with `prebuild` is normal.)
+
+### 11.3 Optional: EAS cloud build (not required)
+
+Only if you prefer Expo’s servers to compile the APK (still **not** your
+Ubuntu host). Needs a free Expo account:
+
+```bash
+cd mobile
 npx eas-cli@latest login
-npx eas-cli@latest init    # links this folder to an Expo project; writes projectId
-```
-
-`mobile/eas.json` already points production builds at
-`http://203.192.206.63/api`. Change that value if your host or path differs
-(Tailscale, HTTPS domain, etc.).
-
-Android APK you can sideload (recommended first):
-
-```bash
+npx eas-cli@latest init
 npm run build:android
-# same as: npx eas-cli@latest build --profile preview --platform android
 ```
 
-Follow the URL on [expo.dev](https://expo.dev) → download the APK → install on
-the phone (allow “install unknown apps” if prompted).
-
-iOS (needs Apple Developer account for device builds):
+To use EAS tooling but compile **on your PC** (needs Docker Desktop):
 
 ```bash
-npm run build:ios
+npm run build:android:local
 ```
 
 Profiles in `eas.json`:
 
 | Profile | Output | Use |
 |---|---|---|
-| `preview` | Android **APK**, internal iOS | Sideload / TestFlight-style internal |
+| `preview` | Android **APK**, internal iOS | Sideload |
 | `production` | Android **AAB**, store iOS | Play Store / App Store |
 | `development` | Dev client | Optional native debugging |
 
 Cleartext HTTP is enabled in `app.config.js` so `http://…` APIs work on device.
-When you move to HTTPS, you can tighten ATS / cleartext settings later.
-
-If you change the server URL later, update `eas.json` and run a new EAS build.
+If you change the server URL later, update `mobile/.env` / `eas.json` and
+rebuild the APK.
 
 ---
 

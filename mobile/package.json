@@ -45,7 +45,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "eas:init": "npx eas-cli@latest init",
+    "apk:local": "expo prebuild --platform android && expo run:android --variant release",
+    "apk:local:gradle": "expo prebuild --platform android && cd android && gradlew.bat assembleRelease",
     "build:android": "npx eas-cli@latest build --profile preview --platform android",
+    "build:android:local": "npx eas-cli@latest build --profile preview --platform android --local",
     "build:ios": "npx eas-cli@latest build --profile preview --platform ios",
     "build:all": "npx eas-cli@latest build --profile preview --platform all",
     "build:production": "npx eas-cli@latest build --profile production --platform all"
