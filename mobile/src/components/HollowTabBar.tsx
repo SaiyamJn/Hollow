@@ -1,4 +1,12 @@
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  LayoutChangeEvent,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -12,15 +20,54 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Links: "share-2",
 };
 
-/** Minimal floating pill — evenly spaced, centered icons, pill-shaped active state. */
+/** Capsule size — wider than tall so it always reads as a pill, never a square. */
+const PILL_H = 30;
+const PILL_W = 56;
+
+type Slot = { x: number; width: number };
+
+/** Compact floating pill — sliding capsule active indicator + visible icons. */
 export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { theme, colors } = useTheme();
   const { tabBarBottom, tabBarMarginH, isNarrow } = useLayout();
-  const iconSize = isNarrow ? 18 : 20;
+  const iconSize = isNarrow ? 17 : 19;
+  const focusedRouteKey = state.routes[state.index]?.key;
 
-  const visible = state.routes
-    .map((route, index) => ({ route, index }))
-    .filter(({ route }) => route.name !== "Home");
+  const visible = state.routes.filter((route) => route.name !== "Home");
+
+  const [slots, setSlots] = useState<Record<string, Slot>>({});
+  const pillX = useRef(new Animated.Value(0)).current;
+  const pillOpacity = useRef(new Animated.Value(0)).current;
+
+  const focused = visible.find((r) => r.key === focusedRouteKey);
+  const focusedSlot = focused ? slots[focused.key] : undefined;
+  const showPill = Boolean(focusedSlot);
+
+  useEffect(() => {
+    if (!focusedSlot) {
+      Animated.timing(pillOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+      return;
+    }
+    const targetX = focusedSlot.x + (focusedSlot.width - PILL_W) / 2;
+    Animated.parallel([
+      Animated.spring(pillX, {
+        toValue: targetX,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 140,
+      }),
+      Animated.timing(pillOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+    ]).start();
+  }, [focusedSlot?.x, focusedSlot?.width, focusedSlot, pillX, pillOpacity]);
+
+  function onItemLayout(key: string, e: LayoutChangeEvent) {
+    const { x, width } = e.nativeEvent.layout;
+    setSlots((prev) => {
+      const cur = prev[key];
+      if (cur && cur.x === x && cur.width === width) return prev;
+      return { ...prev, [key]: { x, width } };
+    });
+  }
 
   return (
     <View
@@ -37,8 +84,8 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
           backgroundColor:
             Platform.OS === "android"
               ? theme === "dark"
-                ? "rgba(22, 24, 27, 0.92)"
-                : "rgba(255, 255, 255, 0.92)"
+                ? "rgba(22, 24, 27, 0.96)"
+                : "rgba(255, 255, 255, 0.96)"
               : "transparent",
         },
       ]}
@@ -52,17 +99,32 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
       )}
 
       <View style={styles.row}>
-        {visible.map(({ route, index }) => {
-          const focused = state.index === index;
+        {showPill && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.slidingPill,
+              {
+                opacity: pillOpacity,
+                backgroundColor: colors.accentSoft,
+                borderColor: `${colors.accent}55`,
+                transform: [{ translateX: pillX }],
+              },
+            ]}
+          />
+        )}
+
+        {visible.map((route) => {
+          const isFocused = route.key === focusedRouteKey;
           const { options } = descriptors[route.key];
-          const color = focused ? colors.accent : colors.textSecondary;
+          const color = isFocused ? colors.accent : colors.textSecondary;
           const onPress = () => {
             const event = navigation.emit({
               type: "tabPress",
               target: route.key,
               canPreventDefault: true,
             });
-            if (!focused && !event.defaultPrevented) {
+            if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name, route.params);
             }
           };
@@ -70,26 +132,15 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
             <Pressable
               key={route.key}
               accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
+              accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
               onPress={onPress}
-              // Kill Android square ripple — selection is the soft pill fill only.
+              onLayout={(e) => onItemLayout(route.key, e)}
               android_ripple={{ color: "transparent" }}
               style={styles.item}
-              hitSlop={8}
+              hitSlop={6}
             >
-              <View
-                style={[
-                  styles.iconPill,
-                  focused && {
-                    backgroundColor: colors.accentSoft,
-                  },
-                ]}
-              >
-                <View style={styles.iconSlot}>
-                  <Feather name={TAB_ICONS[route.name] ?? "circle"} size={iconSize} color={color} />
-                </View>
-              </View>
+              <Feather name={TAB_ICONS[route.name] ?? "circle"} size={iconSize} color={color} />
             </Pressable>
           );
         })}
@@ -108,29 +159,26 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-evenly",
-    paddingHorizontal: 8,
+    justifyContent: "space-around",
+    paddingHorizontal: 6,
+    position: "relative",
+  },
+  /** Fixed-size capsule that slides under the active icon. */
+  slidingPill: {
+    position: "absolute",
+    left: 0,
+    top: (TAB_BAR_HEIGHT - PILL_H) / 2,
+    width: PILL_W,
+    height: PILL_H,
+    borderRadius: PILL_H / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    zIndex: 0,
   },
   item: {
     flex: 1,
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-  },
-  /** Capsule active indicator — full pill, never a square. */
-  iconPill: {
-    height: 34,
-    minWidth: 56,
-    paddingHorizontal: 18,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  /** Fixed box so Feather glyphs share one optical center. */
-  iconSlot: {
-    width: 22,
-    height: 22,
-    alignItems: "center",
-    justifyContent: "center",
+    zIndex: 1,
   },
 });

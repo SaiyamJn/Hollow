@@ -22,9 +22,11 @@ import { AuthProvider, useAuth } from "./src/contexts/auth";
 import { UnlockProvider } from "./src/contexts/unlock";
 import { initOfflineSync } from "./src/lib/api";
 import { initNotifications } from "./src/lib/notifications";
+import { configureMotion } from "./src/lib/motion";
 import { useLayout } from "./src/lib/layout";
 import { SearchModal } from "./src/components/SearchModal";
 import { HollowTabBar } from "./src/components/HollowTabBar";
+import { HollowStackHeader } from "./src/components/HollowStackHeader";
 import HomeScreen from "./src/screens/HomeScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
@@ -109,6 +111,8 @@ function MainTabs({ navigation }: any) {
   const statusBarInset = useStatusBarInset();
   const [searchOpen, setSearchOpen] = useState(false);
   const headerPad = isNarrow ? 8 : 16;
+  // Content height below the status bar — keep titles/actions fully visible.
+  const headerContentH = 48;
 
   return (
     <>
@@ -117,13 +121,12 @@ function MainTabs({ navigation }: any) {
         screenOptions={({ route, navigation: tabNav }) => ({
           headerStyle: {
             backgroundColor: Platform.OS === "android" ? (colors.surface0 as string) : "transparent",
-            // Extra room so title/icons never sit under the status bar.
-            height: statusBarInset + 56,
+            height: statusBarInset + headerContentH,
             elevation: 0,
             shadowOpacity: 0,
           },
           headerBackground: () => <GlassChrome />,
-          headerStatusBarHeight: statusBarInset + 4,
+          headerStatusBarHeight: statusBarInset,
           headerTitleContainerStyle: {
             paddingVertical: 0,
           },
@@ -221,20 +224,12 @@ function Root() {
       <Stack.Navigator
         screenOptions={{
           contentStyle: { backgroundColor: colors.surface0 },
-          headerStyle: {
-            backgroundColor: Platform.OS === "android" ? colors.surface0 : "transparent",
-          },
-          headerBackground: () => <GlassChrome />,
-          statusBarTranslucent: true,
-          headerTitleStyle: {
-            color: colors.textPrimary,
-            fontWeight: "500",
-            fontSize: 16,
-            ...(fontFamily ? { fontFamily } : null),
-          },
+          // Custom header pads below the status bar on device (Expo web is fine either way).
+          header: (props) => <HollowStackHeader {...props} />,
           headerTintColor: colors.accent,
           headerShadowVisible: false,
           headerTitleAlign: "center",
+          headerTitleStyle: fontFamily ? { fontFamily } : undefined,
         }}
       >
         {status === "signedIn" ? (
@@ -267,6 +262,7 @@ function Root() {
 export default function App() {
   useEffect(() => {
     const handle = InteractionManager.runAfterInteractions(() => {
+      configureMotion();
       initOfflineSync();
       void initNotifications();
     });

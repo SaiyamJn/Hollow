@@ -10,6 +10,7 @@ import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
+import { animateListChange } from "../lib/motion";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -50,6 +51,7 @@ export default function QuickNotesScreen({ navigation }: any) {
   const create = useMutation({
     mutationFn: () => createQuickNote(draft.trim(), draftColor),
     onSuccess: () => {
+      animateListChange();
       setDraft("");
       setDraftColor("gray");
       invalidate();
@@ -58,9 +60,16 @@ export default function QuickNotesScreen({ navigation }: any) {
   const update = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updateQuickNote>[1] }) =>
       updateQuickNote(id, patch),
+    onSuccess: () => {
+      animateListChange();
+      invalidate();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: deleteQuickNote,
+    onMutate: () => animateListChange(),
     onSuccess: invalidate,
   });
-  const remove = useMutation({ mutationFn: deleteQuickNote, onSuccess: invalidate });
 
   function openNote(note: QuickNote) {
     navigation.navigate("QuickNote", {

@@ -14,6 +14,7 @@ import { useTheme } from "../contexts/theme";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useLayout } from "../lib/layout";
+import { animateListChange } from "../lib/motion";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -108,6 +109,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   });
   const remove = useMutation({
     mutationFn: () => deleteQuickNote(noteId),
+    onMutate: () => animateListChange(),
     onSuccess: () => {
       invalidate();
       navigation.goBack();

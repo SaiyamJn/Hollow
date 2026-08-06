@@ -16,9 +16,11 @@ const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const MINUTES = Array.from({ length: 60 }, (_, m) => m);
 
-const ITEM_H = 36;
-const VISIBLE = 5;
+/** Compact wheel metrics — same snap behaviour, less vertical space. */
+const ITEM_H = 28;
+const VISIBLE = 3;
 const PAD = Math.floor(VISIBLE / 2);
+const CELL_H = 30;
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -74,7 +76,6 @@ function RollingColumn({
   }
 
   function onScrollEndDrag(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    // If velocity is near zero, momentum end may not fire — snap here too.
     const vy = e.nativeEvent.velocity?.y ?? 0;
     if (Math.abs(vy) < 0.05) commit(e.nativeEvent.contentOffset.y);
   }
@@ -102,9 +103,10 @@ function RollingColumn({
         ref={ref}
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_H}
-        decelerationRate="fast"
+        decelerationRate={0.92}
         disableIntervalMomentum
         nestedScrollEnabled
+        scrollEventThrottle={16}
         onLayout={() => {
           ref.current?.scrollTo({ y: index * ITEM_H, animated: false });
         }}
@@ -117,6 +119,8 @@ function RollingColumn({
       >
         {items.map((n) => {
           const active = n === value;
+          const distance = Math.abs(items.indexOf(n) - index);
+          const faded = distance >= 2;
           return (
             <Pressable
               key={n}
@@ -129,8 +133,9 @@ function RollingColumn({
               <Text
                 style={{
                   color: active ? colors.textPrimary : colors.textSecondary,
-                  fontSize: 15,
+                  fontSize: active ? 15 : 13,
                   fontWeight: active ? "600" : "400",
+                  opacity: faded ? 0.35 : active ? 1 : 0.7,
                   fontVariant: ["tabular-nums"],
                 }}
               >
@@ -144,7 +149,7 @@ function RollingColumn({
   );
 }
 
-/** Glass month grid + Apple-style rolling time — matches web DateTimePicker. */
+/** Compact glass month grid + rolling time — same design, smaller footprint. */
 export function GlassDateTimePicker({
   value,
   onChange,
@@ -185,7 +190,7 @@ export function GlassDateTimePicker({
     onChange(base);
   }
 
-  const monthLabel = cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const monthLabel = cursor.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 
   return (
     <View style={[styles.wrap, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
@@ -194,16 +199,16 @@ export function GlassDateTimePicker({
           onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
           hitSlop={8}
         >
-          <Feather name="chevron-left" size={18} color={colors.textSecondary} />
+          <Feather name="chevron-left" size={16} color={colors.textSecondary} />
         </Pressable>
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", textAlign: "center", flex: 1 }}>
+        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "500", textAlign: "center", flex: 1 }}>
           {monthLabel}
         </Text>
         <Pressable
           onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
           hitSlop={8}
         >
-          <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+          <Feather name="chevron-right" size={16} color={colors.textSecondary} />
         </Pressable>
       </View>
 
@@ -226,19 +231,19 @@ export function GlassDateTimePicker({
               onPress={() => pickDay(day)}
               style={[
                 styles.cell,
-                isSelected && { backgroundColor: colors.accent, borderRadius: 10 },
+                isSelected && { backgroundColor: colors.accent, borderRadius: 8 },
                 !isSelected &&
                   isToday && {
                     borderWidth: StyleSheet.hairlineWidth,
                     borderColor: colors.accent,
-                    borderRadius: 10,
+                    borderRadius: 8,
                   },
               ]}
             >
               <Text
                 style={{
                   color: isSelected ? "#0a0a0a" : colors.textPrimary,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: isSelected || isToday ? "600" : "400",
                 }}
               >
@@ -250,7 +255,7 @@ export function GlassDateTimePicker({
       </View>
 
       <View style={[styles.timeBlock, { borderTopColor: colors.glassBorder }]}>
-        <Text style={{ color: colors.textSecondary, fontSize: 10, letterSpacing: 0.7, textAlign: "center" }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 9, letterSpacing: 0.6, textAlign: "center" }}>
           TIME
         </Text>
         <View
@@ -260,11 +265,11 @@ export function GlassDateTimePicker({
           ]}
         >
           <RollingColumn items={HOURS} value={hour} onChange={(h) => setTime(h, minute)} />
-          <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600", marginBottom: 2 }}>:</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>:</Text>
           <RollingColumn items={MINUTES} value={minute} onChange={(m) => setTime(hour, m)} />
           {selected && (
-            <Pressable onPress={() => onChange(null)} style={{ marginLeft: 8 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Clear</Text>
+            <Pressable onPress={() => onChange(null)} style={{ marginLeft: 6 }} hitSlop={6}>
+              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Clear</Text>
             </Pressable>
           )}
         </View>
@@ -275,38 +280,38 @@ export function GlassDateTimePicker({
 
 const styles = StyleSheet.create({
   wrap: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    gap: 8,
+    padding: 8,
+    gap: 4,
   },
-  monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 28 },
   weekRow: { flexDirection: "row" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   cell: {
     width: "14.28%",
-    aspectRatio: 1,
+    height: CELL_H,
     alignItems: "center",
     justifyContent: "center",
   },
-  cellLabel: { width: "14.28%", textAlign: "center", fontSize: 11 },
+  cellLabel: { width: "14.28%", textAlign: "center", fontSize: 10, marginBottom: 2 },
   timeBlock: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
-    gap: 8,
+    paddingTop: 6,
+    gap: 4,
   },
   wheels: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    gap: 2,
   },
   wheel: {
-    width: 56,
+    width: 44,
     height: ITEM_H * VISIBLE,
     overflow: "hidden",
   },
@@ -321,7 +326,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: ITEM_H * PAD,
     height: ITEM_H,
-    borderRadius: 10,
+    borderRadius: ITEM_H / 2,
     borderWidth: StyleSheet.hairlineWidth,
     zIndex: 2,
   },
@@ -330,7 +335,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    height: ITEM_H * 1.35,
+    height: ITEM_H * 1.1,
     zIndex: 3,
   },
   fadeBottom: {
@@ -338,7 +343,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: ITEM_H * 1.35,
+    height: ITEM_H * 1.1,
     zIndex: 3,
   },
 });

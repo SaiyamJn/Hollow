@@ -11,6 +11,7 @@ import { PromptModal } from "../components/PromptModal";
 import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { truncateLabel, useLayout } from "../lib/layout";
+import { animateListChange } from "../lib/motion";
 
 type Prompt =
   | { kind: "new-notebook" }
@@ -165,8 +166,12 @@ export default function NotebooksScreen({ navigation }: any) {
                       {
                         text: "Delete",
                         style: "destructive",
-                        onPress: () =>
-                          void deleteNotebook(nb.id).then(() => queryClient.invalidateQueries({ queryKey: ["notebooks"] })),
+                        onPress: () => {
+                          animateListChange();
+                          void deleteNotebook(nb.id).then(() =>
+                            queryClient.invalidateQueries({ queryKey: ["notebooks"] })
+                          );
+                        },
                       },
                     ])
                   }

@@ -11,6 +11,7 @@ import { PromptModal } from "../components/PromptModal";
 import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { truncateLabel, useLayout } from "../lib/layout";
+import { animateListChange } from "../lib/motion";
 
 type Prompt =
   | { kind: "new-section" }
@@ -41,6 +42,7 @@ export default function NotebookScreen({ route, navigation }: any) {
       return;
     }
     rememberSection(sec.id, sec.title, notebookId, title);
+    animateListChange();
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(sec.id) ? next.delete(sec.id) : next.add(sec.id);

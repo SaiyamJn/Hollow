@@ -2,8 +2,8 @@ import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** Floating tab pill metrics — keep in sync with HollowTabBar. */
-export const TAB_BAR_HEIGHT = 58;
-export const TAB_BAR_LIFT = 16;
+export const TAB_BAR_HEIGHT = 46;
+export const TAB_BAR_LIFT = 12;
 export const FAB_SIZE = 52;
 
 export function useLayout() {
@@ -12,8 +12,9 @@ export function useLayout() {
   const isNarrow = width < 360;
   const isShort = height < 700;
   const screenPad = isNarrow ? 12 : 16;
-  const tabBarBottom = Math.max(insets.bottom, 10) + (isShort ? 10 : TAB_BAR_LIFT);
-  const tabBarMarginH = Math.min(48, Math.max(16, (width - 280) / 2));
+  const tabBarBottom = Math.max(insets.bottom, 10) + (isShort ? 8 : TAB_BAR_LIFT);
+  // Compact pill, but wide enough that all 4 icons stay visible.
+  const tabBarMarginH = Math.min(40, Math.max(16, (width - 300) / 2));
 
   return {
     height,

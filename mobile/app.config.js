@@ -14,13 +14,14 @@ const config = {
   slug: "hollow",
   version,
   orientation: "portrait",
-  // Same rounded Hollow mark everywhere (web BrandMark uses the same asset).
-  icon: "./assets/hollow-logo.png",
+  // Launcher icons use Wally-sized safe-zone padding (~43% mark).
+  // In-app BrandMark still uses hollow-logo.png (full rounded mark).
+  icon: "./assets/icon.png",
   scheme: "hollow",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   splash: {
-    image: "./assets/hollow-logo.png",
+    image: "./assets/splash-icon.png",
     resizeMode: "contain",
     backgroundColor: "#ffffff",
   },
@@ -39,21 +40,33 @@ const config = {
   android: {
     package: "com.hollow.notes",
     versionCode,
+    // Avoid edge-to-edge drawing under the status bar on modern Android.
+    edgeToEdgeEnabled: false,
     adaptiveIcon: {
       backgroundColor: "#ffffff",
-      foregroundImage: "./assets/hollow-logo.png",
+      foregroundImage: "./assets/adaptive-icon.png",
     },
     predictiveBackGestureEnabled: false,
     // Required for http:// API hosts on release builds.
     usesCleartextTraffic: true,
     // Shrink the window when the keyboard opens so inputs aren't covered.
     softwareKeyboardLayoutMode: "resize",
+    permissions: [
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.SCHEDULE_EXACT_ALARM",
+      "android.permission.USE_EXACT_ALARM",
+      "android.permission.VIBRATE",
+      "android.permission.RECEIVE_BOOT_COMPLETED",
+    ],
   },
   androidStatusBar: {
-    // Edge-to-edge: headers pad with StatusBar.currentHeight / safe-area insets.
-    translucent: true,
-    backgroundColor: "#00000000",
+    // Solid status bar so stack/tab headers never draw underneath on phones.
+    translucent: false,
+    backgroundColor: "#0f1012",
     barStyle: "light-content",
+  },
+  androidNavigationBar: {
+    backgroundColor: "#0f1012",
   },
   web: {
     favicon: "./assets/hollow-logo.png",

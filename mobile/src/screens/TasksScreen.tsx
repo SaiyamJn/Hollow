@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   SectionList,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import { syncTaskReminders } from "../lib/notifications";
+import { animateListChange } from "../lib/motion";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
@@ -70,13 +72,6 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
   return sections;
 }
 
-function defaultDue() {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return d;
-}
-
 type Draft = { title: string; description: string; due: Date | null };
 type EditDraft = Draft & { id: string };
 
@@ -103,6 +98,7 @@ export default function TasksScreen() {
   const create = useMutation({
     mutationFn: createTask,
     onSuccess: () => {
+      animateListChange();
       invalidate();
       setDraft(null);
       setQuickAdd("");
@@ -122,7 +118,10 @@ export default function TasksScreen() {
         description?: string;
       };
     }) => updateTask(id, patch),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      animateListChange();
+      invalidate();
+    },
   });
   const saveEdit = useMutation({
     mutationFn: ({
@@ -133,14 +132,19 @@ export default function TasksScreen() {
       patch: { title: string; description: string; dueAt: string | null };
     }) => updateTask(id, patch),
     onSuccess: () => {
+      animateListChange();
       invalidate();
       setEditing(null);
     },
   });
-  const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
+  const remove = useMutation({
+    mutationFn: deleteTask,
+    onMutate: () => animateListChange(),
+    onSuccess: invalidate,
+  });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", due: defaultDue() });
+    setDraft({ title: title.trim(), description: "", due: null });
   }
 
   function openEdit(task: Task) {
@@ -191,7 +195,10 @@ export default function TasksScreen() {
             const count = section.completedCount ?? section.data.length;
             return (
               <Pressable
-                onPress={() => setShowCompleted((v) => !v)}
+                onPress={() => {
+                  animateListChange();
+                  setShowCompleted((v) => !v);
+                }}
                 style={styles.completedHeader}
                 hitSlop={6}
               >
@@ -222,6 +229,7 @@ export default function TasksScreen() {
                   style={{ flexShrink: 0 }}
                   onPress={() =>
                     setExpanded((prev) => {
+                      animateListChange();
                       const next = new Set(prev);
                       next.has(task.id) ? next.delete(task.id) : next.add(task.id);
                       return next;
@@ -400,13 +408,30 @@ function TaskFormModal({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  if (!draft) return null;
+  // Calendar/clock stay collapsed unless the user opts in (or the task already has a due date).
+  const [showDuePicker, setShowDuePicker] = useState(false);
 
-  // Keep modal clear of status bar / home indicator; scroll when the
-  // calendar makes the sheet taller than the screen.
-  const padTop = Math.max(insets.top, 28) + 20;
+  useEffect(() => {
+    if (visible) setShowDuePicker(Boolean(draft?.due));
+  }, [visible, draft?.due]);
+
+  if (!draft) return null;
+  const current = draft;
+
+  const topInset = Math.max(insets.top, Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0, 28);
+  const padTop = topInset + 24;
   const padBottom = Math.max(insets.bottom, 16) + 16;
   const maxCardH = Math.max(280, height - padTop - padBottom);
+
+  function openDuePicker() {
+    if (!current.due) {
+      const d = new Date();
+      d.setMinutes(0, 0, 0);
+      d.setHours(d.getHours() + 1);
+      onChange({ ...current, due: d });
+    }
+    setShowDuePicker(true);
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -457,8 +482,8 @@ function TaskFormModal({
               ]}
               placeholder="Title"
               placeholderTextColor={colors.textSecondary}
-              value={draft.title}
-              onChangeText={(nextTitle) => onChange({ ...draft, title: nextTitle })}
+              value={current.title}
+              onChangeText={(nextTitle) => onChange({ ...current, title: nextTitle })}
               autoFocus
             />
             <TextInput
@@ -472,18 +497,45 @@ function TaskFormModal({
                   textAlign: "center",
                 },
               ]}
-              placeholder="Description (optional)"
+              placeholder="Description"
               placeholderTextColor={colors.textSecondary}
-              value={draft.description}
-              onChangeText={(description) => onChange({ ...draft, description })}
+              value={current.description}
+              onChangeText={(description) => onChange({ ...current, description })}
               multiline
             />
-            <GlassDateTimePicker value={draft.due} onChange={(due) => onChange({ ...draft, due })} />
+
+            {showDuePicker ? (
+              <>
+                <GlassDateTimePicker value={current.due} onChange={(due) => onChange({ ...current, due })} />
+                <Pressable
+                  onPress={() => {
+                    onChange({ ...current, due: null });
+                    setShowDuePicker(false);
+                  }}
+                  style={{ alignSelf: "center", marginTop: 8, paddingVertical: 4 }}
+                  hitSlop={8}
+                >
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Remove due date</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                onPress={openDuePicker}
+                style={[styles.dueToggle, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
+                hitSlop={6}
+              >
+                <Feather name="calendar" size={14} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {current.due ? formatDueLabel(current.due) : "Add due date "}
+                </Text>
+              </Pressable>
+            )}
+
             <View style={{ flexDirection: "row", justifyContent: "center", gap: 24, marginTop: 14 }}>
               <Pressable onPress={onClose}>
                 <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
               </Pressable>
-              <Pressable disabled={!draft.title.trim() || busy} onPress={onSubmit}>
+              <Pressable disabled={!current.title.trim() || busy} onPress={onSubmit}>
                 <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>{submitLabel}</Text>
               </Pressable>
             </View>
@@ -533,4 +585,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   draftDesc: { minHeight: 72, textAlignVertical: "top" },
+  dueToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
 });

@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
 import { useFont } from "../contexts/font";
 import { useUnlock } from "../contexts/unlock";
-import { fetchHealth } from "../lib/api";
+import { fetchHealth, fetchTasks } from "../lib/api";
 import {
   APP_BUILD,
   APP_COPYRIGHT,
@@ -77,7 +77,9 @@ export default function SettingsScreen() {
       Alert.alert("Notifications blocked", "Enable notifications for Hollow in your device settings.");
     }
     if (effective) {
-      await syncTaskReminders(queryClient.getQueryData<Task[]>(["tasks"]));
+      const cached = queryClient.getQueryData<Task[]>(["tasks"]);
+      const tasks = cached ?? (await queryClient.fetchQuery({ queryKey: ["tasks"], queryFn: fetchTasks }));
+      await syncTaskReminders(tasks);
     }
   }
 

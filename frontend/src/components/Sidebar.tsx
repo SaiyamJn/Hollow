@@ -51,9 +51,9 @@ export function Sidebar() {
           className={({ isActive }) => {
             const active = key === "notebooks" ? onNotebooks : isActive;
             return clsx(
-              "flex h-10 w-10 items-center justify-center rounded-full transition-all duration-150",
+              "flex h-[34px] min-w-[52px] px-3.5 items-center justify-center rounded-full transition-all duration-200",
               active
-                ? "bg-accent text-surface-0"
+                ? "bg-accent text-surface-0 shadow-sm"
                 : "text-secondary hover:text-primary hover:bg-surface-2/80"
             );
           }}
@@ -68,10 +68,10 @@ export function Sidebar() {
         disabled={!graphNotebookId}
         onClick={() => graphNotebookId && navigate(`/notebooks/${graphNotebookId}/graph`)}
         className={clsx(
-          "flex h-10 w-10 items-center justify-center rounded-full transition-all duration-150",
+          "flex h-[34px] min-w-[52px] px-3.5 items-center justify-center rounded-full transition-all duration-200",
           "disabled:opacity-40 disabled:pointer-events-none",
           onGraph
-            ? "bg-accent text-surface-0"
+            ? "bg-accent text-surface-0 shadow-sm"
             : "text-secondary hover:text-primary hover:bg-surface-2/80"
         )}
       >

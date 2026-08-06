@@ -5,6 +5,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -66,7 +67,8 @@ export function PromptModal({
   }
 
   const padH = isNarrow ? 16 : 28;
-  const padTop = Math.max(insets.top, 28) + 20;
+  const topInset = Math.max(insets.top, Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0, 28);
+  const padTop = topInset + 24;
   const padBottom = Math.max(insets.bottom, 16) + 16;
   const maxCardH = Math.max(200, height - padTop - padBottom);
 
