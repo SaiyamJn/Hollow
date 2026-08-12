@@ -380,6 +380,7 @@ export default function TasksScreen() {
         submitLabel={create.isPending ? "Adding…" : "Add task"}
         draft={draft}
         busy={create.isPending}
+        autoFocus
         onClose={() => setDraft(null)}
         onChange={setDraft}
         onSubmit={() => {

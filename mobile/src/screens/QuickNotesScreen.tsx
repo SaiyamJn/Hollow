@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   FlatList,
   Pressable,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { createQuickNote, deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
 import type { QuickNote } from "../lib/types";
 import { resolveNoteFields } from "../lib/noteFields";
@@ -65,19 +67,38 @@ export default function QuickNotesScreen({ navigation }: any) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftColor, setDraftColor] = useState("yellow");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
-  const { isNarrow, screenPad, listBottomClearance } = useLayout();
+  const { isNarrow, screenPad, listBottomClearance, fabBottom } = useLayout();
   const { width } = useWindowDimensions();
   const cardWidth = (width - screenPad * 2 - GRID_GAP) / NUM_COLUMNS;
+  const selecting = selected.size > 0;
+  const selectAnim = useRef(new Animated.Value(0)).current;
 
-  const { data: notes } = useQuery({
-    queryKey: ["quicknotes", showArchived],
-    queryFn: () => fetchQuickNotes(showArchived),
+  useEffect(() => {
+    Animated.spring(selectAnim, {
+      toValue: selecting ? 1 : 0,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 65,
+    }).start();
+  }, [selecting, selectAnim]);
+
+  // Fetch active + archived together so the Archive chip can switch views cleanly.
+  const { data: library } = useQuery({
+    queryKey: ["quicknotes", "library"],
+    queryFn: () => fetchQuickNotes(true),
   });
 
+  const list = useMemo(() => {
+    const all = library ?? [];
+    return all.filter((n) => (showArchived ? n.archived : !n.archived));
+  }, [library, showArchived]);
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+
   const create = useMutation({
     mutationFn: () => createQuickNote({ content: draft.trim(), color: draftColor, kind: "note" }),
     onSuccess: () => {
@@ -92,7 +113,6 @@ export default function QuickNotesScreen({ navigation }: any) {
     },
   });
   const createBlankNote = useMutation({
-    // Send a single space so older APIs that require content.min(1) still accept the draft.
     mutationFn: () => createQuickNote({ title: "", content: " ", color: "yellow", kind: "note" }),
     onSuccess: (note) => {
       animateListChange();
@@ -103,6 +123,7 @@ export default function QuickNotesScreen({ navigation }: any) {
         content: (note.content ?? "").trim(),
         color: note.color,
         kind: "note",
+        autoFocus: true,
       });
     },
     onError: (err: any) => {
@@ -127,6 +148,7 @@ export default function QuickNotesScreen({ navigation }: any) {
         content: "",
         color: note.color,
         kind: "list",
+        autoFocus: true,
       });
     },
     onError: (err: any) => {
@@ -136,18 +158,6 @@ export default function QuickNotesScreen({ navigation }: any) {
           "The server may need updating. Deploy the latest API and run migrations, then try again."
       );
     },
-  });  const update = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updateQuickNote>[1] }) =>
-      updateQuickNote(id, patch),
-    onSuccess: () => {
-      animateListChange();
-      invalidate();
-    },
-  });
-  const remove = useMutation({
-    mutationFn: deleteQuickNote,
-    onMutate: () => animateListChange(),
-    onSuccess: invalidate,
   });
 
   function openNote(note: QuickNote) {
@@ -171,11 +181,75 @@ export default function QuickNotesScreen({ navigation }: any) {
     if (!createBlankNote.isPending) createBlankNote.mutate();
   }
 
-  const list = notes ?? [];
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function enterSelection(id: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelected(new Set([id]));
+  }
+
+  function toggleSelection(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else {
+        void Haptics.selectionAsync();
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function bulkUpdate(patch: Parameters<typeof updateQuickNote>[1]) {
+    const ids = [...selected];
+    if (!ids.length) return;
+    animateListChange();
+    try {
+      await Promise.all(ids.map((id) => updateQuickNote(id, patch)));
+      clearSelection();
+      invalidate();
+    } catch (err: any) {
+      Alert.alert("Couldn't update", err?.response?.data?.error ?? "Try again.");
+    }
+  }
+
+  async function bulkDelete() {
+    const ids = [...selected];
+    if (!ids.length) return;
+    Alert.alert(
+      ids.length === 1 ? "Move to recycle bin?" : `Move ${ids.length} notes to recycle bin?`,
+      "You can restore them within 7 days.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Move",
+          style: "destructive",
+          onPress: async () => {
+            animateListChange();
+            try {
+              await Promise.all(ids.map((id) => deleteQuickNote(id)));
+              clearSelection();
+              invalidate();
+            } catch (err: any) {
+              Alert.alert("Couldn't delete", err?.response?.data?.error ?? "Try again.");
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function setArchiveView(next: boolean) {
+    clearSelection();
+    setShowArchived(next);
+  }
+
   const pinned = list.filter((n) => n.pinned);
   const rest = list.filter((n) => !n.pinned);
+  const archivedCount = (library ?? []).filter((n) => n.archived).length;
 
-  // Flat list with optional section headers as data rows for a Keep-like grid.
   type Row =
     | { type: "header"; id: string; label: string }
     | { type: "pair"; id: string; left: QuickNote; right?: QuickNote };
@@ -196,6 +270,8 @@ export default function QuickNotesScreen({ navigation }: any) {
   pushPairs(pinned, pinned.length ? "PINNED" : undefined);
   pushPairs(rest, pinned.length && rest.length ? "OTHERS" : undefined);
 
+  const anySelectedPinned = [...selected].some((id) => list.find((n) => n.id === id)?.pinned);
+
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <FlatList
@@ -204,144 +280,162 @@ export default function QuickNotesScreen({ navigation }: any) {
         keyExtractor={(r) => r.id}
         contentContainerStyle={{
           paddingTop: screenPad,
-          paddingBottom: listBottomClearance(true) + keyboardInset,
+          paddingBottom: listBottomClearance(true) + keyboardInset + (selecting ? 64 : 0),
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ paddingHorizontal: screenPad, marginBottom: 14 }}>
+          <View
+            style={{
+              paddingHorizontal: screenPad,
+              marginBottom: 14,
+              opacity: selecting ? 0.55 : 1,
+            }}
+            pointerEvents={selecting ? "none" : "auto"}
+          >
             <Text style={{ color: colors.textPrimary, fontSize: 22, fontWeight: "600", letterSpacing: -0.3 }}>
-              Capture
+              {showArchived ? "Archive" : "Capture"}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4, marginBottom: 14 }}>
-              Sticky notes & checklists — pin what matters.
+              {showArchived
+                ? "Notes you've put aside — restore anytime."
+                : "Sticky notes & checklists — pin what matters."}
             </Text>
 
-            <View style={styles.quickRow}>
-              <Pressable
-                onPress={openFullNote}
-                disabled={createBlankNote.isPending}
-                style={[
-                  styles.quickChip,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface1,
-                    opacity: createBlankNote.isPending ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: "rgba(234, 179, 8, 0.2)" }]}>
-                  <Feather name="edit-3" size={16} color="rgb(234, 179, 8)" />
+            {!showArchived && (
+              <>
+                <View style={styles.quickRow}>
+                  <Pressable
+                    onPress={openFullNote}
+                    disabled={createBlankNote.isPending}
+                    style={[
+                      styles.quickChip,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface1,
+                        opacity: createBlankNote.isPending ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.quickIcon, { backgroundColor: "rgba(234, 179, 8, 0.2)" }]}>
+                      <Feather name="edit-3" size={16} color="rgb(234, 179, 8)" />
+                    </View>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
+                      {createBlankNote.isPending ? "Opening…" : "Note"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (!createList.isPending) createList.mutate();
+                    }}
+                    disabled={createList.isPending}
+                    style={[
+                      styles.quickChip,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface1,
+                        opacity: createList.isPending ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.quickIcon, { backgroundColor: "rgba(93, 202, 165, 0.2)" }]}>
+                      <Feather name="check-square" size={16} color="rgb(93, 202, 165)" />
+                    </View>
+                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
+                      {createList.isPending ? "Creating…" : "List"}
+                    </Text>
+                  </Pressable>
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "600" }}>
-                    {createBlankNote.isPending ? "Opening…" : "Note"}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                    Title + body
-                  </Text>
-                </View>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  if (!createList.isPending) createList.mutate();
-                }}
-                disabled={createList.isPending}
-                style={[
-                  styles.quickChip,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface1,
-                    opacity: createList.isPending ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: "rgba(93, 202, 165, 0.2)" }]}>
-                  <Feather name="check-square" size={16} color="rgb(93, 202, 165)" />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "600" }}>
-                    {createList.isPending ? "Creating…" : "List"}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                    Shopping, todos…
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
 
-            <Pressable onPress={openComposer} style={{ marginBottom: composerOpen ? 10 : 0 }}>
-              <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "500" }}>
-                Quick capture…
-              </Text>
-            </Pressable>
+                <Pressable onPress={openComposer} style={{ marginBottom: composerOpen ? 10 : 0 }}>
+                  <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "500" }}>
+                    Quick capture…
+                  </Text>
+                </Pressable>
 
-            {composerOpen && (
-              <View
-                style={[
-                  styles.composer,
-                  {
-                    backgroundColor: colors.surface1,
-                    borderColor: colors.border,
-                    borderLeftColor: ACCENT_BAR[draftColor] || colors.accent,
-                  },
-                ]}
-              >
-                <TextInput
-                  ref={composerRef}
-                  style={{ color: colors.textPrimary, fontSize: 15, minHeight: 56, textAlign: "left", lineHeight: 22 }}
-                  placeholder="What's on your mind?"
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  textAlignVertical="top"
-                  value={draft}
-                  onChangeText={setDraft}
-                />
-                <View style={styles.composerRow}>
-                  <View style={[styles.dots, isNarrow && { gap: 8 }]}>
-                    {Object.keys(PALETTE).map((color) => {
-                      const selected = draftColor === color;
-                      const size = isNarrow ? 18 : 22;
-                      return (
+                {composerOpen && (
+                  <View
+                    style={[
+                      styles.composer,
+                      {
+                        backgroundColor: colors.surface1,
+                        borderColor: colors.border,
+                        borderLeftColor: ACCENT_BAR[draftColor] || colors.accent,
+                      },
+                    ]}
+                  >
+                    <TextInput
+                      ref={composerRef}
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        minHeight: 56,
+                        textAlign: "left",
+                        lineHeight: 22,
+                      }}
+                      placeholder="What's on your mind?"
+                      placeholderTextColor={colors.textSecondary}
+                      multiline
+                      textAlignVertical="top"
+                      value={draft}
+                      onChangeText={setDraft}
+                    />
+                    <View style={styles.composerRow}>
+                      <View style={[styles.dots, isNarrow && { gap: 8 }]}>
+                        {Object.keys(PALETTE).map((color) => {
+                          const isSelected = draftColor === color;
+                          const size = isNarrow ? 18 : 22;
+                          return (
+                            <TouchableOpacity
+                              key={color}
+                              onPress={() => setDraftColor(color)}
+                              activeOpacity={0.7}
+                              hitSlop={6}
+                              style={{
+                                height: size,
+                                width: size,
+                                borderRadius: size / 2,
+                                backgroundColor: DOT_COLORS[color],
+                                opacity: isSelected ? 1 : 0.35,
+                                transform: [{ scale: isSelected ? 1.15 : 1 }],
+                                borderWidth: isSelected ? 2 : 0,
+                                borderColor: colors.textPrimary,
+                              }}
+                            />
+                          );
+                        })}
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <TouchableOpacity
-                          key={color}
-                          onPress={() => setDraftColor(color)}
-                          activeOpacity={0.7}
-                          hitSlop={6}
-                          style={{
-                            height: size,
-                            width: size,
-                            borderRadius: size / 2,
-                            backgroundColor: DOT_COLORS[color],
-                            opacity: selected ? 1 : 0.35,
-                            transform: [{ scale: selected ? 1.15 : 1 }],
-                            borderWidth: selected ? 2 : 0,
-                            borderColor: colors.textPrimary,
+                          onPress={() => {
+                            setComposerOpen(false);
+                            setDraft("");
                           }}
-                        />
-                      );
-                    })}
+                          hitSlop={8}
+                        >
+                          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          disabled={!draft.trim() || create.isPending}
+                          onPress={() => create.mutate()}
+                          activeOpacity={0.75}
+                          style={[
+                            styles.addButton,
+                            { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 },
+                          ]}
+                        >
+                          <Text style={{ color: colors.surface0, fontWeight: "600", fontSize: 13 }}>Save</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <TouchableOpacity onPress={() => { setComposerOpen(false); setDraft(""); }} hitSlop={8}>
-                      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      disabled={!draft.trim() || create.isPending}
-                      onPress={() => create.mutate()}
-                      activeOpacity={0.75}
-                      style={[styles.addButton, { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 }]}
-                    >
-                      <Text style={{ color: colors.surface0, fontWeight: "600", fontSize: 13 }}>Save</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+                )}
+              </>
             )}
 
             <View style={styles.libraryRow}>
               <Pressable
-                onPress={() => setShowArchived((v) => !v)}
+                onPress={() => setArchiveView(!showArchived)}
                 style={[
                   styles.libraryChip,
                   {
@@ -362,7 +456,8 @@ export default function QuickNotesScreen({ navigation }: any) {
                     fontWeight: "500",
                   }}
                 >
-                  {showArchived ? "Archived" : "Archive"}
+                  {showArchived ? "Exit archive" : "Archive"}
+                  {!showArchived && archivedCount > 0 ? ` (${archivedCount})` : ""}
                 </Text>
               </Pressable>
               <Pressable
@@ -400,21 +495,32 @@ export default function QuickNotesScreen({ navigation }: any) {
             );
           }
           return (
-            <View style={{ flexDirection: "row", gap: GRID_GAP, paddingHorizontal: screenPad, marginBottom: GRID_GAP }}>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: GRID_GAP,
+                paddingHorizontal: screenPad,
+                marginBottom: GRID_GAP,
+              }}
+            >
               <NoteCard
                 note={item.left}
                 width={cardWidth}
+                selected={selected.has(item.left.id)}
+                selecting={selecting}
                 onOpen={() => openNote(item.left)}
-                onPatch={(patch) => update.mutate({ id: item.left.id, patch })}
-                onDelete={() => remove.mutate(item.left.id)}
+                onLongPress={() => enterSelection(item.left.id)}
+                onToggleSelect={() => toggleSelection(item.left.id)}
               />
               {item.right ? (
                 <NoteCard
                   note={item.right}
                   width={cardWidth}
+                  selected={selected.has(item.right.id)}
+                  selecting={selecting}
                   onOpen={() => openNote(item.right!)}
-                  onPatch={(patch) => update.mutate({ id: item.right!.id, patch })}
-                  onDelete={() => remove.mutate(item.right!.id)}
+                  onLongPress={() => enterSelection(item.right!.id)}
+                  onToggleSelect={() => toggleSelection(item.right!.id)}
                 />
               ) : (
                 <View style={{ width: cardWidth }} />
@@ -424,37 +530,92 @@ export default function QuickNotesScreen({ navigation }: any) {
         }}
         ListEmptyComponent={
           <EmptyState
-            icon="feather"
-            title="Nothing captured yet"
-            subtitle="Tap Note for a sticky thought, or List for a checklist that stays together."
+            icon={showArchived ? "archive" : "feather"}
+            title={showArchived ? "Archive is empty" : "Nothing captured yet"}
+            subtitle={
+              showArchived
+                ? "Long-press notes and tap archive to move them here."
+                : "Tap Note for a sticky thought, or List for a checklist that stays together."
+            }
           />
         }
       />
 
-      <Fab
-        actions={[
-          {
-            key: "note",
-            label: "New note",
-            icon: "edit-3",
-            onPress: openFullNote,
-          },
-          {
-            key: "list",
-            label: "New list",
-            icon: "check-square",
-            onPress: () => {
-              if (!createList.isPending) createList.mutate();
+      {!selecting && !showArchived && (
+        <Fab
+          actions={[
+            { key: "note", label: "New note", icon: "edit-3", onPress: openFullNote },
+            {
+              key: "list",
+              label: "New list",
+              icon: "check-square",
+              onPress: () => {
+                if (!createList.isPending) createList.mutate();
+              },
             },
-          },
+            { key: "quick", label: "Quick capture", icon: "zap", onPress: openComposer },
+          ]}
+        />
+      )}
+
+      <Animated.View
+        pointerEvents={selecting ? "auto" : "none"}
+        style={[
+          styles.selectDock,
           {
-            key: "quick",
-            label: "Quick capture",
-            icon: "zap",
-            onPress: openComposer,
+            bottom: fabBottom,
+            backgroundColor: colors.surface1,
+            borderColor: colors.border,
+            opacity: selectAnim,
+            transform: [
+              {
+                translateY: selectAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [28, 0],
+                }),
+              },
+              {
+                scale: selectAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.96, 1],
+                }),
+              },
+            ],
           },
         ]}
-      />
+      >
+        <Pressable onPress={clearSelection} hitSlop={8} style={styles.selectIconBtn}>
+          <Feather name="x" size={18} color={colors.textPrimary} />
+        </Pressable>
+        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600", flex: 1 }}>
+          {selected.size} selected
+        </Text>
+        <Pressable
+          onPress={() => bulkUpdate({ pinned: !anySelectedPinned })}
+          hitSlop={8}
+          style={styles.selectIconBtn}
+        >
+          <Feather
+            name="star"
+            size={18}
+            color={anySelectedPinned ? colors.accent : colors.textSecondary}
+          />
+        </Pressable>
+        <Pressable
+          onPress={() => bulkUpdate({ archived: !showArchived })}
+          hitSlop={8}
+          style={styles.selectIconBtn}
+        >
+          <Feather
+            name={showArchived ? "rotate-ccw" : "archive"}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+        <Pressable onPress={bulkDelete} hitSlop={8} style={styles.selectIconBtn}>
+          <Feather name="trash-2" size={18} color={colors.textSecondary} />
+        </Pressable>
+      </Animated.View>
     </KeyboardSafe>
   );
 }
@@ -462,15 +623,19 @@ export default function QuickNotesScreen({ navigation }: any) {
 function NoteCard({
   note,
   width,
+  selected,
+  selecting,
   onOpen,
-  onPatch,
-  onDelete,
+  onLongPress,
+  onToggleSelect,
 }: {
   note: QuickNote;
   width: number;
+  selected: boolean;
+  selecting: boolean;
   onOpen: () => void;
-  onPatch: (patch: Partial<Pick<QuickNote, "title" | "content" | "color" | "pinned" | "archived" | "items">>) => void;
-  onDelete: () => void;
+  onLongPress: () => void;
+  onToggleSelect: () => void;
 }) {
   const { colors } = useTheme();
   const isList = note.kind === "list";
@@ -481,14 +646,37 @@ function NoteCard({
   const previewItems = items.slice(0, 5);
   const bar = ACCENT_BAR[note.color] ?? colors.border;
   const tint = note.color !== "gray" ? PALETTE[note.color] : colors.surface1;
+  const cardScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(cardScale, {
+      toValue: selected ? 0.98 : 1,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 120,
+    }).start();
+  }, [selected, cardScale]);
 
   return (
-    <GlassCard
-      style={{ width }}
-      contentStyle={[styles.card, { backgroundColor: tint, borderLeftWidth: 3, borderLeftColor: bar || colors.border }]}
-    >
-      <Pressable onPress={onOpen} style={{ flex: 1, alignSelf: "stretch" }}>
-        {isList ? (
+    <Animated.View style={{ width, transform: [{ scale: cardScale }] }}>
+      <GlassCard
+        style={{
+          width: "100%",
+          borderColor: selected ? colors.accent : colors.glassBorder,
+          borderWidth: selected ? 2 : StyleSheet.hairlineWidth,
+        }}
+        contentStyle={[
+          styles.card,
+          { backgroundColor: tint, borderLeftWidth: 3, borderLeftColor: bar || colors.border },
+        ]}
+      >
+        <Pressable
+          onPress={() => (selecting ? onToggleSelect() : onOpen())}
+          onLongPress={onLongPress}
+          delayLongPress={280}
+          style={{ flex: 1, alignSelf: "stretch" }}
+        >
+          {isList ? (
           <View style={{ gap: 5 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
               <Feather name="check-square" size={12} color={colors.accent} />
@@ -551,19 +739,14 @@ function NoteCard({
             )}
           </View>
         )}
-      </Pressable>
-      <View style={styles.cardActions}>
-        <Pressable onPress={() => onPatch({ pinned: !note.pinned })} hitSlop={6}>
-          <Feather name="star" size={14} color={note.pinned ? colors.accent : colors.textSecondary} />
+        {note.pinned && (
+          <View style={styles.pinHint}>
+            <Feather name="star" size={11} color={colors.accent} />
+          </View>
+        )}
         </Pressable>
-        <Pressable onPress={() => onPatch({ archived: !note.archived })} hitSlop={6}>
-          <Feather name={note.archived ? "rotate-ccw" : "archive"} size={14} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable onPress={onDelete} hitSlop={6}>
-          <Feather name="trash-2" size={14} color={colors.textSecondary} />
-        </Pressable>
-      </View>
-    </GlassCard>
+      </GlassCard>
+    </Animated.View>
   );
 }
 
@@ -574,7 +757,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -600,6 +784,24 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  selectDock: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  selectIconBtn: { padding: 8 },
   composer: {
     alignSelf: "stretch",
     padding: 14,
@@ -623,8 +825,8 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-  card: { padding: 12, minHeight: 110, justifyContent: "space-between", gap: 12, alignItems: "stretch" },
-  cardActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: 14 },
+  card: { padding: 12, minHeight: 110, justifyContent: "space-between", gap: 10, alignItems: "stretch" },
   listPreviewRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   strike: { textDecorationLine: "line-through" },
+  pinHint: { position: "absolute", top: -2, right: 0 },
 });

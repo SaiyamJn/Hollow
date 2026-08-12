@@ -65,6 +65,7 @@ export default function NotebooksScreen({ navigation }: any) {
           sectionId: prompt.sectionId,
           notebookId: prompt.notebookId,
           title: value,
+          autoFocus: true,
         });
       } else if (prompt.kind === "rename-notebook") {
         await renameNotebook(prompt.notebook.id, value);

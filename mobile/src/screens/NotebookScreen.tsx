@@ -76,7 +76,13 @@ export default function NotebookScreen({ route, navigation }: any) {
         const page = await createPage(prompt.section.id, value, unlock.sectionPasswords[prompt.section.id]);
         rememberSection(prompt.section.id, prompt.section.title, notebookId, title);
         invalidate();
-        navigation.navigate("Page", { pageId: page.id, sectionId: prompt.section.id, notebookId, title: value });
+        navigation.navigate("Page", {
+          pageId: page.id,
+          sectionId: prompt.section.id,
+          notebookId,
+          title: value,
+          autoFocus: true,
+        });
       } else {
         await unlockSection(prompt.section.id, value);
         unlock.setSectionPassword(prompt.section.id, value);

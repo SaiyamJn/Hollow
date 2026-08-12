@@ -59,11 +59,13 @@ function VaultSeal({ color, background }: { color: string; background: string })
 // simple editor instead of a native block editor for v1). Saving from mobile
 // stores plain text; the web app renders it as paragraphs.
 export default function PageEditorScreen({ route, navigation }: any) {
-  const { pageId, sectionId, notebookId: routeNotebookId } = route.params as {
+  const { pageId, sectionId, notebookId: routeNotebookId, autoFocus: autoFocusParam } = route.params as {
     pageId: string;
     sectionId: string;
     notebookId?: string;
+    autoFocus?: boolean;
   };
+  const shouldAutoFocus = Boolean(autoFocusParam);
   const { colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
@@ -115,14 +117,14 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   useEffect(() => {
     if (!positionReady || selection == null) return;
-    // One-shot restore, then release `selection` so typing stays uncontrolled.
+    // Restore caret; only open the keyboard when this page was just created.
     const t = setTimeout(() => {
-      inputRef.current?.focus();
+      if (shouldAutoFocus) inputRef.current?.focus();
       inputRef.current?.setNativeProps?.({ selection });
       setSelection(undefined);
     }, 50);
     return () => clearTimeout(t);
-  }, [positionReady, pageId]);
+  }, [positionReady, pageId, shouldAutoFocus]);
 
   const saveNow = useCallback(async () => {
     if (pendingText.current === null) return;

@@ -312,6 +312,7 @@ export default function HomeScreen({ navigation }: any) {
       submitLabel={taskBusy ? "Adding…" : "Add task"}
       draft={taskDraft}
       busy={taskBusy}
+      autoFocus
       onClose={() => setTaskDraft(null)}
       onChange={setTaskDraft}
       onSubmit={async () => {

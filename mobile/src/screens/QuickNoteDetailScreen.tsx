@@ -66,13 +66,16 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
     content: initialContent,
     color: initialColor,
     kind: initialKind,
+    autoFocus: autoFocusParam,
   } = route.params as {
     noteId: string;
     title?: string;
     content?: string;
     color?: string;
     kind?: "note" | "list";
+    autoFocus?: boolean;
   };
+  const shouldAutoFocus = Boolean(autoFocusParam);
   const { colors } = useTheme();
   const queryClient = useQueryClient();
 
@@ -332,7 +335,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                 placeholder="List title"
                 placeholderTextColor={colors.textSecondary}
                 value={title}
-                autoFocus
+                autoFocus={shouldAutoFocus}
                 onChangeText={(next) => {
                   setTitle(next);
                   scheduleSave(next, content, color, items);
@@ -388,7 +391,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                 ]}
                 multiline
                 textAlignVertical="top"
-                autoFocus
+                autoFocus={shouldAutoFocus}
                 value={content}
                 onChangeText={(next) => {
                   setContent(next);

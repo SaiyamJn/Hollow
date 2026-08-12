@@ -54,6 +54,7 @@ export function TaskFormModal({
   submitLabel,
   draft,
   busy,
+  autoFocus = false,
   onClose,
   onChange,
   onSubmit,
@@ -63,6 +64,7 @@ export function TaskFormModal({
   submitLabel: string;
   draft: TaskDraft | null;
   busy: boolean;
+  autoFocus?: boolean;
   onClose: () => void;
   onChange: (next: TaskDraft | null) => void;
   onSubmit: () => void;
@@ -143,7 +145,7 @@ export function TaskFormModal({
                 placeholderTextColor={colors.textSecondary}
                 value={current.title}
                 onChangeText={(nextTitle) => onChange({ ...current, title: nextTitle })}
-                autoFocus
+                autoFocus={autoFocus}
               />
               <TextInput
                 style={[
