@@ -90,16 +90,25 @@ model PageLink {
 
 // Google Keep-style quick notes, separate from the notebook hierarchy
 model QuickNote {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
+  /// Optional sealed title (notes + lists)
+  title     String    @default("")
   content   String
-  color     String   @default("gray")
-  pinned    Boolean  @default(false)
-  archived  Boolean  @default(false)
-  owner     User     @relation(fields: [ownerId], references: [id])
+  /// note = free text; list = checklist (title field + items)
+  kind      String    @default("note")
+  /// Sealed JSON: [{ id, text, done }] when kind = list
+  items     String?
+  color     String    @default("gray")
+  pinned    Boolean   @default(false)
+  archived  Boolean   @default(false)
+  /// Soft-delete — purged permanently 7 days after this timestamp
+  deletedAt DateTime?
+  owner     User      @relation(fields: [ownerId], references: [id])
   ownerId   String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([ownerId])
+  @@index([ownerId, deletedAt])
 }
 
 // Google Tasks-style tasks, with subtasks and optional due dates
@@ -110,6 +119,8 @@ model Task {
   done         Boolean   @default(false)
   starred      Boolean   @default(false)
   dueAt        DateTime?
+  /// daily | weekly | monthly | yearly — only meaningful when dueAt is set
+  repeatRule   String?
   owner        User      @relation(fields: [ownerId], references: [id])
   ownerId      String
   parentTask   Task?     @relation("SubTasks", fields: [parentTaskId], references: [id])

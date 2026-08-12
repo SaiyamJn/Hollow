@@ -55,10 +55,14 @@ export interface Backlink {
 
 export interface QuickNote {
   id: string;
+  title?: string;
   content: string;
+  kind?: "note" | "list";
+  items?: { id: string; text: string; done: boolean }[] | null;
   color: string;
   pinned: boolean;
   archived: boolean;
+  deletedAt?: string | null;
   createdAt: string;
 }
 
@@ -69,6 +73,7 @@ export interface Task {
   done: boolean;
   starred: boolean;
   dueAt: string | null;
+  repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
   parentTaskId: string | null;
   subtasks?: Task[];
   createdAt: string;

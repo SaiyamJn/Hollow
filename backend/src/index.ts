@@ -7,7 +7,7 @@ import authRoutes from "./routes/auth";
 import notebookRoutes from "./routes/notebooks";
 import sectionRoutes from "./routes/sections";
 import pageRoutes from "./routes/pages";
-import quickNoteRoutes from "./routes/quicknotes";
+import quickNoteRoutes, { purgeExpiredQuickNotes } from "./routes/quicknotes";
 import taskRoutes from "./routes/tasks";
 import tagRoutes from "./routes/tags";
 import adminRoutes from "./routes/admin";
@@ -72,4 +72,10 @@ registerCollab(io);
 process.on("unhandledRejection", (err) => console.error("Unhandled rejection:", err));
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`API listening on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`API listening on port ${PORT}`);
+  void purgeExpiredQuickNotes().catch((err) => console.error("Trash purge failed:", err));
+  setInterval(() => {
+    void purgeExpiredQuickNotes().catch((err) => console.error("Trash purge failed:", err));
+  }, 6 * 60 * 60 * 1000);
+});

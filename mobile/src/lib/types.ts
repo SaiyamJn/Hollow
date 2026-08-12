@@ -47,12 +47,22 @@ export interface Backlink {
   updatedAt: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface QuickNote {
   id: string;
+  title: string;
   content: string;
+  kind: "note" | "list";
+  items: ChecklistItem[] | null;
   color: string;
   pinned: boolean;
   archived: boolean;
+  deletedAt?: string | null;
   createdAt: string;
 }
 
@@ -63,10 +73,14 @@ export interface Task {
   done: boolean;
   starred: boolean;
   dueAt: string | null;
+  /** daily | weekly | monthly | yearly */
+  repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;
   parentTaskId: string | null;
   subtasks?: Task[];
   createdAt: string;
 }
+
+export type TaskRepeatRule = NonNullable<Task["repeatRule"]>;
 
 export interface RecentPage {
   id: string;

@@ -8,6 +8,7 @@ import { getNavMemory, rememberNotebook, rememberSection } from "../lib/navMemor
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
+import EmptyState from "../components/EmptyState";
 import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { truncateLabel, useLayout } from "../lib/layout";
@@ -184,9 +185,11 @@ export default function NotebookScreen({ route, navigation }: any) {
         })}
 
         {notebook && notebook.sections.length === 0 && (
-          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 32 }}>
-            No sections yet — tap + to create one.
-          </Text>
+          <EmptyState
+            icon="layers"
+            title="Empty notebook"
+            subtitle="Add a section, then fill it with pages. Tap + to begin."
+          />
         )}
       </ScrollView>
 

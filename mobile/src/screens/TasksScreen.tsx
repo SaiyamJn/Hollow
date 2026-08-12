@@ -1,19 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
-  ScrollView,
   SectionList,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
@@ -22,8 +15,10 @@ import { animateListChange } from "../lib/motion";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
+import EmptyState from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
-import { GlassDateTimePicker, formatDueLabel } from "../components/GlassDateTimePicker";
+import { formatDueLabel } from "../components/GlassDateTimePicker";
+import { TaskFormModal, formatRepeatLabel, type TaskDraft } from "../components/TaskFormModal";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
@@ -72,14 +67,13 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
   return sections;
 }
 
-type Draft = { title: string; description: string; due: Date | null };
-type EditDraft = Draft & { id: string };
+type EditDraft = TaskDraft & { id: string };
 
 export default function TasksScreen() {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<TaskDraft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
@@ -129,7 +123,12 @@ export default function TasksScreen() {
       patch,
     }: {
       id: string;
-      patch: { title: string; description: string; dueAt: string | null };
+      patch: {
+        title: string;
+        description: string;
+        dueAt: string | null;
+        repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;
+      };
     }) => updateTask(id, patch),
     onSuccess: () => {
       animateListChange();
@@ -144,7 +143,7 @@ export default function TasksScreen() {
   });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", due: null });
+    setDraft({ title: title.trim(), description: "", due: null, repeat: null });
   }
 
   function openEdit(task: Task) {
@@ -153,6 +152,7 @@ export default function TasksScreen() {
       title: task.title,
       description: task.description ?? "",
       due: task.dueAt ? new Date(task.dueAt) : null,
+      repeat: task.repeatRule ?? null,
     });
   }
 
@@ -164,13 +164,21 @@ export default function TasksScreen() {
         : colors.textSecondary;
 
   const sections = groupTasks(tasks ?? [], showCompleted);
+  const openCount = (tasks ?? []).filter((t) => !t.done).length;
+  const completedCount = (tasks ?? []).filter((t) => t.done).length;
+  const allDone = (tasks?.length ?? 0) > 0 && openCount === 0;
+  const noneYet = (tasks?.length ?? 0) === 0;
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <SectionList
         sections={sections}
         keyExtractor={(t) => t.id}
-        contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) + keyboardInset }}
+        contentContainerStyle={{
+          padding: screenPad,
+          paddingBottom: listBottomClearance(true) + keyboardInset,
+          flexGrow: 1,
+        }}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
@@ -178,7 +186,7 @@ export default function TasksScreen() {
             <GlassCard style={{ alignSelf: "stretch" }} contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}>
               <TextInput
                 ref={quickAddRef}
-                style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "center" }]}
+                style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "left" }]}
                 placeholder={isNarrow ? "Add a task…" : "Add a task, press return"}
                 placeholderTextColor={colors.textSecondary}
                 value={quickAdd}
@@ -188,6 +196,18 @@ export default function TasksScreen() {
                 }}
               />
             </GlassCard>
+            {allDone && (
+              <EmptyState
+                icon="check-circle"
+                title="You're all done"
+                subtitle={
+                  completedCount === 1
+                    ? "That last task is checked off. Enjoy the quiet."
+                    : `${completedCount} tasks cleared. Nothing left on your plate.`
+                }
+                compact
+              />
+            )}
           </View>
         }
         renderSectionHeader={({ section }) => {
@@ -267,6 +287,12 @@ export default function TasksScreen() {
                   {!!task.dueAt && (
                     <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
                       {formatDueLabel(task.dueAt)}
+                      {task.repeatRule ? ` · ${formatRepeatLabel(task.repeatRule)}` : ""}
+                    </Text>
+                  )}
+                  {!task.dueAt && !!task.repeatRule && (
+                    <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                      {formatRepeatLabel(task.repeatRule)}
                     </Text>
                   )}
                 </Pressable>
@@ -313,7 +339,7 @@ export default function TasksScreen() {
                     </View>
                   ))}
                   <TextInput
-                    style={{ color: colors.textPrimary, fontSize: 13, paddingVertical: 6, textAlign: "center" }}
+                    style={{ color: colors.textPrimary, fontSize: 13, paddingVertical: 6, textAlign: "left" }}
                     placeholder="+ Add subtask"
                     placeholderTextColor={colors.textSecondary}
                     value={subtaskDrafts[task.id] ?? ""}
@@ -332,15 +358,19 @@ export default function TasksScreen() {
           );
         }}
         ListEmptyComponent={
-          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 24 }}>
-            No tasks yet.
-          </Text>
+          noneYet ? (
+            <EmptyState
+              icon="sunrise"
+              title="A clean slate"
+              subtitle="Add a task when something needs doing — it'll show up here."
+            />
+          ) : null
         }
       />
 
       <Fab
         actions={[
-          { key: "task", label: "New task", icon: "check-square", onPress: () => quickAddRef.current?.focus() },
+          { key: "task", label: "New task", icon: "check-square", onPress: () => openCreate("") },
         ]}
       />
 
@@ -358,6 +388,7 @@ export default function TasksScreen() {
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
+            repeatRule: draft.due ? draft.repeat : null,
           });
         }}
       />
@@ -378,171 +409,12 @@ export default function TasksScreen() {
               title: editing.title.trim(),
               description: editing.description.trim(),
               dueAt: editing.due ? editing.due.toISOString() : null,
+              repeatRule: editing.due ? editing.repeat : null,
             },
           });
         }}
       />
     </KeyboardSafe>
-  );
-}
-
-function TaskFormModal({
-  visible,
-  title,
-  submitLabel,
-  draft,
-  busy,
-  onClose,
-  onChange,
-  onSubmit,
-}: {
-  visible: boolean;
-  title: string;
-  submitLabel: string;
-  draft: Draft | null;
-  busy: boolean;
-  onClose: () => void;
-  onChange: (next: Draft | null) => void;
-  onSubmit: () => void;
-}) {
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
-  // Calendar/clock stay collapsed unless the user opts in (or the task already has a due date).
-  const [showDuePicker, setShowDuePicker] = useState(false);
-
-  useEffect(() => {
-    if (visible) setShowDuePicker(Boolean(draft?.due));
-  }, [visible, draft?.due]);
-
-  if (!draft) return null;
-  const current = draft;
-
-  const topInset = Math.max(insets.top, Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0, 28);
-  const padTop = topInset + 24;
-  const padBottom = Math.max(insets.bottom, 16) + 16;
-  const maxCardH = Math.max(280, height - padTop - padBottom);
-
-  function openDuePicker() {
-    if (!current.due) {
-      const d = new Date();
-      d.setMinutes(0, 0, 0);
-      d.setHours(d.getHours() + 1);
-      onChange({ ...current, due: d });
-    }
-    setShowDuePicker(true);
-  }
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={[
-          styles.draftOverlay,
-          {
-            paddingTop: padTop,
-            paddingBottom: padBottom,
-            paddingHorizontal: 16,
-          },
-        ]}
-      >
-        <GlassCard
-          strong
-          style={{ maxHeight: maxCardH, width: "100%", overflow: "hidden" }}
-          contentStyle={[styles.draftCard, { maxHeight: maxCardH }]}
-        >
-          <ScrollView
-            style={{ maxHeight: maxCardH - 8 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            automaticallyAdjustKeyboardInsets
-            bounces={false}
-            contentContainerStyle={{ paddingBottom: 8 }}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 15,
-                fontWeight: "500",
-                marginBottom: 12,
-                textAlign: "center",
-              }}
-            >
-              {title}
-            </Text>
-            <TextInput
-              style={[
-                styles.draftInput,
-                {
-                  color: colors.textPrimary,
-                  borderColor: colors.glassBorder,
-                  backgroundColor: colors.glass,
-                  textAlign: "center",
-                },
-              ]}
-              placeholder="Title"
-              placeholderTextColor={colors.textSecondary}
-              value={current.title}
-              onChangeText={(nextTitle) => onChange({ ...current, title: nextTitle })}
-              autoFocus
-            />
-            <TextInput
-              style={[
-                styles.draftInput,
-                styles.draftDesc,
-                {
-                  color: colors.textPrimary,
-                  borderColor: colors.glassBorder,
-                  backgroundColor: colors.glass,
-                  textAlign: "center",
-                },
-              ]}
-              placeholder="Description"
-              placeholderTextColor={colors.textSecondary}
-              value={current.description}
-              onChangeText={(description) => onChange({ ...current, description })}
-              multiline
-            />
-
-            {showDuePicker ? (
-              <>
-                <GlassDateTimePicker value={current.due} onChange={(due) => onChange({ ...current, due })} />
-                <Pressable
-                  onPress={() => {
-                    onChange({ ...current, due: null });
-                    setShowDuePicker(false);
-                  }}
-                  style={{ alignSelf: "center", marginTop: 8, paddingVertical: 4 }}
-                  hitSlop={8}
-                >
-                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Remove due date</Text>
-                </Pressable>
-              </>
-            ) : (
-              <Pressable
-                onPress={openDuePicker}
-                style={[styles.dueToggle, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
-                hitSlop={6}
-              >
-                <Feather name="calendar" size={14} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                  {current.due ? formatDueLabel(current.due) : "Add due date "}
-                </Text>
-              </Pressable>
-            )}
-
-            <View style={{ flexDirection: "row", justifyContent: "center", gap: 24, marginTop: 14 }}>
-              <Pressable onPress={onClose}>
-                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
-              </Pressable>
-              <Pressable disabled={!current.title.trim() || busy} onPress={onSubmit}>
-                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>{submitLabel}</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </GlassCard>
-      </KeyboardAvoidingView>
-    </Modal>
   );
 }
 
@@ -554,12 +426,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 8,
     marginTop: 8,
-    textAlign: "center",
+    textAlign: "left",
   },
   completedHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 6,
     marginTop: 16,
     marginBottom: 8,
@@ -570,30 +442,4 @@ const styles = StyleSheet.create({
   taskTitle: { fontSize: 14, minWidth: 0 },
   strike: { textDecorationLine: "line-through" },
   subtasks: { marginLeft: 16, paddingBottom: 6 },
-  draftOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-start",
-  },
-  draftCard: { padding: 20 },
-  draftInput: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    marginBottom: 10,
-  },
-  draftDesc: { minHeight: 72, textAlignVertical: "top" },
-  dueToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 4,
-  },
 });

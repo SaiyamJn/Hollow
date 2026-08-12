@@ -8,6 +8,7 @@ import { getNavMemory } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
+import EmptyState from "../components/EmptyState";
 import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { truncateLabel, useLayout } from "../lib/layout";
@@ -184,9 +185,11 @@ export default function NotebooksScreen({ navigation }: any) {
         })}
 
         {notebooks && notebooks.length === 0 && (
-          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 32 }}>
-            No notebooks yet — tap + to create one.
-          </Text>
+          <EmptyState
+            icon="book-open"
+            title="No notebooks yet"
+            subtitle="Tap + to start a notebook — sections and pages live inside."
+          />
         )}
       </ScrollView>
 

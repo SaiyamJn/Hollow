@@ -6,6 +6,7 @@ import { fetchBacklinks, fetchNotebooks, fetchOutlinks } from "../lib/api";
 import type { Section } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
+import EmptyState from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { useLayout } from "../lib/layout";
 
@@ -92,10 +93,20 @@ export default function LinksScreen({ navigation }: any) {
         />
       ))}
 
-      {visibleSections.every((s) => s.pages.length === 0) && (
-        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 24 }}>
-          No pages to link yet — create a page, then type [[Another Page]].
-        </Text>
+      {(!notebooks || notebooks.length === 0) && (
+        <EmptyState
+          icon="share-2"
+          title="No links yet"
+          subtitle="Create a notebook and a page first — then connect pages with [[Title]]."
+        />
+      )}
+
+      {notebooks && notebooks.length > 0 && visibleSections.every((s) => s.pages.length === 0) && (
+        <EmptyState
+          icon="git-branch"
+          title="No pages to link"
+          subtitle="Create a page, then type [[Another Page]] to grow your graph."
+        />
       )}
     </ScrollView>
   );

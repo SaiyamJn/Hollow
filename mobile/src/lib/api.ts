@@ -3,7 +3,7 @@ import NetInfo from "@react-native-community/netinfo";
 import Constants from "expo-constants";
 import axios, { AxiosError } from "axios";
 import { Platform } from "react-native";
-import type { Backlink, DailyNote, Notebook, Page, PageMeta, QuickNote, RecentPage, Section, Task, User } from "./types";
+import type { Backlink, ChecklistItem, DailyNote, Notebook, Page, PageMeta, QuickNote, RecentPage, Section, Task, User } from "./types";
 
 /** Expo tunnel / ngrok hosts — Metro only; never a Hollow API host. */
 function isTunnelOrPublicDevHost(host: string): boolean {
@@ -264,28 +264,48 @@ export async function openDailyNote() {
 }
 
 // ---- quick notes ----
-export async function fetchQuickNotes(includeArchived: boolean) {
+export async function fetchQuickNotes(includeArchived: boolean, trashed = false) {
   const { data } = await api.get<QuickNote[]>("/quick-notes", {
-    params: includeArchived ? { archived: "true" } : {},
+    params: {
+      ...(includeArchived ? { archived: "true" } : {}),
+      ...(trashed ? { trashed: "true" } : {}),
+    },
   });
   return data;
 }
 
-export async function createQuickNote(content: string, color?: string) {
-  const { data } = await api.post<QuickNote>("/quick-notes", { content, ...(color ? { color } : {}) });
+export async function createQuickNote(input: {
+  title?: string;
+  content?: string;
+  color?: string;
+  kind?: "note" | "list";
+  items?: ChecklistItem[];
+}) {
+  const { data } = await api.post<QuickNote>("/quick-notes", input);
   return data;
 }
 
 export async function updateQuickNote(
   id: string,
-  patch: Partial<Pick<QuickNote, "content" | "color" | "pinned" | "archived">>
+  patch: Partial<Pick<QuickNote, "title" | "content" | "color" | "pinned" | "archived" | "items">>
 ) {
   const { data } = await api.patch<QuickNote>(`/quick-notes/${id}`, patch);
   return data;
 }
 
+/** Soft-delete into the recycle bin (kept 7 days). */
 export async function deleteQuickNote(id: string) {
   await api.delete(`/quick-notes/${id}`);
+}
+
+/** Permanent delete — used for empty discard and emptying trash. */
+export async function deleteQuickNotePermanent(id: string) {
+  await api.delete(`/quick-notes/${id}`, { params: { permanent: "true" } });
+}
+
+export async function restoreQuickNote(id: string) {
+  const { data } = await api.post<QuickNote>(`/quick-notes/${id}/restore`);
+  return data;
 }
 
 // ---- tasks ----
@@ -300,6 +320,7 @@ export async function createTask(input: {
   dueAt?: string;
   parentTaskId?: string;
   starred?: boolean;
+  repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
 }) {
   const { data } = await api.post<Task>("/tasks", input);
   return data;
@@ -313,6 +334,7 @@ export async function updateTask(
     done?: boolean;
     starred?: boolean;
     dueAt?: string | null;
+    repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
   }
 ) {
   const { data } = await api.patch<Task>(`/tasks/${id}`, patch);

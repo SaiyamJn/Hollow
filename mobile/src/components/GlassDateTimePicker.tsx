@@ -12,15 +12,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../contexts/theme";
 
-const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
-const MINUTES = Array.from({ length: 60 }, (_, m) => m);
+const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+const HOURS_12 = Array.from({ length: 12 }, (_, h) => h + 1);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // Google-style 5-min steps
+const MERIDIEMS = ["AM", "PM"] as const;
 
 /** Compact wheel metrics — same snap behaviour, less vertical space. */
 const ITEM_H = 28;
 const VISIBLE = 3;
 const PAD = Math.floor(VISIBLE / 2);
-const CELL_H = 30;
+const CELL_H = 36;
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -34,12 +35,39 @@ function daysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
+function startOfDay(d: Date) {
+  const next = new Date(d);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+/** Date-only due times are stored at local midnight. */
+export function isDateOnlyDue(due: Date) {
+  return due.getHours() === 0 && due.getMinutes() === 0 && due.getSeconds() === 0;
+}
+
 export function formatDueLabel(iso: string | Date | null | undefined) {
   if (!iso) return "No due date";
   const due = typeof iso === "string" ? new Date(iso) : iso;
   const date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  const time = due.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (isDateOnlyDue(due)) return date;
+  const time = due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   return `${date} · ${time}`;
+}
+
+function to12Hour(hours24: number) {
+  const meridiem: (typeof MERIDIEMS)[number] = hours24 >= 12 ? "PM" : "AM";
+  const h12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  return { h12, meridiem };
+}
+
+function to24Hour(h12: number, meridiem: (typeof MERIDIEMS)[number]) {
+  if (meridiem === "AM") return h12 === 12 ? 0 : h12;
+  return h12 === 12 ? 12 : h12 + 12;
+}
+
+function snapMinute(m: number) {
+  return Math.min(55, Math.round(m / 5) * 5);
 }
 
 /** Finite Apple-style snap wheel — smooth, not infinite. */
@@ -47,12 +75,14 @@ function RollingColumn({
   items,
   value,
   onChange,
-  format = (n: number) => String(n).padStart(2, "0"),
+  format = (n: number | string) => String(n).padStart(2, "0"),
+  width = 44,
 }: {
-  items: number[];
-  value: number;
-  onChange: (n: number) => void;
-  format?: (n: number) => string;
+  items: (number | string)[];
+  value: number | string;
+  onChange: (n: number | string) => void;
+  format?: (n: number | string) => string;
+  width?: number;
 }) {
   const { colors } = useTheme();
   const ref = useRef<ScrollView>(null);
@@ -81,7 +111,7 @@ function RollingColumn({
   }
 
   return (
-    <View style={styles.wheel}>
+    <View style={[styles.wheel, { width }]}>
       <View
         pointerEvents="none"
         style={[
@@ -123,7 +153,7 @@ function RollingColumn({
           const faded = distance >= 2;
           return (
             <Pressable
-              key={n}
+              key={String(n)}
               onPress={() => {
                 onChange(n);
                 ref.current?.scrollTo({ y: items.indexOf(n) * ITEM_H, animated: true });
@@ -149,7 +179,10 @@ function RollingColumn({
   );
 }
 
-/** Compact glass month grid + rolling time — same design, smaller footprint. */
+/**
+ * Google Tasks–style due picker:
+ * calendar + optional time (date-only by default), with Today / Tomorrow / Next week chips.
+ */
 export function GlassDateTimePicker({
   value,
   onChange,
@@ -161,10 +194,22 @@ export function GlassDateTimePicker({
   const initial = value ?? new Date();
   const [cursor, setCursor] = useState(() => new Date(initial.getFullYear(), initial.getMonth(), 1));
   const selected = value;
-  const hour = selected?.getHours() ?? 9;
-  const minute = selected?.getMinutes() ?? 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const hasTime = Boolean(selected && !isDateOnlyDue(selected));
+  const [showTime, setShowTime] = useState(hasTime);
+
+  useEffect(() => {
+    setShowTime(Boolean(selected && !isDateOnlyDue(selected)));
+  }, [selected]);
+
+  const hour24 = selected && hasTime ? selected.getHours() : 9;
+  const minute = selected && hasTime ? snapMinute(selected.getMinutes()) : 0;
+  const { h12, meridiem } = to12Hour(hour24);
+
+  const today = startOfDay(new Date());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 7);
 
   const cells = useMemo(() => {
     const year = cursor.getFullYear();
@@ -178,43 +223,100 @@ export function GlassDateTimePicker({
     return out;
   }, [cursor]);
 
-  function pickDay(day: Date) {
-    const next = new Date(day);
-    next.setHours(hour, minute, 0, 0);
+  function applyDay(day: Date, withTime: boolean) {
+    const next = startOfDay(day);
+    if (withTime) {
+      next.setHours(hour24, minute, 0, 0);
+    }
     onChange(next);
   }
 
-  function setTime(h: number, m: number) {
-    const base = selected ? new Date(selected) : new Date();
-    base.setHours(h, m, 0, 0);
+  function pickDay(day: Date) {
+    applyDay(day, showTime);
+  }
+
+  function pickChip(day: Date) {
+    setCursor(new Date(day.getFullYear(), day.getMonth(), 1));
+    applyDay(day, showTime);
+  }
+
+  function setTime(h12Next: number, m: number, mer: (typeof MERIDIEMS)[number]) {
+    const base = selected ? startOfDay(selected) : startOfDay(new Date());
+    base.setHours(to24Hour(h12Next, mer), snapMinute(m), 0, 0);
     onChange(base);
   }
 
-  const monthLabel = cursor.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  function enableTime() {
+    const base = selected ? startOfDay(selected) : startOfDay(new Date());
+    base.setHours(9, 0, 0, 0);
+    setShowTime(true);
+    onChange(base);
+  }
+
+  function clearTime() {
+    if (!selected) {
+      setShowTime(false);
+      return;
+    }
+    setShowTime(false);
+    onChange(startOfDay(selected));
+  }
+
+  const monthLabel = cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const chips: { label: string; day: Date }[] = [
+    { label: "Today", day: today },
+    { label: "Tomorrow", day: tomorrow },
+    { label: "Next week", day: nextWeek },
+  ];
 
   return (
     <View style={[styles.wrap, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+      <View style={styles.chips}>
+        {chips.map(({ label, day }) => {
+          const active = selected ? sameDay(day, selected) : false;
+          return (
+            <Pressable
+              key={label}
+              onPress={() => pickChip(day)}
+              style={[
+                styles.chip,
+                {
+                  borderColor: active ? colors.accent : colors.glassBorder,
+                  backgroundColor: active ? colors.accentSoft : "transparent",
+                },
+              ]}
+            >
+              <Text style={{ color: active ? colors.accent : colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <View style={styles.monthRow}>
         <Pressable
           onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
           hitSlop={8}
+          style={styles.monthNav}
         >
-          <Feather name="chevron-left" size={16} color={colors.textSecondary} />
+          <Feather name="chevron-left" size={18} color={colors.textSecondary} />
         </Pressable>
-        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "500", textAlign: "center", flex: 1 }}>
+        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", textAlign: "center", flex: 1 }}>
           {monthLabel}
         </Text>
         <Pressable
           onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
           hitSlop={8}
+          style={styles.monthNav}
         >
-          <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+          <Feather name="chevron-right" size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
 
       <View style={styles.weekRow}>
-        {WEEKDAYS.map((d) => (
-          <Text key={d} style={[styles.cellLabel, { color: colors.textSecondary }]}>
+        {WEEKDAYS.map((d, i) => (
+          <Text key={`${d}-${i}`} style={[styles.cellLabel, { color: colors.textSecondary }]}>
             {d}
           </Text>
         ))}
@@ -227,52 +329,74 @@ export function GlassDateTimePicker({
           const isToday = sameDay(day, today);
           return (
             <Pressable
-              key={day.toISOString()}
+              key={`${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`}
               onPress={() => pickDay(day)}
-              style={[
-                styles.cell,
-                isSelected && { backgroundColor: colors.accent, borderRadius: 8 },
-                !isSelected &&
-                  isToday && {
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: colors.accent,
-                    borderRadius: 8,
-                  },
-              ]}
+              style={styles.cell}
             >
-              <Text
-                style={{
-                  color: isSelected ? "#0a0a0a" : colors.textPrimary,
-                  fontSize: 12,
-                  fontWeight: isSelected || isToday ? "600" : "400",
-                }}
+              <View
+                style={[
+                  styles.dayDisc,
+                  isSelected && { backgroundColor: colors.accent },
+                  !isSelected && isToday && { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.accent },
+                ]}
               >
-                {day.getDate()}
-              </Text>
+                <Text
+                  style={{
+                    color: isSelected ? "#0a0a0a" : colors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: isSelected || isToday ? "600" : "400",
+                  }}
+                >
+                  {day.getDate()}
+                </Text>
+              </View>
             </Pressable>
           );
         })}
       </View>
 
       <View style={[styles.timeBlock, { borderTopColor: colors.glassBorder }]}>
-        <Text style={{ color: colors.textSecondary, fontSize: 9, letterSpacing: 0.6, textAlign: "center" }}>
-          TIME
-        </Text>
-        <View
-          style={[
-            styles.wheels,
-            { borderColor: colors.glassBorder, backgroundColor: colors.surface1 },
-          ]}
-        >
-          <RollingColumn items={HOURS} value={hour} onChange={(h) => setTime(h, minute)} />
-          <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>:</Text>
-          <RollingColumn items={MINUTES} value={minute} onChange={(m) => setTime(hour, m)} />
-          {selected && (
-            <Pressable onPress={() => onChange(null)} style={{ marginLeft: 6 }} hitSlop={6}>
-              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Clear</Text>
-            </Pressable>
-          )}
-        </View>
+        {showTime ? (
+          <>
+            <View style={styles.timeHeader}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Time</Text>
+              <Pressable onPress={clearTime} hitSlop={8}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Remove time</Text>
+              </Pressable>
+            </View>
+            <View
+              style={[
+                styles.wheels,
+                { borderColor: colors.glassBorder, backgroundColor: colors.surface1 },
+              ]}
+            >
+              <RollingColumn
+                items={HOURS_12}
+                value={h12}
+                onChange={(h) => setTime(Number(h), minute, meridiem)}
+                format={(n) => String(n)}
+              />
+              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>:</Text>
+              <RollingColumn
+                items={MINUTES}
+                value={minute}
+                onChange={(m) => setTime(h12, Number(m), meridiem)}
+              />
+              <RollingColumn
+                items={[...MERIDIEMS]}
+                value={meridiem}
+                onChange={(mer) => setTime(h12, minute, mer as (typeof MERIDIEMS)[number])}
+                format={(n) => String(n)}
+                width={48}
+              />
+            </View>
+          </>
+        ) : (
+          <Pressable onPress={enableTime} style={styles.setTimeRow} hitSlop={6}>
+            <Feather name="clock" size={15} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Set time</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -282,10 +406,23 @@ const styles = StyleSheet.create({
   wrap: {
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 8,
-    gap: 4,
+    padding: 10,
+    gap: 6,
   },
-  monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 28 },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 2,
+  },
+  chip: {
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 32 },
+  monthNav: { padding: 4 },
   weekRow: { flexDirection: "row" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   cell: {
@@ -294,11 +431,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cellLabel: { width: "14.28%", textAlign: "center", fontSize: 10, marginBottom: 2 },
+  dayDisc: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cellLabel: { width: "14.28%", textAlign: "center", fontSize: 11, marginBottom: 2, fontWeight: "500" },
   timeBlock: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 6,
-    gap: 4,
+    paddingTop: 8,
+    gap: 6,
+  },
+  timeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 2,
+  },
+  setTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
   },
   wheels: {
     flexDirection: "row",

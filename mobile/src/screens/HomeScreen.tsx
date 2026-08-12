@@ -25,6 +25,7 @@ import { useAuth } from "../contexts/auth";
 import { useUnlock } from "../contexts/unlock";
 import { Fab } from "../components/Fab";
 import { PromptModal } from "../components/PromptModal";
+import { TaskFormModal, type TaskDraft } from "../components/TaskFormModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
@@ -59,7 +60,9 @@ export default function HomeScreen({ navigation }: any) {
 
   const [draft, setDraft] = useState("");
   const [captured, setCaptured] = useState(false);
-  const [prompt, setPrompt] = useState<"notebook" | "task" | null>(null);
+  const [prompt, setPrompt] = useState<"notebook" | null>(null);
+  const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null);
+  const [taskBusy, setTaskBusy] = useState(false);
   const captureRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
@@ -85,7 +88,7 @@ export default function HomeScreen({ navigation }: any) {
   });
 
   const capture = useMutation({
-    mutationFn: () => createQuickNote(draft.trim()),
+    mutationFn: () => createQuickNote({ content: draft.trim() }),
     onSuccess: () => {
       setDraft("");
       setCaptured(true);
@@ -217,7 +220,12 @@ export default function HomeScreen({ navigation }: any) {
       {/* recent pages */}
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CONTINUE WRITING</Text>
       {(recent ?? []).length === 0 && (
-        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Pages you edit will show up here.</Text>
+        <View style={styles.quietEmpty}>
+          <Feather name="edit-3" size={13} color={colors.textSecondary} />
+          <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
+            Pages you edit will show up here
+          </Text>
+        </View>
       )}
       {(recent ?? []).map((p, i) => {
         const sealed = p.section.isLocked && !unlock.sectionPasswords[p.section.id];
@@ -263,7 +271,12 @@ export default function HomeScreen({ navigation }: any) {
         {scheduled.length > 0 ? "TODAY" : "OPEN TASKS"}
       </Text>
       {list.length === 0 && (
-        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Nothing on your plate.</Text>
+        <View style={styles.quietEmpty}>
+          <Feather name="check" size={13} color={colors.accent} />
+          <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
+            All clear for now
+          </Text>
+        </View>
       )}
       {list.map(({ task, overdue: isOverdue }) => (
         <View key={task.id} style={styles.taskRow}>
@@ -283,27 +296,53 @@ export default function HomeScreen({ navigation }: any) {
     <Fab
       actions={[
         { key: "note", label: "Quick note", icon: "file-text", onPress: () => captureRef.current?.focus() },
-        { key: "task", label: "New task", icon: "check-square", onPress: () => setPrompt("task") },
+        {
+          key: "task",
+          label: "New task",
+          icon: "check-square",
+          onPress: () => setTaskDraft({ title: "", description: "", due: null, repeat: null }),
+        },
         { key: "notebook", label: "New notebook", icon: "book", onPress: () => setPrompt("notebook") },
       ]}
     />
 
+    <TaskFormModal
+      visible={taskDraft !== null}
+      title="New task"
+      submitLabel={taskBusy ? "Adding…" : "Add task"}
+      draft={taskDraft}
+      busy={taskBusy}
+      onClose={() => setTaskDraft(null)}
+      onChange={setTaskDraft}
+      onSubmit={async () => {
+        if (!taskDraft?.title.trim() || taskBusy) return;
+        setTaskBusy(true);
+        try {
+          await createTask({
+            title: taskDraft.title.trim(),
+            description: taskDraft.description.trim() || undefined,
+            dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
+            repeatRule: taskDraft.due ? taskDraft.repeat : null,
+          });
+          queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          setTaskDraft(null);
+        } finally {
+          setTaskBusy(false);
+        }
+      }}
+    />
+
     <PromptModal
-      visible={prompt !== null}
-      title={prompt === "task" ? "New task" : "New notebook"}
+      visible={prompt === "notebook"}
+      title="New notebook"
       placeholder="Title"
       submitLabel="Create"
       onClose={() => setPrompt(null)}
       onSubmit={async (value) => {
         try {
-          if (prompt === "task") {
-            await createTask({ title: value });
-            queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          } else {
-            const nb = await createNotebook(value);
-            queryClient.invalidateQueries({ queryKey: ["notebooks"] });
-            navigation.navigate("Notebook", { notebookId: nb.id, title: nb.title });
-          }
+          const nb = await createNotebook(value);
+          queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+          navigation.navigate("Notebook", { notebookId: nb.id, title: nb.title });
           return null;
         } catch (err: any) {
           return err.response?.data?.error ?? "Something went wrong";
@@ -345,6 +384,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sectionLabel: { fontSize: 11, letterSpacing: 1, marginTop: 24, marginBottom: 8 },
+  quietEmpty: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
   recentRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   recentFeatured: {
     paddingHorizontal: 12,

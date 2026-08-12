@@ -37,6 +37,13 @@ export function Fab({
     else setOpen(true);
   }
 
+  function runAction(action: FabAction) {
+    setOpen(false);
+    // Defer so the modal fully dismisses before navigation / another modal opens.
+    // Nested Pressable + Modal close was swallowing "New list" taps.
+    setTimeout(() => action.onPress(), 80);
+  }
+
   return (
     <>
       <Pressable
@@ -58,16 +65,14 @@ export function Fab({
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={[styles.menu, { bottom: resolvedBottom + size + 10, right: isNarrow ? 14 : 20 }]}>
+        <View style={styles.backdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel="Dismiss" />
+          <View
+            style={[styles.menu, { bottom: resolvedBottom + size + 10, right: isNarrow ? 14 : 20 }]}
+            pointerEvents="box-none"
+          >
             {actions.map((action) => (
-              <Pressable
-                key={action.key}
-                onPress={() => {
-                  setOpen(false);
-                  action.onPress();
-                }}
-              >
+              <Pressable key={action.key} onPress={() => runAction(action)}>
                 <GlassCard style={{ borderRadius: 999, maxWidth: menuMaxWidth }} contentStyle={styles.menuItem}>
                   <Text
                     style={{ color: colors.textPrimary, fontSize: 14, flexShrink: 1 }}
@@ -82,7 +87,7 @@ export function Fab({
               </Pressable>
             ))}
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </>
   );
