@@ -50,7 +50,7 @@ function DetailRow({
   );
 }
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }: any) {
   const { colors, theme, toggle } = useTheme();
   const { font, setFont } = useFont();
   const { user, logout } = useAuth();
@@ -113,6 +113,20 @@ export default function SettingsScreen() {
           </Text>
         )}
       </GlassCard>
+
+      <Pressable onPress={() => navigation.navigate("Devices")} style={{ marginTop: 10 }}>
+        <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }}>
+              Devices
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+              See where you’re signed in and sign out remotely
+            </Text>
+          </View>
+          <Text style={{ color: colors.textSecondary, fontSize: 18 }}>›</Text>
+        </GlassCard>
+      </Pressable>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>APPEARANCE</Text>
       <GlassCard contentStyle={[styles.card, styles.rowBetween]}>

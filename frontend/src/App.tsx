@@ -14,6 +14,8 @@ const PageEditor = lazy(() => import("./pages/PageEditor"));
 const Settings = lazy(() => import("./pages/Settings"));
 const QuickNotes = lazy(() => import("./pages/QuickNotes"));
 const Tasks = lazy(() => import("./pages/Tasks"));
+const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
+const RecycleBin = lazy(() => import("./pages/RecycleBin"));
 const GraphView = lazy(() => import("./pages/GraphView"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
@@ -101,6 +103,22 @@ export default function App() {
           element={
             <Suspense fallback={<RouteFallback />}>
               <Tasks />
+            </Suspense>
+          }
+        />
+        <Route
+          path="calendar"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <CalendarPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="recycle-bin"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <RecycleBin />
             </Suspense>
           }
         />

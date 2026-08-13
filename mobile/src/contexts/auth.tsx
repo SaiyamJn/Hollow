@@ -1,6 +1,12 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { AppState } from "react-native";
-import { api, setApiToken, login as apiLogin, register as apiRegister } from "../lib/api";
+import {
+  api,
+  setApiToken,
+  login as apiLogin,
+  register as apiRegister,
+  logoutAuthSession,
+} from "../lib/api";
 import { deleteSecureItem, getSecureItem, setSecureItem } from "../lib/secureStorage";
 import type { User } from "../lib/types";
 
@@ -11,7 +17,8 @@ interface AuthContextValue {
   user: User | null;
   login: (login: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, username: string) => Promise<void>;
-  logout: () => Promise<void>;
+  /** `localOnly` skips the server revoke (e.g. session already ended remotely). */
+  logout: (opts?: { localOnly?: boolean }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -140,7 +147,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistSession(token, nextUser);
   }
 
-  async function logout() {
+  async function logout(opts?: { localOnly?: boolean }) {
+    if (!opts?.localOnly) {
+      try {
+        await logoutAuthSession();
+      } catch {
+        // Still clear local session if the network/server call fails.
+      }
+    }
     await Promise.all([deleteSecureItem(TOKEN_KEY), deleteSecureItem(USER_KEY)]);
     setApiToken(null);
     setUser(null);

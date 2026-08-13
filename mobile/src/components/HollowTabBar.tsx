@@ -16,13 +16,15 @@ import { TAB_BAR_HEIGHT, useLayout } from "../lib/layout";
 const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Notebooks: "book",
   "Quick notes": "file-text",
+  Calendar: "calendar",
   Tasks: "check-square",
   Links: "share-2",
 };
 
 /** Capsule size — wider than tall so it always reads as a pill, never a square. */
 const PILL_H = 30;
-const PILL_W = 56;
+/** Slightly narrower so five visible tabs (incl. Calendar) still read as a pill. */
+const PILL_W = 48;
 
 type Slot = { x: number; width: number };
 

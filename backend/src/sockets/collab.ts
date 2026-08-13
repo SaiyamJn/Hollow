@@ -59,17 +59,30 @@ function schedulePersist(pageId: string, entry: DocEntry) {
 }
 
 export function registerCollab(io: Server) {
-  // Same JWT bearer flow as the REST middleware, but carried in the
-  // Socket.io handshake instead of an Authorization header.
+  // Same JWT + AuthSession check as REST, but carried in the Socket.io handshake.
   io.use((socket: AuthedSocket, next) => {
-    try {
-      const token = socket.handshake.auth?.token as string | undefined;
-      const payload = jwt.verify(token ?? "", process.env.JWT_SECRET!) as { userId: string };
-      socket.userId = payload.userId;
-      next();
-    } catch {
-      next(new Error("Unauthorized"));
-    }
+    void (async () => {
+      try {
+        const token = socket.handshake.auth?.token as string | undefined;
+        const payload = jwt.verify(token ?? "", process.env.JWT_SECRET!) as {
+          userId: string;
+          sid?: string;
+        };
+        if (!payload.userId || !payload.sid) {
+          next(new Error("Unauthorized"));
+          return;
+        }
+        const session = await prisma.authSession.findUnique({ where: { id: payload.sid } });
+        if (!session || session.userId !== payload.userId || session.revokedAt) {
+          next(new Error("Unauthorized"));
+          return;
+        }
+        socket.userId = payload.userId;
+        next();
+      } catch {
+        next(new Error("Unauthorized"));
+      }
+    })();
   });
 
   io.on("connection", (socket: AuthedSocket) => {

@@ -8,7 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { disconnectSocket } from "../lib/socket";
-import { fetchNotebooks, fetchTasks, openDailyNote } from "../lib/api";
+import { fetchNotebooks, fetchTasks, logoutAuthSession, openDailyNote } from "../lib/api";
 import { notifyDueTasks } from "../lib/notify";
 import { formatCombo, matchesCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { Sidebar } from "../components/Sidebar";
@@ -188,7 +188,12 @@ export default function AppShell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [navigate, location.pathname, queryClient, setFocusMode, setPaletteOpen, toggle, binds]);
 
-  function onLogout() {
+  async function onLogout() {
+    try {
+      await logoutAuthSession();
+    } catch {
+      // still clear local session
+    }
     clearUnlocks();
     disconnectSocket();
     logout();

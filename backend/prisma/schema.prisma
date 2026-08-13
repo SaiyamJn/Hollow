@@ -8,15 +8,33 @@ datasource db {
 }
 
 model User {
-  id           String      @id @default(uuid())
-  email        String      @unique
-  username     String      @unique
+  id           String        @id @default(uuid())
+  email        String        @unique
+  username     String        @unique
   passwordHash String
   name         String
   notebooks    Notebook[]
   quickNotes   QuickNote[]
   tasks        Task[]
-  createdAt    DateTime    @default(now())
+  authSessions AuthSession[]
+  createdAt    DateTime      @default(now())
+}
+
+/// One row per login — JWT carries sid so devices can be listed and revoked.
+model AuthSession {
+  id         String    @id @default(uuid())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  deviceName String
+  platform   String
+  client     String
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId])
+  @@index([userId, revokedAt])
 }
 
 model Notebook {

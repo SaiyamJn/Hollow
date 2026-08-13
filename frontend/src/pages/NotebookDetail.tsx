@@ -107,7 +107,9 @@ export default function NotebookDetail() {
       invalidate();
       setDialog(null);
       setDraft("");
-      navigate(`/notebooks/${notebookId}/sections/${vars.section.id}/pages/${page.id}`);
+      navigate(`/notebooks/${notebookId}/sections/${vars.section.id}/pages/${page.id}`, {
+        state: { autoFocus: true },
+      });
     },
   });
 

@@ -5,6 +5,16 @@ export interface User {
   name: string;
 }
 
+export interface AuthSession {
+  id: string;
+  deviceName: string;
+  platform: string;
+  client: string;
+  createdAt: string;
+  lastSeenAt: string;
+  current: boolean;
+}
+
 export interface PageMeta {
   id: string;
   title: string;
@@ -53,18 +63,26 @@ export interface Backlink {
   updatedAt: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface QuickNote {
   id: string;
   title?: string;
   content: string;
   kind?: "note" | "list";
-  items?: { id: string; text: string; done: boolean }[] | null;
+  items?: ChecklistItem[] | null;
   color: string;
   pinned: boolean;
   archived: boolean;
   deletedAt?: string | null;
   createdAt: string;
 }
+
+export type TaskRepeatRule = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface Task {
   id: string;

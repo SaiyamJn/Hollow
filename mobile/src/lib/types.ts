@@ -5,6 +5,16 @@ export interface User {
   name: string;
 }
 
+export interface AuthSession {
+  id: string;
+  deviceName: string;
+  platform: string;
+  client: string;
+  createdAt: string;
+  lastSeenAt: string;
+  current: boolean;
+}
+
 export interface PageMeta {
   id: string;
   title: string;

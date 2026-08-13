@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { DateTimePicker, formatDueLabel } from "../components/DateTimePicker";
+import { REPEAT_OPTIONS, formatRepeatLabel } from "../lib/taskRepeat";
+import type { TaskRepeatRule } from "../lib/types";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
@@ -59,7 +61,12 @@ function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => voi
   );
 }
 
-type Draft = { title: string; description: string; due: Date | null };
+type Draft = {
+  title: string;
+  description: string;
+  due: Date | null;
+  repeat: TaskRepeatRule | null;
+};
 type EditDraft = Draft & { id: string };
 
 export default function Tasks() {
@@ -106,7 +113,12 @@ export default function Tasks() {
       patch,
     }: {
       id: string;
-      patch: { title: string; description: string; dueAt: string | null };
+      patch: {
+        title: string;
+        description: string;
+        dueAt: string | null;
+        repeatRule?: TaskRepeatRule | null;
+      };
     }) => updateTask(id, patch),
     onSuccess: () => {
       invalidate();
@@ -116,7 +128,7 @@ export default function Tasks() {
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", due: null });
+    setDraft({ title: title.trim(), description: "", due: null, repeat: null });
     create.reset();
   }
 
@@ -130,6 +142,7 @@ export default function Tasks() {
       title: draft.title.trim(),
       description: draft.description.trim() || undefined,
       dueAt: draft.due ? draft.due.toISOString() : undefined,
+      repeatRule: draft.due ? draft.repeat : null,
     });
   }
 
@@ -141,6 +154,7 @@ export default function Tasks() {
         title: editing.title.trim(),
         description: editing.description.trim(),
         dueAt: editing.due ? editing.due.toISOString() : null,
+        repeatRule: editing.due ? editing.repeat : null,
       },
     });
   }
@@ -198,6 +212,7 @@ export default function Tasks() {
                       title: task.title,
                       description: task.description ?? "",
                       due: task.dueAt ? new Date(task.dueAt) : null,
+                      repeat: task.repeatRule ?? null,
                     });
                   }}
                   onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
@@ -233,6 +248,7 @@ export default function Tasks() {
                         title: task.title,
                         description: task.description ?? "",
                         due: task.dueAt ? new Date(task.dueAt) : null,
+                        repeat: task.repeatRule ?? null,
                       });
                     }}
                     onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
@@ -273,7 +289,28 @@ export default function Tasks() {
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
-              <DateTimePicker value={draft.due} onChange={(due) => setDraft({ ...draft, due })} />
+              <DateTimePicker
+                value={draft.due}
+                onChange={(due) => setDraft({ ...draft, due, repeat: due ? draft.repeat : null })}
+              />
+              {draft.due && (
+                <select
+                  className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent"
+                  value={draft.repeat ?? ""}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      repeat: (e.target.value || null) as TaskRepeatRule | null,
+                    })
+                  }
+                >
+                  {REPEAT_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.value ?? ""}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               {createError && <p className="text-sm text-danger text-center">{createError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
@@ -306,7 +343,6 @@ export default function Tasks() {
           {editing && (
             <div className="space-y-3">
               <Input
-                autoFocus
                 placeholder="Title"
                 value={editing.title}
                 onChange={(e) => setEditing({ ...editing, title: e.target.value })}
@@ -319,7 +355,28 @@ export default function Tasks() {
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               />
-              <DateTimePicker value={editing.due} onChange={(due) => setEditing({ ...editing, due })} />
+              <DateTimePicker
+                value={editing.due}
+                onChange={(due) => setEditing({ ...editing, due, repeat: due ? editing.repeat : null })}
+              />
+              {editing.due && (
+                <select
+                  className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent"
+                  value={editing.repeat ?? ""}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      repeat: (e.target.value || null) as TaskRepeatRule | null,
+                    })
+                  }
+                >
+                  {REPEAT_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.value ?? ""}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               {editError && <p className="text-sm text-danger text-center">{editError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
@@ -390,7 +447,10 @@ function TaskRow({
             <span className="block text-xs text-secondary truncate mt-0.5">{task.description}</span>
           ) : null}
           {task.dueAt ? (
-            <span className="block text-xs text-secondary mt-0.5">{formatDueLabel(task.dueAt)}</span>
+            <span className="block text-xs text-secondary mt-0.5">
+              {formatDueLabel(task.dueAt)}
+              {task.repeatRule ? ` · ${formatRepeatLabel(task.repeatRule)}` : ""}
+            </span>
           ) : null}
         </button>
         {subtasks.length > 0 && (

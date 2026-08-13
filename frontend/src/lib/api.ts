@@ -2,9 +2,12 @@ import axios from "axios";
 import { useAuthStore } from "../stores/auth";
 import { useAdminStore } from "../stores/admin";
 import { useUnlockStore } from "../stores/unlock";
+import { deviceAuthMeta } from "./deviceInfo";
 import type {
   AdminStats,
+  AuthSession,
   Backlink,
+  ChecklistItem,
   DailyNote,
   GraphData,
   Notebook,
@@ -15,6 +18,7 @@ import type {
   Section,
   Tag,
   Task,
+  TaskRepeatRule,
   User,
 } from "./types";
 
@@ -72,14 +76,38 @@ export async function register(email: string, password: string, name: string, us
     password,
     name,
     username,
+    ...deviceAuthMeta(),
   });
   return data;
 }
 
 /** `login` may be email or username. */
 export async function login(login: string, password: string) {
-  const { data } = await api.post<{ token: string; user: User }>("/auth/login", { login, password });
+  const { data } = await api.post<{ token: string; user: User }>("/auth/login", {
+    login,
+    password,
+    ...deviceAuthMeta(),
+  });
   return data;
+}
+
+export async function fetchAuthSessions() {
+  const { data } = await api.get<{ sessions: AuthSession[] }>("/auth/sessions");
+  return data.sessions;
+}
+
+export async function revokeAuthSession(id: string) {
+  const { data } = await api.delete<{ ok: boolean; current: boolean }>(`/auth/sessions/${id}`);
+  return data;
+}
+
+export async function revokeOtherAuthSessions() {
+  const { data } = await api.post<{ ok: boolean; revoked: number }>("/auth/sessions/revoke-others");
+  return data;
+}
+
+export async function logoutAuthSession() {
+  await api.post("/auth/logout");
 }
 
 // ---- notebooks / sections ----
@@ -197,28 +225,47 @@ export async function fetchGraph(notebookId: string) {
 }
 
 // ---- quick notes ----
-export async function fetchQuickNotes(includeArchived: boolean) {
+export async function fetchQuickNotes(includeArchived: boolean, trashed = false) {
   const { data } = await api.get<QuickNote[]>("/quick-notes", {
-    params: includeArchived ? { archived: "true" } : {},
+    params: {
+      ...(includeArchived ? { archived: "true" } : {}),
+      ...(trashed ? { trashed: "true" } : {}),
+    },
   });
   return data;
 }
 
-export async function createQuickNote(content: string, color?: string) {
-  const { data } = await api.post<QuickNote>("/quick-notes", { content, ...(color ? { color } : {}) });
+export async function createQuickNote(input: {
+  title?: string;
+  content?: string;
+  color?: string;
+  kind?: "note" | "list";
+  items?: ChecklistItem[];
+}) {
+  const { data } = await api.post<QuickNote>("/quick-notes", input);
   return data;
 }
 
 export async function updateQuickNote(
   id: string,
-  patch: Partial<Pick<QuickNote, "content" | "color" | "pinned" | "archived">>
+  patch: Partial<Pick<QuickNote, "title" | "content" | "color" | "pinned" | "archived" | "items">>
 ) {
   const { data } = await api.patch<QuickNote>(`/quick-notes/${id}`, patch);
   return data;
 }
 
+/** Soft-delete into the recycle bin (kept 7 days). */
 export async function deleteQuickNote(id: string) {
   await api.delete(`/quick-notes/${id}`);
+}
+
+export async function deleteQuickNotePermanent(id: string) {
+  await api.delete(`/quick-notes/${id}`, { params: { permanent: "true" } });
+}
+
+export async function restoreQuickNote(id: string) {
+  const { data } = await api.post<QuickNote>(`/quick-notes/${id}/restore`);
+  return data;
 }
 
 // ---- tasks ----
@@ -233,6 +280,7 @@ export async function createTask(input: {
   dueAt?: string;
   parentTaskId?: string;
   starred?: boolean;
+  repeatRule?: TaskRepeatRule | null;
 }) {
   const { data } = await api.post<Task>("/tasks", input);
   return data;
@@ -246,6 +294,7 @@ export async function updateTask(
     done?: boolean;
     starred?: boolean;
     dueAt?: string | null;
+    repeatRule?: TaskRepeatRule | null;
   }
 ) {
   const { data } = await api.patch<Task>(`/tasks/${id}`, patch);

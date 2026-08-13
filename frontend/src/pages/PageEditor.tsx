@@ -1,5 +1,5 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -173,6 +173,8 @@ function Editor({
 }) {
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const shouldAutoFocus = Boolean((location.state as { autoFocus?: boolean } | null)?.autoFocus);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const focusMode = useUiStore((s) => s.focusMode);
@@ -271,10 +273,11 @@ function Editor({
         if (saved?.blockId && editor.document.some((b) => b.id === saved.blockId)) {
           editor.setTextCursorPosition(saved.blockId, saved.placement ?? "end");
         }
-        editor.focus();
+        // Only open the keyboard/caret focus for newly created pages.
+        if (shouldAutoFocus) editor.focus();
       } catch {
         try {
-          editor.focus();
+          if (shouldAutoFocus) editor.focus();
         } catch {
           // Editor surface may not be mounted yet.
         }

@@ -182,7 +182,7 @@ function QuickCapture() {
   const [captured, setCaptured] = useState(false);
 
   const capture = useMutation({
-    mutationFn: () => createQuickNote(draft.trim()),
+    mutationFn: () => createQuickNote({ content: draft.trim() }),
     onSuccess: () => {
       setDraft("");
       setCaptured(true);

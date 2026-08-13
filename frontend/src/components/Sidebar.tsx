@@ -1,6 +1,6 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Book, CheckSquare, Home, StickyNote, Waypoints } from "lucide-react";
+import { Book, CalendarDays, CheckSquare, Home, StickyNote, Waypoints } from "lucide-react";
 import clsx from "clsx";
 import { fetchNotebooks } from "../lib/api";
 import { useUiStore } from "../stores/ui";
@@ -11,12 +11,13 @@ const items: {
   to: string;
   label: string;
   icon: typeof Home;
-  bind: KeybindId;
+  bind?: KeybindId;
   end?: boolean;
 }[] = [
   { key: "home", to: "/", label: "Home", icon: Home, bind: "home", end: true },
   { key: "notebooks", to: "/notebooks", label: "Notebooks", icon: Book, bind: "notebooks" },
   { key: "quick", to: "/quick-notes", label: "Quick notes", icon: StickyNote, bind: "quickNotes" },
+  { key: "calendar", to: "/calendar", label: "Calendar", icon: CalendarDays },
   { key: "tasks", to: "/tasks", label: "Tasks", icon: CheckSquare, bind: "tasks" },
 ];
 
@@ -47,11 +48,11 @@ export function Sidebar() {
           key={key}
           to={to}
           end={end}
-          title={`${label} (${formatCombo(binds[bind])})`}
+          title={bind ? `${label} (${formatCombo(binds[bind])})` : label}
           className={({ isActive }) => {
             const active = key === "notebooks" ? onNotebooks : isActive;
             return clsx(
-              "flex h-[34px] min-w-[52px] px-3.5 items-center justify-center rounded-full transition-all duration-200",
+              "flex h-[34px] min-w-[48px] px-3 items-center justify-center rounded-full transition-all duration-200",
               active
                 ? "bg-accent text-surface-0 shadow-sm"
                 : "text-secondary hover:text-primary hover:bg-surface-2/80"

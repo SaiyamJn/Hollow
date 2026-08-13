@@ -13,8 +13,8 @@ export function useLayout() {
   const isShort = height < 700;
   const screenPad = isNarrow ? 12 : 16;
   const tabBarBottom = Math.max(insets.bottom, 10) + (isShort ? 8 : TAB_BAR_LIFT);
-  // Compact pill, but wide enough that all 4 icons stay visible.
-  const tabBarMarginH = Math.min(40, Math.max(16, (width - 300) / 2));
+  // Compact pill, wide enough that tab icons (incl. Calendar) stay visible.
+  const tabBarMarginH = Math.min(32, Math.max(10, (width - 340) / 2));
 
   return {
     height,

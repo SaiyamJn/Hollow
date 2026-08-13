@@ -7,7 +7,13 @@ import { useFont } from "../theme/FontProvider";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { disconnectSocket } from "../lib/socket";
-import { fetchHealth } from "../lib/api";
+import {
+  fetchAuthSessions,
+  fetchHealth,
+  logoutAuthSession,
+  revokeAuthSession,
+  revokeOtherAuthSessions,
+} from "../lib/api";
 import {
   APP_BUILD,
   APP_COPYRIGHT,
@@ -99,6 +105,78 @@ export default function Settings() {
     retry: false,
     staleTime: 60_000,
   });
+
+  const {
+    data: sessions,
+    refetch: refetchSessions,
+    isFetching: sessionsLoading,
+    error: sessionsError,
+  } = useQuery({
+    queryKey: ["auth-sessions"],
+    queryFn: fetchAuthSessions,
+    staleTime: 15_000,
+  });
+
+  async function signOutLocal() {
+    try {
+      await logoutAuthSession();
+    } catch {
+      // ignore — still clear local state
+    }
+    clearUnlocks();
+    disconnectSocket();
+    logout();
+    navigate("/login", { replace: true });
+  }
+
+  async function onRevokeSession(id: string, current: boolean) {
+    const label = current ? "Log out of this browser?" : "Sign out this device?";
+    if (!window.confirm(label)) return;
+    try {
+      const res = await revokeAuthSession(id);
+      if (res.current) {
+        clearUnlocks();
+        disconnectSocket();
+        logout();
+        navigate("/login", { replace: true });
+        return;
+      }
+      void refetchSessions();
+    } catch (err: any) {
+      window.alert(err?.response?.data?.error ?? "Couldn't sign out that device.");
+    }
+  }
+
+  async function onRevokeOthers() {
+    if (!window.confirm("Sign out every other device? This browser stays signed in.")) return;
+    try {
+      const res = await revokeOtherAuthSessions();
+      void refetchSessions();
+      window.alert(
+        res.revoked === 0
+          ? "No other devices were signed in."
+          : `Signed out ${res.revoked} other device${res.revoked === 1 ? "" : "s"}.`
+      );
+    } catch (err: any) {
+      window.alert(err?.response?.data?.error ?? "Couldn't sign out other devices.");
+    }
+  }
+
+  function relativeTime(iso: string) {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (Number.isNaN(ms) || ms < 0) return "just now";
+    const mins = Math.floor(ms / 60_000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 48) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 14) return `${days}d ago`;
+    return new Date(iso).toLocaleDateString();
+  }
+
+  const sessionList = sessions ?? [];
+  const otherCount = sessionList.filter((s) => !s.current).length;
 
   return (
     <div className="max-w-lg mx-auto px-7 py-10 space-y-4">
@@ -220,22 +298,60 @@ export default function Settings() {
         {bindError && <p className="text-sm text-danger">{bindError}</p>}
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3 text-center">
-        <h2 className="text-sm font-medium text-primary">Session</h2>
-        <p className="text-sm text-secondary">
-          Your login token is kept in localStorage — acceptable for this self-hosted project, but not suitable
-          for a high-security production deployment without hardening.
+      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3">
+        <div className="text-center">
+          <h2 className="text-sm font-medium text-primary">Devices</h2>
+          <p className="text-sm text-secondary mt-0.5">
+            Where this account is signed in. Sign out remotely anytime.
+          </p>
+        </div>
+        {sessionsError ? (
+          <p className="text-sm text-danger text-center">
+            Couldn&apos;t load devices. Sign in again after updating the server.
+          </p>
+        ) : sessionsLoading && !sessions ? (
+          <p className="text-sm text-secondary text-center">Loading…</p>
+        ) : (
+          <ul className="divide-y divide-border text-left">
+            {sessionList.map((s) => (
+              <li key={s.id} className="flex items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-primary truncate">{s.deviceName}</span>
+                    {s.current && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-accent bg-accent-soft px-1.5 py-0.5 rounded-full">
+                        This device
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-secondary mt-0.5">
+                    Active {relativeTime(s.lastSeenAt)} · signed in {relativeTime(s.createdAt)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void onRevokeSession(s.id, s.current)}
+                  className="shrink-0 text-sm text-danger font-medium hover:underline"
+                >
+                  {s.current ? "Log out" : "Sign out"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-secondary text-center">
+          {sessionList.length} device{sessionList.length === 1 ? "" : "s"} signed in
         </p>
-        <Button
-          onClick={() => {
-            clearUnlocks();
-            disconnectSocket();
-            logout();
-            navigate("/login", { replace: true });
-          }}
-        >
-          Log out
-        </Button>
+        {otherCount > 0 && (
+          <div className="flex justify-center">
+            <Button onClick={() => void onRevokeOthers()}>
+              Sign out {otherCount} other device{otherCount === 1 ? "" : "s"}
+            </Button>
+          </div>
+        )}
+        <div className="flex justify-center pt-1">
+          <Button onClick={() => void signOutLocal()}>Log out of this browser</Button>
+        </div>
       </section>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-4">

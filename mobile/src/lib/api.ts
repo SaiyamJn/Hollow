@@ -3,7 +3,21 @@ import NetInfo from "@react-native-community/netinfo";
 import Constants from "expo-constants";
 import axios, { AxiosError } from "axios";
 import { Platform } from "react-native";
-import type { Backlink, ChecklistItem, DailyNote, Notebook, Page, PageMeta, QuickNote, RecentPage, Section, Task, User } from "./types";
+import { deviceAuthMeta } from "./deviceInfo";
+import type {
+  AuthSession,
+  Backlink,
+  ChecklistItem,
+  DailyNote,
+  Notebook,
+  Page,
+  PageMeta,
+  QuickNote,
+  RecentPage,
+  Section,
+  Task,
+  User,
+} from "./types";
 
 /** Expo tunnel / ngrok hosts — Metro only; never a Hollow API host. */
 function isTunnelOrPublicDevHost(host: string): boolean {
@@ -168,7 +182,11 @@ export async function fetchHealth() {
 // ---- auth ----
 /** `login` may be email or username. */
 export async function login(login: string, password: string) {
-  const { data } = await api.post<{ token: string; user: User }>("/auth/login", { login, password });
+  const { data } = await api.post<{ token: string; user: User }>("/auth/login", {
+    login,
+    password,
+    ...deviceAuthMeta(),
+  });
   return data;
 }
 
@@ -178,8 +196,28 @@ export async function register(email: string, password: string, name: string, us
     password,
     name,
     username,
+    ...deviceAuthMeta(),
   });
   return data;
+}
+
+export async function fetchAuthSessions() {
+  const { data } = await api.get<{ sessions: AuthSession[] }>("/auth/sessions");
+  return data.sessions;
+}
+
+export async function revokeAuthSession(id: string) {
+  const { data } = await api.delete<{ ok: boolean; current: boolean }>(`/auth/sessions/${id}`);
+  return data;
+}
+
+export async function revokeOtherAuthSessions() {
+  const { data } = await api.post<{ ok: boolean; revoked: number }>("/auth/sessions/revoke-others");
+  return data;
+}
+
+export async function logoutAuthSession() {
+  await api.post("/auth/logout");
 }
 
 // ---- notebooks / sections / pages ----
