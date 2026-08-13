@@ -7,9 +7,15 @@ export function datedTasks(tasks: Task[] | undefined): CalendarTask[] {
   if (!tasks?.length) return [];
   const out: CalendarTask[] = [];
   for (const t of tasks) {
-    if (t.dueAt) out.push({ ...t, due: new Date(t.dueAt) });
+    if (t.dueAt) {
+      const due = new Date(t.dueAt);
+      if (!Number.isNaN(due.getTime())) out.push({ ...t, due });
+    }
     for (const s of t.subtasks ?? []) {
-      if (s.dueAt) out.push({ ...s, due: new Date(s.dueAt) });
+      if (s.dueAt) {
+        const due = new Date(s.dueAt);
+        if (!Number.isNaN(due.getTime())) out.push({ ...s, due });
+      }
     }
   }
   return out;

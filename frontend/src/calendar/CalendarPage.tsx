@@ -51,7 +51,7 @@ export default function CalendarPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
@@ -60,6 +60,7 @@ export default function CalendarPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const dated = useMemo(() => datedTasks(tasks), [tasks]);
+  // One occurrence per real due date; Tasks panel hides future repeats until that day.
   const byDay = useMemo(() => groupByDay(dated), [dated]);
   const dayTasks = tasksOnDay(byDay, selected);
   const cells = useMemo(() => monthGrid(cursor), [cursor]);
@@ -109,7 +110,7 @@ export default function CalendarPage() {
     const t = startOfDay(new Date());
     setCursor(startOfMonth(t));
     setSelected(t);
-    setExpanded(true);
+    setExpanded(false);
   }
 
   function selectDay(d: Date) {
@@ -139,6 +140,20 @@ export default function CalendarPage() {
     if (next === dueAt) return;
     update.mutate({ id, patch: { dueAt: next } });
     selectDay(day);
+  }
+
+  function beginEdit(t: CalendarTask) {
+    setEditing({
+      id: t.id,
+      title: t.title,
+      description: t.description ?? "",
+      due: t.due,
+      repeat: t.repeatRule ?? null,
+    });
+  }
+
+  function toggleTask(t: CalendarTask) {
+    update.mutate({ id: t.id, patch: { done: !t.done } });
   }
 
   const weekLabels = weekDays(today).map((d) => d.toLocaleDateString(undefined, { weekday: "narrow" }));
@@ -185,7 +200,7 @@ export default function CalendarPage() {
                   onClick={() => {
                     setView(v.id);
                     setMenuOpen(false);
-                    if (v.id === "schedule") setExpanded(true);
+                    if (v.id === "schedule") setExpanded(false);
                   }}
                   className={clsx(
                     "w-full text-left px-3 py-2 rounded-lg text-sm",
@@ -212,11 +227,11 @@ export default function CalendarPage() {
               ))}
             </div>
             <div
-              className="overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              className="overflow-hidden transition-[max-height] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]"
               style={{ maxHeight: expanded ? 320 : 56 }}
             >
               <div
-                className="transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className="transition-transform duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={{ transform: expanded ? "translateY(0)" : `translateY(-${selectedWeekIndex * 52}px)` }}
               >
                 {Array.from({ length: 6 }, (_, row) => (
@@ -240,13 +255,13 @@ export default function CalendarPage() {
                           onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
                           onDrop={(e) => onDropDay(e, day)}
                           className={clsx(
-                            "flex flex-col items-center pt-0.5 rounded-lg",
-                            isDrop && "bg-accent-soft"
+                            "flex flex-col items-center pt-0.5",
+                            isDrop && "bg-accent-soft/60 rounded-xl"
                           )}
                         >
                           <span
                             className={clsx(
-                              "inline-flex h-[30px] w-[30px] items-center justify-center rounded-full text-sm",
+                              "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm overflow-hidden",
                               isSelected && "bg-accent text-surface-0 font-semibold",
                               !isSelected && isToday && "border-[1.5px] border-accent font-semibold text-primary",
                               !isSelected && !isToday && inMonth && "text-primary",
@@ -255,7 +270,7 @@ export default function CalendarPage() {
                           >
                             {day.getDate()}
                           </span>
-                          <div className="mt-1 w-[70%] space-y-0.5 min-h-[10px]">
+                          <div className="mt-1 w-[70%] max-h-3 space-y-0.5 overflow-hidden">
                             {open.slice(0, 3).map((t) => (
                               <div
                                 key={t.id}
@@ -279,7 +294,7 @@ export default function CalendarPage() {
               <span className="block w-9 h-1 rounded-full bg-border" />
               <ChevronDown
                 size={16}
-                className={clsx("transition-transform duration-300", expanded && "rotate-180")}
+                className={clsx("transition-transform duration-350", expanded ? "rotate-180" : "rotate-0")}
               />
             </button>
           </div>
@@ -294,21 +309,18 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          <div
-            className="space-y-2 min-h-[180px]"
-            onScroll={(e) => {
-              const y = (e.target as HTMLDivElement).scrollTop;
-              if (y > 24 && expanded) setExpanded(false);
-              if (y < 8 && !expanded) setExpanded(true);
-            }}
-          >
+          <div className="space-y-2 min-h-[180px]">
             {dayTasks.length === 0 ? (
               <button
                 type="button"
                 onClick={() => openCreate(selected)}
-                className="w-full py-12 text-sm text-secondary hover:text-accent"
+                className="w-full py-10 flex flex-col items-center gap-3 text-secondary hover:text-accent"
               >
-                No tasks · click to add
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent text-xl">
+                  ✦
+                </span>
+                <span className="text-sm font-semibold text-primary">A clean slate</span>
+                <span className="text-xs">Nothing due this day — click to add a task.</span>
               </button>
             ) : (
               dayTasks.map((t) => (
@@ -316,16 +328,8 @@ export default function CalendarPage() {
                   key={t.id}
                   task={t}
                   onDragStart={onDragStart}
-                  onToggle={() => update.mutate({ id: t.id, patch: { done: !t.done } })}
-                  onEdit={() =>
-                    setEditing({
-                      id: t.id,
-                      title: t.title,
-                      description: t.description ?? "",
-                      due: t.due,
-                      repeat: t.repeatRule ?? null,
-                    })
-                  }
+                  onToggle={() => toggleTask(t)}
+                  onEdit={() => beginEdit(t)}
                 />
               ))
             )}
@@ -381,15 +385,12 @@ export default function CalendarPage() {
                     onDragStart={(e) => onDragStart(e, t)}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setEditing({
-                        id: t.id,
-                        title: t.title,
-                        description: t.description ?? "",
-                        due: t.due,
-                        repeat: t.repeatRule ?? null,
-                      });
+                      beginEdit(t);
                     }}
-                    className={clsx("text-sm py-1 truncate cursor-grab", t.done && "line-through text-secondary")}
+                    className={clsx(
+                      "text-sm py-1 truncate cursor-grab",
+                      t.done && "line-through text-secondary"
+                    )}
                   >
                     {t.title}
                   </div>
@@ -414,16 +415,8 @@ export default function CalendarPage() {
                 key={t.id}
                 task={t}
                 onDragStart={onDragStart}
-                onToggle={() => update.mutate({ id: t.id, patch: { done: !t.done } })}
-                onEdit={() =>
-                  setEditing({
-                    id: t.id,
-                    title: t.title,
-                    description: t.description ?? "",
-                    due: t.due,
-                    repeat: t.repeatRule ?? null,
-                  })
-                }
+                onToggle={() => toggleTask(t)}
+                onEdit={() => beginEdit(t)}
               />
             ))
           )}
@@ -456,16 +449,8 @@ export default function CalendarPage() {
                         key={t.id}
                         task={t}
                         onDragStart={onDragStart}
-                        onToggle={() => update.mutate({ id: t.id, patch: { done: !t.done } })}
-                        onEdit={() =>
-                          setEditing({
-                            id: t.id,
-                            title: t.title,
-                            description: t.description ?? "",
-                            due: t.due,
-                            repeat: t.repeatRule ?? null,
-                          })
-                        }
+                        onToggle={() => toggleTask(t)}
+                        onEdit={() => beginEdit(t)}
                       />
                     ))}
                   </div>
@@ -600,7 +585,7 @@ function TaskRow({
     <div
       draggable
       onDragStart={(e) => onDragStart(e, task)}
-      className="flex items-center gap-3 rounded-xl border border-border glass px-3 py-2.5 cursor-grab active:cursor-grabbing"
+      className="flex items-center gap-3 rounded-xl border border-border glass px-3 py-2.5 cursor-grab active:cursor-grabbing transition-colors duration-200"
     >
       <button
         type="button"

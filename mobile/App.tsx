@@ -236,6 +236,8 @@ function Root() {
           headerShadowVisible: false,
           headerTitleAlign: "center",
           headerTitleStyle: fontFamily ? { fontFamily } : undefined,
+          animation: "slide_from_right",
+          animationDuration: 320,
         }}
       >
         {status === "signedIn" ? (

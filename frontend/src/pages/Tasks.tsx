@@ -13,13 +13,19 @@ import type { TaskRepeatRule } from "../lib/types";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
+/** Next occurrence of a repeat stays off the Tasks list until its day starts. */
+function isDeferredRepeat(task: Task, endOfToday: Date) {
+  if (task.done || !task.repeatRule || !task.dueAt) return false;
+  return new Date(task.dueAt) >= endOfToday;
+}
+
 function groupOpenTasks(tasks: Task[]): [GroupName, Task[]][] {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const open = tasks.filter((t) => !t.done);
+  const open = tasks.filter((t) => !t.done && !isDeferredRepeat(t, endOfToday));
   const starred = open.filter((t) => t.starred);
   const rest = open.filter((t) => !t.starred);
 

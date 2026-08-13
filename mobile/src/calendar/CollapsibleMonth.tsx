@@ -70,8 +70,9 @@ export function CollapsibleMonth({
     Animated.spring(anim, {
       toValue: expanded ? 1 : 0,
       useNativeDriver: false,
-      friction: 9,
-      tension: 68,
+      friction: 12,
+      tension: 48,
+      overshootClamping: true,
     }).start();
   }, [expanded, anim]);
 
@@ -140,11 +141,17 @@ export function CollapsibleMonth({
                     <View
                       style={[
                         styles.dayBubble,
-                        isSelected && { backgroundColor: colors.accent },
-                        !isSelected && isToday && {
-                          borderWidth: 1.5,
-                          borderColor: colors.accent,
+                        isSelected && {
+                          backgroundColor: colors.accent,
+                          borderWidth: 0,
                         },
+                        // Keep today's ring even when another day is selected.
+                        isToday &&
+                          !isSelected && {
+                            backgroundColor: "transparent",
+                            borderWidth: 1.5,
+                            borderColor: colors.accent,
+                          },
                       ]}
                     >
                       <Text
@@ -170,14 +177,11 @@ export function CollapsibleMonth({
                             styles.bar,
                             {
                               backgroundColor: t.starred ? colors.accent : colors.textSecondary,
-                              opacity: t.starred ? 0.95 : 0.45,
+                              opacity: t.starred ? 0.95 : 0.5,
                             },
                           ]}
                         />
                       ))}
-                      {open.length > 3 && (
-                        <Text style={{ color: colors.textSecondary, fontSize: 8 }}>+{open.length - 3}</Text>
-                      )}
                     </View>
                   </Pressable>
                 );
@@ -196,7 +200,7 @@ export function CollapsibleMonth({
       >
         <View style={[styles.handlePill, { backgroundColor: colors.border }]} />
         <Animated.View style={{ transform: [{ rotate: handleRot }] }}>
-          <Feather name="chevron-up" size={16} color={colors.textSecondary} />
+          <Feather name="chevron-down" size={16} color={colors.textSecondary} />
         </Animated.View>
       </Pressable>
     </View>
@@ -246,23 +250,25 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   dayBubble: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
   bars: {
-    marginTop: 3,
-    width: "72%",
+    marginTop: 2,
+    width: "70%",
+    maxHeight: 12,
     gap: 2,
     alignItems: "center",
-    minHeight: 10,
+    overflow: "hidden",
   },
   bar: {
     width: "100%",
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: 999,
   },
   handle: {
     height: HANDLE_H,
@@ -273,7 +279,7 @@ const styles = StyleSheet.create({
   handlePill: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: 999,
     opacity: 0.7,
   },
 });

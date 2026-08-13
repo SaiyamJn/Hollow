@@ -25,13 +25,19 @@ import { useLayout } from "../lib/layout";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date" | "Completed";
 
+/** Next occurrence of a repeat stays off the Tasks list until its day starts. */
+function isDeferredRepeat(task: Task, endOfToday: Date) {
+  if (task.done || !task.repeatRule || !task.dueAt) return false;
+  return new Date(task.dueAt) >= endOfToday;
+}
+
 function groupTasks(tasks: Task[], showCompleted: boolean) {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const open = tasks.filter((t) => !t.done);
+  const open = tasks.filter((t) => !t.done && !isDeferredRepeat(t, endOfToday));
   const completed = tasks.filter((t) => t.done);
 
   const starred = open.filter((t) => t.starred);
@@ -164,7 +170,13 @@ export default function TasksScreen() {
         : colors.textSecondary;
 
   const sections = groupTasks(tasks ?? [], showCompleted);
-  const openCount = (tasks ?? []).filter((t) => !t.done).length;
+  const endOfTodayForCount = (() => {
+    const s = new Date();
+    s.setHours(0, 0, 0, 0);
+    s.setDate(s.getDate() + 1);
+    return s;
+  })();
+  const openCount = (tasks ?? []).filter((t) => !t.done && !isDeferredRepeat(t, endOfTodayForCount)).length;
   const completedCount = (tasks ?? []).filter((t) => t.done).length;
   const allDone = (tasks?.length ?? 0) > 0 && openCount === 0;
   const noneYet = (tasks?.length ?? 0) === 0;

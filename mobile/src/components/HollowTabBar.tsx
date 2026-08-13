@@ -55,10 +55,11 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
       Animated.spring(pillX, {
         toValue: targetX,
         useNativeDriver: true,
-        friction: 8,
-        tension: 140,
+        friction: 10,
+        tension: 90,
+        overshootClamping: false,
       }),
-      Animated.timing(pillOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+      Animated.timing(pillOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
   }, [focusedSlot?.x, focusedSlot?.width, focusedSlot, pillX, pillOpacity]);
 

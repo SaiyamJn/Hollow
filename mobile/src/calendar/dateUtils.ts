@@ -84,7 +84,7 @@ export function formatTime(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   if (h === 0 && m === 0) return "";
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 /** 6×7 month grid (Sunday-start), including leading/trailing days. */

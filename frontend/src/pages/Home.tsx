@@ -272,7 +272,11 @@ function TodayTasks() {
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const open = (tasks ?? []).filter((t) => !t.done);
+  const open = (tasks ?? []).filter((t) => {
+    if (t.done) return false;
+    if (t.repeatRule && t.dueAt && new Date(t.dueAt) >= endOfToday) return false;
+    return true;
+  });
   const overdue = open.filter((t) => t.dueAt && new Date(t.dueAt) < startOfToday);
   const dueToday = open.filter(
     (t) => t.dueAt && new Date(t.dueAt) >= startOfToday && new Date(t.dueAt) < endOfToday

@@ -81,8 +81,8 @@ export default function QuickNotesScreen({ navigation }: any) {
     Animated.spring(selectAnim, {
       toValue: selecting ? 1 : 0,
       useNativeDriver: true,
-      friction: 8,
-      tension: 65,
+      friction: 10,
+      tension: 70,
     }).start();
   }, [selecting, selectAnim]);
 
@@ -252,23 +252,16 @@ export default function QuickNotesScreen({ navigation }: any) {
 
   type Row =
     | { type: "header"; id: string; label: string }
-    | { type: "pair"; id: string; left: QuickNote; right?: QuickNote };
+    | { type: "masonry"; id: string; notes: QuickNote[] };
 
   const rows: Row[] = [];
-  function pushPairs(items: QuickNote[], label?: string) {
+  function pushMasonry(items: QuickNote[], label?: string) {
     if (!items.length) return;
     if (label) rows.push({ type: "header", id: `h-${label}`, label });
-    for (let i = 0; i < items.length; i += 2) {
-      rows.push({
-        type: "pair",
-        id: `p-${items[i].id}`,
-        left: items[i],
-        right: items[i + 1],
-      });
-    }
+    rows.push({ type: "masonry", id: `m-${label ?? "all"}`, notes: items });
   }
-  pushPairs(pinned, pinned.length ? "PINNED" : undefined);
-  pushPairs(rest, pinned.length && rest.length ? "OTHERS" : undefined);
+  pushMasonry(pinned, pinned.length ? "PINNED" : undefined);
+  pushMasonry(rest, pinned.length && rest.length ? "OTHERS" : undefined);
 
   const anySelectedPinned = [...selected].some((id) => list.find((n) => n.id === id)?.pinned);
 
@@ -494,37 +487,47 @@ export default function QuickNotesScreen({ navigation }: any) {
               </Text>
             );
           }
+          // Masonry: two independent columns so card height follows content.
+          const left = item.notes.filter((_: QuickNote, i: number) => i % 2 === 0);
+          const right = item.notes.filter((_: QuickNote, i: number) => i % 2 === 1);
           return (
             <View
               style={{
                 flexDirection: "row",
+                alignItems: "flex-start",
                 gap: GRID_GAP,
                 paddingHorizontal: screenPad,
                 marginBottom: GRID_GAP,
               }}
             >
-              <NoteCard
-                note={item.left}
-                width={cardWidth}
-                selected={selected.has(item.left.id)}
-                selecting={selecting}
-                onOpen={() => openNote(item.left)}
-                onLongPress={() => enterSelection(item.left.id)}
-                onToggleSelect={() => toggleSelection(item.left.id)}
-              />
-              {item.right ? (
-                <NoteCard
-                  note={item.right}
-                  width={cardWidth}
-                  selected={selected.has(item.right.id)}
-                  selecting={selecting}
-                  onOpen={() => openNote(item.right!)}
-                  onLongPress={() => enterSelection(item.right!.id)}
-                  onToggleSelect={() => toggleSelection(item.right!.id)}
-                />
-              ) : (
-                <View style={{ width: cardWidth }} />
-              )}
+              <View style={{ width: cardWidth, gap: GRID_GAP }}>
+                {left.map((note: QuickNote) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    width={cardWidth}
+                    selected={selected.has(note.id)}
+                    selecting={selecting}
+                    onOpen={() => openNote(note)}
+                    onLongPress={() => enterSelection(note.id)}
+                    onToggleSelect={() => toggleSelection(note.id)}
+                  />
+                ))}
+              </View>
+              <View style={{ width: cardWidth, gap: GRID_GAP }}>
+                {right.map((note: QuickNote) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    width={cardWidth}
+                    selected={selected.has(note.id)}
+                    selecting={selecting}
+                    onOpen={() => openNote(note)}
+                    onLongPress={() => enterSelection(note.id)}
+                    onToggleSelect={() => toggleSelection(note.id)}
+                  />
+                ))}
+              </View>
             </View>
           );
         }}
@@ -652,8 +655,8 @@ function NoteCard({
     Animated.spring(cardScale, {
       toValue: selected ? 0.98 : 1,
       useNativeDriver: true,
-      friction: 8,
-      tension: 120,
+      friction: 11,
+      tension: 85,
     }).start();
   }, [selected, cardScale]);
 
@@ -825,7 +828,7 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-  card: { padding: 12, minHeight: 110, justifyContent: "space-between", gap: 10, alignItems: "stretch" },
+  card: { padding: 12, minHeight: 72, gap: 8, alignItems: "stretch" },
   listPreviewRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   strike: { textDecorationLine: "line-through" },
   pinHint: { position: "absolute", top: -2, right: 0 },

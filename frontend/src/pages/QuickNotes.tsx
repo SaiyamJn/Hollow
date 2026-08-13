@@ -324,17 +324,18 @@ export default function QuickNotes() {
       {pinned.length > 0 && (
         <>
           <p className="text-[11px] font-semibold tracking-wide text-secondary mb-2">PINNED</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 mb-6 space-y-4 [column-fill:_balance]">
             {pinned.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                selected={selected.has(note.id)}
-                selecting={selecting}
-                onOpen={() => openNote(note)}
-                onSelectStart={() => enterSelect(note.id)}
-                onToggleSelect={() => toggleSelect(note.id)}
-              />
+              <div key={note.id} className="break-inside-avoid mb-4">
+                <NoteCard
+                  note={note}
+                  selected={selected.has(note.id)}
+                  selecting={selecting}
+                  onOpen={() => openNote(note)}
+                  onSelectStart={() => enterSelect(note.id)}
+                  onToggleSelect={() => toggleSelect(note.id)}
+                />
+              </div>
             ))}
           </div>
         </>
@@ -343,17 +344,18 @@ export default function QuickNotes() {
       {rest.length > 0 && pinned.length > 0 && (
         <p className="text-[11px] font-semibold tracking-wide text-secondary mb-2">OTHERS</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 [column-fill:_balance]">
         {rest.map((note) => (
-          <NoteCard
-            key={note.id}
-            note={note}
-            selected={selected.has(note.id)}
-            selecting={selecting}
-            onOpen={() => openNote(note)}
-            onSelectStart={() => enterSelect(note.id)}
-            onToggleSelect={() => toggleSelect(note.id)}
-          />
+          <div key={note.id} className="break-inside-avoid mb-4">
+            <NoteCard
+              note={note}
+              selected={selected.has(note.id)}
+              selecting={selecting}
+              onOpen={() => openNote(note)}
+              onSelectStart={() => enterSelect(note.id)}
+              onToggleSelect={() => toggleSelect(note.id)}
+            />
+          </div>
         ))}
       </div>
 
@@ -530,7 +532,7 @@ function NoteCard({
         onSelectStart();
       }}
       className={clsx(
-        "relative rounded-xl border glass p-4 shadow-card transition-all duration-200 min-h-[120px] flex flex-col",
+        "relative rounded-xl border glass p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
         selected ? "border-accent border-2" : "border-border hover:shadow-pop hover:-translate-y-0.5"
       )}
       style={{ background: note.color !== "gray" ? PALETTE[note.color] : undefined }}

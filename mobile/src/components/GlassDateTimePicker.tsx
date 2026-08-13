@@ -13,9 +13,8 @@ import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../contexts/theme";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
-const HOURS_12 = Array.from({ length: 12 }, (_, h) => h + 1);
+const HOURS_24 = Array.from({ length: 24 }, (_, h) => h);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // Google-style 5-min steps
-const MERIDIEMS = ["AM", "PM"] as const;
 
 /** Compact wheel metrics — same snap behaviour, less vertical space. */
 const ITEM_H = 28;
@@ -51,19 +50,9 @@ export function formatDueLabel(iso: string | Date | null | undefined) {
   const due = typeof iso === "string" ? new Date(iso) : iso;
   const date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   if (isDateOnlyDue(due)) return date;
-  const time = due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${date} · ${time}`;
-}
-
-function to12Hour(hours24: number) {
-  const meridiem: (typeof MERIDIEMS)[number] = hours24 >= 12 ? "PM" : "AM";
-  const h12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
-  return { h12, meridiem };
-}
-
-function to24Hour(h12: number, meridiem: (typeof MERIDIEMS)[number]) {
-  if (meridiem === "AM") return h12 === 12 ? 0 : h12;
-  return h12 === 12 ? 12 : h12 + 12;
+  const hh = String(due.getHours()).padStart(2, "0");
+  const mm = String(due.getMinutes()).padStart(2, "0");
+  return `${date} · ${hh}:${mm}`;
 }
 
 function snapMinute(m: number) {
@@ -203,7 +192,6 @@ export function GlassDateTimePicker({
 
   const hour24 = selected && hasTime ? selected.getHours() : 9;
   const minute = selected && hasTime ? snapMinute(selected.getMinutes()) : 0;
-  const { h12, meridiem } = to12Hour(hour24);
 
   const today = startOfDay(new Date());
   const tomorrow = new Date(today);
@@ -240,9 +228,9 @@ export function GlassDateTimePicker({
     applyDay(day, showTime);
   }
 
-  function setTime(h12Next: number, m: number, mer: (typeof MERIDIEMS)[number]) {
+  function setTime(h: number, m: number) {
     const base = selected ? startOfDay(selected) : startOfDay(new Date());
-    base.setHours(to24Hour(h12Next, mer), snapMinute(m), 0, 0);
+    base.setHours(h, snapMinute(m), 0, 0);
     onChange(base);
   }
 
@@ -371,23 +359,16 @@ export function GlassDateTimePicker({
               ]}
             >
               <RollingColumn
-                items={HOURS_12}
-                value={h12}
-                onChange={(h) => setTime(Number(h), minute, meridiem)}
-                format={(n) => String(n)}
+                items={HOURS_24}
+                value={hour24}
+                onChange={(h) => setTime(Number(h), minute)}
+                format={(n) => String(n).padStart(2, "0")}
               />
               <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>:</Text>
               <RollingColumn
                 items={MINUTES}
                 value={minute}
-                onChange={(m) => setTime(h12, Number(m), meridiem)}
-              />
-              <RollingColumn
-                items={[...MERIDIEMS]}
-                value={meridiem}
-                onChange={(mer) => setTime(h12, minute, mer as (typeof MERIDIEMS)[number])}
-                format={(n) => String(n)}
-                width={48}
+                onChange={(m) => setTime(hour24, Number(m))}
               />
             </View>
           </>

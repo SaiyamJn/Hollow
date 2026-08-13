@@ -32,8 +32,12 @@ export function formatDueLabel(iso: string | null | undefined) {
   if (!iso) return "No due date";
   const due = new Date(iso);
   const date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  const time = due.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  return `${date} · ${time}`;
+  const isDateOnly =
+    due.getHours() === 0 && due.getMinutes() === 0 && due.getSeconds() === 0;
+  if (isDateOnly) return date;
+  const hh = String(due.getHours()).padStart(2, "0");
+  const mm = String(due.getMinutes()).padStart(2, "0");
+  return `${date} · ${hh}:${mm}`;
 }
 
 interface DateTimePickerProps {

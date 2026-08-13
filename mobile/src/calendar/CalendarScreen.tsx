@@ -33,6 +33,8 @@ import {
 } from "./dateUtils";
 import { datedTasks, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
 import { CollapsibleMonth, ensureSelectedInMonth } from "./CollapsibleMonth";
+import EmptyState from "../components/EmptyState";
+import { animatePanel } from "../lib/motion";
 
 type EditDraft = TaskDraft & { id: string };
 type CalView = "schedule" | "week" | "day" | "agenda";
@@ -58,7 +60,7 @@ export default function CalendarScreen() {
   const [viewMenu, setViewMenu] = useState(false);
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
 
@@ -69,8 +71,16 @@ export default function CalendarScreen() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const dated = useMemo(() => datedTasks(tasks), [tasks]);
+  // One row per real due date — calendar shows the next occurrence early;
+  // Tasks panel waits until that day starts.
   const byDay = useMemo(() => groupByDay(dated), [dated]);
   const dayTasks = tasksOnDay(byDay, selected);
+
+  function setCalendarExpanded(next: boolean) {
+    if (next === expanded) return;
+    animatePanel();
+    setExpanded(next);
+  }
 
   const create = useMutation({
     mutationFn: createTask,
@@ -101,8 +111,8 @@ export default function CalendarScreen() {
 
   function pulseMonth() {
     Animated.sequence([
-      Animated.timing(fade, { toValue: 0.35, duration: 90, useNativeDriver: true }),
-      Animated.timing(fade, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 0.45, duration: 120, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
     ]).start();
   }
 
@@ -118,7 +128,7 @@ export default function CalendarScreen() {
     const t = startOfDay(new Date());
     setCursor(startOfMonth(t));
     setSelected(t);
-    setExpanded(true);
+    setCalendarExpanded(false);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
@@ -139,7 +149,7 @@ export default function CalendarScreen() {
       id: task.id,
       title: task.title,
       description: task.description ?? "",
-      due: task.dueAt ? new Date(task.dueAt) : null,
+      due: task.dueAt ? new Date(task.dueAt) : task.due,
       repeat: task.repeatRule,
     });
   }
@@ -148,10 +158,8 @@ export default function CalendarScreen() {
     const prev = scrollY.current;
     scrollY.current = y;
     if (view !== "schedule") return;
-    // Scroll down through list → roll calendar up
-    if (y > 24 && y > prev && expanded) setExpanded(false);
-    // Pull back to top → roll calendar down
-    if (y < 8 && prev >= 8 && !expanded) setExpanded(true);
+    // Scrolling the list collapses an open calendar; expand only via handle/drag.
+    if (y > 24 && y > prev && expanded) setCalendarExpanded(false);
   }
 
   const weekStrip = useMemo(() => {
@@ -219,7 +227,7 @@ export default function CalendarScreen() {
                   today={today}
                   byDay={byDay}
                   expanded={expanded}
-                  onExpandedChange={setExpanded}
+                  onExpandedChange={setCalendarExpanded}
                   onSelectDay={selectDay}
                   onSwipeMonth={shiftMonth}
                 />
@@ -250,9 +258,12 @@ export default function CalendarScreen() {
                 scrollEventThrottle={16}
                 ListEmptyComponent={
                   <Pressable onPress={() => openCreate(selected)} style={styles.emptyDay}>
-                    <Text style={{ color: colors.textSecondary, fontSize: 14, textAlign: "center" }}>
-                      No tasks · tap to add
-                    </Text>
+                    <EmptyState
+                      compact
+                      icon="sunrise"
+                      title="A clean slate"
+                      subtitle="Nothing due this day — tap to add a task."
+                    />
                   </Pressable>
                 }
                 renderItem={({ item }) => (
@@ -260,7 +271,9 @@ export default function CalendarScreen() {
                     task={item}
                     colors={colors}
                     onPress={() => openEdit(item)}
-                    onToggle={() => update.mutate({ id: item.id, patch: { done: !item.done } })}
+                    onToggle={() => {
+                      update.mutate({ id: item.id, patch: { done: !item.done } });
+                    }}
                     onReschedule={(dir) => {
                       if (!item.dueAt) return;
                       const next = addDays(item.due, dir);
@@ -448,7 +461,7 @@ export default function CalendarScreen() {
                   onPress={() => {
                     setView(opt.id);
                     setViewMenu(false);
-                    if (opt.id === "schedule") setExpanded(true);
+                    if (opt.id === "schedule") setCalendarExpanded(false);
                   }}
                   style={[styles.menuRow, active && { backgroundColor: colors.accentSoft }]}
                 >
