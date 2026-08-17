@@ -1,4 +1,4 @@
-import { KeyboardEvent, useMemo, useState } from "react";
+import { KeyboardEvent, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -116,6 +116,8 @@ export default function QuickNotes() {
 
   const selecting = selected.size > 0;
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+  const editSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSaveSeq = useRef(0);
 
   async function persistOrder(group: QuickNote[], orderedIds: string[]) {
     const pinnedIds = notes.filter((n) => n.pinned).map((n) => n.id);
@@ -125,7 +127,8 @@ export default function QuickNotes() {
 
     queryClient.setQueryData<QuickNote[]>(["quicknotes", "library"], (prev) => {
       if (!prev) return prev;
-      const rank = new Map(merged.map((id, i) => [id, merged.length - i]));
+      const base = Math.floor(Date.now() / 1000);
+      const rank = new Map(merged.map((id, i) => [id, base - i]));
       return [...prev]
         .map((n) => (rank.has(n.id) ? { ...n, sortOrder: rank.get(n.id)! } : n))
         .sort((a, b) => {
@@ -184,7 +187,12 @@ export default function QuickNotes() {
 
   async function closeEditor() {
     if (!editing) return;
-    if (isEmptyEdit(editing)) {
+    if (editSaveTimer.current) {
+      clearTimeout(editSaveTimer.current);
+      editSaveTimer.current = null;
+    }
+    // Only discard brand-new empty drafts. Emptied existing notes stay (may be recycled intentionally via trash).
+    if (editing.isNew && isEmptyEdit(editing)) {
       try {
         await deleteQuickNotePermanent(editing.id);
         invalidate();
@@ -193,6 +201,20 @@ export default function QuickNotes() {
       }
       setEditing(null);
       return;
+    }
+    // Flush latest draft before closing so keystrokes aren't lost.
+    if (!isEmptyEdit(editing)) {
+      try {
+        await updateQuickNote(editing.id, {
+          title: editing.title,
+          content: editing.kind === "list" ? " " : editing.content || " ",
+          color: editing.color,
+          items: editing.kind === "list" ? editing.items : undefined,
+        });
+        invalidate();
+      } catch {
+        // keep editor open? — still close; user can reopen
+      }
     }
     setEditing(null);
   }
@@ -249,12 +271,18 @@ export default function QuickNotes() {
 
   function persistEdit(next: EditState) {
     setEditing(next);
-    void updateQuickNote(next.id, {
-      title: next.title,
-      content: next.kind === "list" ? " " : next.content || " ",
-      color: next.color,
-      items: next.kind === "list" ? next.items : undefined,
-    }).then(invalidate);
+    if (editSaveTimer.current) clearTimeout(editSaveTimer.current);
+    const seq = ++editSaveSeq.current;
+    editSaveTimer.current = setTimeout(() => {
+      void updateQuickNote(next.id, {
+        title: next.title,
+        content: next.kind === "list" ? " " : next.content || " ",
+        color: next.color,
+        items: next.kind === "list" ? next.items : undefined,
+      }).then(() => {
+        if (seq === editSaveSeq.current) invalidate();
+      });
+    }, 400);
   }
 
   const anySelectedPinned = [...selected].some((id) => notes.find((n) => n.id === id)?.pinned);

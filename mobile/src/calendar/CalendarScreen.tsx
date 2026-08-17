@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -55,7 +55,12 @@ export default function CalendarScreen() {
   const queryClient = useQueryClient();
   const { screenPad, listBottomClearance } = useLayout();
 
-  const today = useMemo(() => startOfDay(new Date()), []);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
   const [view, setView] = useState<CalView>("schedule");
   const [viewMenu, setViewMenu] = useState(false);
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
@@ -73,10 +78,9 @@ export default function CalendarScreen() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const dated = useMemo(() => datedTasks(tasks), [tasks]);
-  // Recurring tasks: project onto every occurrence day in the visible window.
-  // Tasks panel still only surfaces a repeat on its live due day.
-  const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -7), [cursor]);
-  const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 2)), -1), [cursor]);
+  // Wide window so month indicators + agenda cover far-out repeats.
+  const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -40), [cursor]);
+  const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 12)), -1), [cursor]);
   const expandedTasks = useMemo(
     () => expandForRange(dated, rangeStart, rangeEnd),
     [dated, rangeStart, rangeEnd]
@@ -165,6 +169,11 @@ export default function CalendarScreen() {
       repeatUntil: null,
       repeatCount: null,
     });
+  }
+
+  function toggleTask(t: CalendarTask) {
+    if (t.virtual) return;
+    update.mutate({ id: t.id, patch: { done: !t.done } });
   }
 
   function openEdit(task: CalendarTask) {
@@ -366,10 +375,7 @@ export default function CalendarScreen() {
                     task={item}
                     colors={colors}
                     onPress={() => openEdit(item)}
-                    onToggle={() => {
-                      if (item.virtual) return;
-                      update.mutate({ id: item.id, patch: { done: !item.done } });
-                    }}
+                    onToggle={() => toggleTask(item)}
                     onReschedule={(dir) => {
                       if (item.virtual || !item.dueAt) return;
                       const next = addDays(item.due, dir);
@@ -484,7 +490,7 @@ export default function CalendarScreen() {
                   task={item}
                   colors={colors}
                   onPress={() => openEdit(item)}
-                  onToggle={() => update.mutate({ id: item.id, patch: { done: !item.done } })}
+                  onToggle={() => toggleTask(item)}
                 />
               )}
             />
@@ -531,7 +537,7 @@ export default function CalendarScreen() {
                         task={t}
                         colors={colors}
                         onPress={() => openEdit(t)}
-                        onToggle={() => update.mutate({ id: t.id, patch: { done: !t.done } })}
+                        onToggle={() => toggleTask(t)}
                       />
                     ))}
                   </View>

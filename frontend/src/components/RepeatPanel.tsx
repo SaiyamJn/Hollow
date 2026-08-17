@@ -395,12 +395,3 @@ export function RepeatField({
     </div>
   );
 }
-
-/** @deprecated Prefer RepeatField — kept for any direct embeds. */
-export function RepeatPanel(props: {
-  due: Date | null;
-  value: RepeatDraft;
-  onChange: (next: RepeatDraft) => void;
-}) {
-  return <RepeatEditor {...props} />;
-}

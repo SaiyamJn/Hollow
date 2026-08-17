@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { fetchNotebooks, openDailyNote } from "../lib/api";
+import { createQuickNote, fetchNotebooks, openDailyNote } from "../lib/api";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { useLayout } from "../lib/layout";
@@ -43,6 +43,11 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
 
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks, enabled: visible });
 
+  function close() {
+    setQuery("");
+    onClose();
+  }
+
   const daily = useMutation({
     mutationFn: openDailyNote,
     onSuccess: (note) => {
@@ -56,10 +61,21 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
     },
   });
 
-  function close() {
-    setQuery("");
-    onClose();
-  }
+  const newQuickNote = useMutation({
+    mutationFn: () => createQuickNote({ title: "", content: " ", color: "yellow", kind: "note" }),
+    onSuccess: (note) => {
+      queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+      close();
+      navigation.navigate("QuickNote", {
+        noteId: note.id,
+        title: note.title,
+        content: note.content,
+        color: note.color,
+        kind: note.kind,
+        autoFocus: true,
+      });
+    },
+  });
 
   const items = useMemo<SearchItem[]>(() => {
     const actions: SearchItem[] = [
@@ -78,8 +94,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
         label: "New quick note",
         icon: "file-text",
         run: () => {
-          close();
-          navigation.navigate("Tabs", { screen: "Quick notes" });
+          if (!newQuickNote.isPending) newQuickNote.mutate();
         },
       },
       {
@@ -116,7 +131,7 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
 
     return [...actions, ...pages];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notebooks, unlock.sectionPasswords, navigation]);
+  }, [notebooks, unlock.sectionPasswords, navigation, newQuickNote.isPending]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

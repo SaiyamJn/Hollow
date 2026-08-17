@@ -2,11 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   PanResponder,
-  Pressable,
-  StyleSheet,
   View,
   type GestureResponderEvent,
-  type PanResponderGestureState,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import type { QuickNote } from "../lib/types";
@@ -49,8 +46,12 @@ function buildSlots(
   });
 }
 
+function sameOrder(a: string[], b: string[]) {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
 /**
- * Long-press + drag reorder that stays in a masonry (multi-column) layout.
+ * Long-press + drag reorder in a masonry (multi-column) layout.
  * Order is linear; cards alternate across columns (0→left, 1→right, …).
  */
 export function ReorderableNoteList({
@@ -59,8 +60,6 @@ export function ReorderableNoteList({
   columns = 2,
   columnWidth,
   gap = 10,
-  kickoffId,
-  onKickoffConsumed,
   renderCard,
   onReorder,
 }: {
@@ -69,15 +68,23 @@ export function ReorderableNoteList({
   columns?: number;
   columnWidth: number;
   gap?: number;
-  kickoffId?: string | null;
-  onKickoffConsumed?: () => void;
-  renderCard: (note: QuickNote, opts: { dragging: boolean; arranging: boolean }) => React.ReactNode;
+  renderCard: (
+    note: QuickNote,
+    opts: {
+      dragging: boolean;
+      arranging: boolean;
+      /** Call from the card's onLongPress to start a drag (page coords). */
+      startDrag?: (pageX: number, pageY: number) => void;
+    }
+  ) => React.ReactNode;
   onReorder: (orderedIds: string[]) => void;
 }) {
   const [order, setOrder] = useState(notes.map((n) => n.id));
   const orderRef = useRef(order);
+  const initialOrderRef = useRef(order);
   const heights = useRef<Map<string, number>>(new Map());
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const draggingIdRef = useRef<string | null>(null);
   const dragX = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const dragScale = useRef(new Animated.Value(1)).current;
@@ -92,11 +99,11 @@ export function ReorderableNoteList({
 
   useEffect(() => {
     const ids = notes.map((n) => n.id);
-    if (!draggingId) {
+    if (!draggingIdRef.current) {
       setOrder(ids);
       orderRef.current = ids;
     }
-  }, [notes, draggingId]);
+  }, [notes]);
 
   function measureContainer() {
     containerRef.current?.measureInWindow((x, y) => {
@@ -110,7 +117,7 @@ export function ReorderableNoteList({
   }
 
   function beginDrag(id: string, pageX: number, pageY: number) {
-    if (!enabled) return;
+    if (!enabled || draggingIdRef.current) return;
     measureContainer();
     refreshSlots();
     const slot = slotsRef.current.find((s) => s.id === id);
@@ -120,37 +127,12 @@ export function ReorderableNoteList({
     dragX.setValue(0);
     dragY.setValue(0);
     lastHover.current = orderRef.current.indexOf(id);
+    initialOrderRef.current = orderRef.current.slice();
+    draggingIdRef.current = id;
     setDraggingId(id);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Animated.spring(dragScale, { toValue: 1.04, useNativeDriver: true, friction: 7, tension: 100 }).start();
   }
-
-  useEffect(() => {
-    if (!kickoffId || !enabled) return;
-    const t = setTimeout(() => {
-      measureContainer();
-      refreshSlots();
-      const slot = slotsRef.current.find((s) => s.id === kickoffId);
-      ghostOrigin.current = { left: slot?.left ?? 0, top: slot?.top ?? 0 };
-      startPageX.current = containerX.current + (slot?.left ?? 0) + columnWidth / 2;
-      startPageY.current = containerY.current + (slot?.top ?? 0) + (slot?.height ?? 40) / 2;
-      dragX.setValue(0);
-      dragY.setValue(0);
-      lastHover.current = orderRef.current.indexOf(kickoffId);
-      setDraggingId(kickoffId);
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Animated.spring(dragScale, { toValue: 1.04, useNativeDriver: true, friction: 7, tension: 100 }).start();
-      onKickoffConsumed?.();
-    }, 30);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kickoffId]);
-
-  const byId = new Map(notes.map((n) => [n.id, n]));
-  const ordered = order.map((id) => byId.get(id)).filter(Boolean) as QuickNote[];
-  const arranging = !!draggingId;
-  const slots = buildSlots(order, heights.current, columns, columnWidth, gap);
-  slotsRef.current = slots;
 
   function indexFromPoint(pageX: number, pageY: number): number {
     const localX = pageX - containerX.current;
@@ -158,11 +140,9 @@ export function ReorderableNoteList({
     const ids = orderRef.current;
     if (!ids.length) return 0;
 
-    // Prefer the column under the finger, then nearest vertical mid in that column.
     const col = Math.max(0, Math.min(columns - 1, Math.floor(localX / (columnWidth + gap))));
     const inCol = slotsRef.current.filter((s) => s.col === col);
     if (inCol.length === 0) {
-      // Empty column — place at end of list with that column parity
       const last = slotsRef.current[slotsRef.current.length - 1];
       return last ? last.index : 0;
     }
@@ -181,8 +161,9 @@ export function ReorderableNoteList({
   }
 
   function applyHover(to: number) {
-    if (!draggingId || to === lastHover.current) return;
-    const from = orderRef.current.indexOf(draggingId);
+    const id = draggingIdRef.current;
+    if (!id || to === lastHover.current) return;
+    const from = orderRef.current.indexOf(id);
     if (from < 0 || from === to) {
       lastHover.current = to;
       return;
@@ -196,34 +177,47 @@ export function ReorderableNoteList({
   }
 
   function finishDrag() {
-    if (!draggingId) return;
+    if (!draggingIdRef.current) return;
     Animated.parallel([
       Animated.spring(dragX, { toValue: 0, useNativeDriver: true, friction: 8, tension: 90 }),
       Animated.spring(dragY, { toValue: 0, useNativeDriver: true, friction: 8, tension: 90 }),
       Animated.spring(dragScale, { toValue: 1, useNativeDriver: true, friction: 8 }),
     ]).start();
     const ids = orderRef.current.slice();
+    const changed = !sameOrder(ids, initialOrderRef.current);
+    draggingIdRef.current = null;
     setDraggingId(null);
     lastHover.current = -1;
-    onReorder(ids);
+    if (changed) onReorder(ids);
   }
 
   const pan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-        dragX.setValue(g.dx);
-        dragY.setValue(g.dy);
+      // Capture moves once a drag is active so the same finger keeps controlling the ghost.
+      onStartShouldSetPanResponder: () => !!draggingIdRef.current,
+      onStartShouldSetPanResponderCapture: () => !!draggingIdRef.current,
+      onMoveShouldSetPanResponder: () => !!draggingIdRef.current,
+      onMoveShouldSetPanResponderCapture: () => !!draggingIdRef.current,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderMove: (e: GestureResponderEvent) => {
+        if (!draggingIdRef.current) return;
+        const { pageX, pageY } = e.nativeEvent;
+        dragX.setValue(pageX - startPageX.current);
+        dragY.setValue(pageY - startPageY.current);
         refreshSlots();
-        applyHover(indexFromPoint(startPageX.current + g.dx, startPageY.current + g.dy));
+        applyHover(indexFromPoint(pageX, pageY));
       },
       onPanResponderRelease: () => finishDrag(),
       onPanResponderTerminate: () => finishDrag(),
     })
   ).current;
 
-  const dragSlot = draggingId ? slots.find((s) => s.id === draggingId) : undefined;
+  const byId = new Map(notes.map((n) => [n.id, n]));
+  const ordered = order.map((id) => byId.get(id)).filter(Boolean) as QuickNote[];
+  const arranging = !!draggingId;
+  const slots = buildSlots(order, heights.current, columns, columnWidth, gap);
+  slotsRef.current = slots;
+
   const totalWidth = columns * columnWidth + (columns - 1) * gap;
   const colHeights = Array.from({ length: columns }, () => 0);
   for (const s of slots) {
@@ -241,11 +235,11 @@ export function ReorderableNoteList({
       ref={containerRef}
       style={{ width: totalWidth, minHeight: arranging ? totalHeight : undefined }}
       onLayout={() => measureContainer()}
-      {...(arranging ? pan.panHandlers : {})}
+      {...pan.panHandlers}
     >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap }}>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap }} pointerEvents="box-none">
         {columnNotes.map((colNotes, col) => (
-          <View key={col} style={{ width: columnWidth, gap }}>
+          <View key={col} style={{ width: columnWidth, gap }} pointerEvents="box-none">
             {colNotes.map((note) => {
               const isDragging = draggingId === note.id;
               return (
@@ -255,16 +249,15 @@ export function ReorderableNoteList({
                     heights.current.set(note.id, e.nativeEvent.layout.height);
                   }}
                   style={{ opacity: isDragging ? 0.2 : 1 }}
+                  pointerEvents={arranging && !isDragging ? "none" : "auto"}
                 >
-                  <Pressable
-                    delayLongPress={220}
-                    onLongPress={(e) =>
-                      beginDrag(note.id, e.nativeEvent.pageX, e.nativeEvent.pageY)
-                    }
-                    disabled={!enabled}
-                  >
-                    {renderCard(note, { dragging: isDragging, arranging })}
-                  </Pressable>
+                  {renderCard(note, {
+                    dragging: isDragging,
+                    arranging,
+                    startDrag: enabled
+                      ? (pageX, pageY) => beginDrag(note.id, pageX, pageY)
+                      : undefined,
+                  })}
                 </View>
               );
             })}
@@ -275,15 +268,20 @@ export function ReorderableNoteList({
       {draggingId && byId.get(draggingId) && (
         <Animated.View
           pointerEvents="none"
-          style={[
-            styles.ghost,
-            {
-              width: columnWidth,
-              left: ghostOrigin.current.left,
-              top: ghostOrigin.current.top,
-              transform: [{ translateX: dragX }, { translateY: dragY }, { scale: dragScale }],
-            },
-          ]}
+          style={{
+            position: "absolute",
+            zIndex: 40,
+            elevation: 14,
+            width: columnWidth,
+            left: ghostOrigin.current.left,
+            top: ghostOrigin.current.top,
+            transform: [{ translateX: dragX }, { translateY: dragY }, { scale: dragScale }],
+            shadowColor: "#000",
+            shadowOpacity: 0.28,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            borderRadius: 14,
+          }}
         >
           {renderCard(byId.get(draggingId)!, { dragging: true, arranging: true })}
         </Animated.View>
@@ -291,16 +289,3 @@ export function ReorderableNoteList({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  ghost: {
-    position: "absolute",
-    zIndex: 40,
-    elevation: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    borderRadius: 14,
-  },
-});

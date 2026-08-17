@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Plus, Repeat } from "lucide-react";
 import clsx from "clsx";
@@ -51,7 +51,12 @@ const VIEWS: { id: CalView; label: string }[] = [
 /** TickTick-style collapsible month + day list. */
 export default function CalendarPage() {
   const queryClient = useQueryClient();
-  const today = useMemo(() => startOfDay(new Date()), []);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
   const [view, setView] = useState<CalView>("schedule");
   const [menuOpen, setMenuOpen] = useState(false);
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
@@ -66,10 +71,9 @@ export default function CalendarPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const dated = useMemo(() => datedTasks(tasks), [tasks]);
-  // Recurring: show on every occurrence day in the calendar. Tasks panel still
-  // only lists a repeat on its live due day (Upcoming stays for one-off futures).
-  const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -7), [cursor]);
-  const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 2)), -1), [cursor]);
+  // Wide window so schedule indicators + agenda cover far-out repeats.
+  const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -40), [cursor]);
+  const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 12)), -1), [cursor]);
   const expandedTasks = useMemo(
     () => expandForRange(dated, rangeStart, rangeEnd),
     [dated, rangeStart, rangeEnd]

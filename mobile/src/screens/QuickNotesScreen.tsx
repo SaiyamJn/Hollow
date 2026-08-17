@@ -204,7 +204,8 @@ export default function QuickNotesScreen({ navigation }: any) {
 
     queryClient.setQueryData<QuickNote[]>(["quicknotes", "library"], (prev) => {
       if (!prev) return prev;
-      const rank = new Map(merged.map((id, i) => [id, merged.length - i]));
+      const base = Math.floor(Date.now() / 1000);
+      const rank = new Map(merged.map((id, i) => [id, base - i]));
       return [...prev]
         .map((n) => (rank.has(n.id) ? { ...n, sortOrder: rank.get(n.id)! } : n))
         .sort((a, b) => {
@@ -561,7 +562,7 @@ export default function QuickNotesScreen({ navigation }: any) {
                 columnWidth={cardWidth}
                 gap={GRID_GAP}
                 onReorder={(ids) => void persistOrder(item.notes, ids)}
-                renderCard={(note, { dragging }) => (
+                renderCard={(note, { dragging, startDrag }) => (
                   <NoteCard
                     note={note}
                     width={cardWidth}
@@ -569,8 +570,9 @@ export default function QuickNotesScreen({ navigation }: any) {
                     selecting={selecting}
                     dragging={dragging}
                     onOpen={() => openNote(note)}
-                    onLongPress={() => {
+                    onLongPress={(pageX, pageY) => {
                       if (selectMode) enterSelection(note.id);
+                      else startDrag?.(pageX, pageY);
                     }}
                     onToggleSelect={() => toggleSelection(note.id)}
                   />
@@ -687,7 +689,7 @@ function NoteCard({
   selecting: boolean;
   dragging?: boolean;
   onOpen: () => void;
-  onLongPress: () => void;
+  onLongPress: (pageX: number, pageY: number) => void;
   onToggleSelect: () => void;
 }) {
   const { colors } = useTheme();
@@ -726,7 +728,7 @@ function NoteCard({
       >
         <Pressable
           onPress={() => (selecting ? onToggleSelect() : onOpen())}
-          onLongPress={onLongPress}
+          onLongPress={(e) => onLongPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}
           delayLongPress={280}
           style={{ flex: 1, alignSelf: "stretch" }}
         >

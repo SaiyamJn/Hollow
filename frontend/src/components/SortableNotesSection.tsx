@@ -54,9 +54,11 @@ export function SortableNotesSection({
 
   function onDragEnd(e: React.DragEvent) {
     (e.currentTarget as HTMLElement).style.opacity = "1";
+    const next = order.slice();
+    const changed = next.length !== notes.length || next.some((id, i) => id !== notes[i]?.id);
     setDraggingId(null);
     setOverId(null);
-    onReorder(order);
+    if (changed) onReorder(next);
   }
 
   function onDragOver(id: string, index: number, e: React.DragEvent) {

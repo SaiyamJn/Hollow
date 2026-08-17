@@ -19,14 +19,6 @@ export const UNIT_OPTIONS: { value: TaskRepeatRule; singular: string; plural: st
   { value: "yearly", singular: "year", plural: "years" },
 ];
 
-export const REPEAT_OPTIONS: { value: TaskRepeatRule | null; label: string }[] = [
-  { value: null, label: "Does not repeat" },
-  { value: "daily", label: "Every day" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "yearly", label: "Yearly" },
-];
-
 export function normalizeRepeatDays(days: number[] | null | undefined): number[] | null {
   if (!days?.length) return null;
   const clean = [...new Set(days.filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b);

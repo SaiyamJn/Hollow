@@ -213,26 +213,25 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
       if (discarded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const snap = latest.current;
-      if (isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
+      if (shouldAutoFocus && isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
         discarded.current = true;
         pending.current = null;
         void deleteQuickNotePermanent(noteId).then(invalidate);
         return;
       }
       if (pending.current) {
-        // Fire-and-forget flush so title/body aren't lost on back.
         void saveNow();
       }
     });
     return unsub;
-  }, [navigation, noteId, saveNow]);
+  }, [navigation, noteId, saveNow, shouldAutoFocus]);
 
   useEffect(() => {
     return () => {
       if (discarded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const snap = latest.current;
-      if (isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
+      if (shouldAutoFocus && isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
         discarded.current = true;
         pending.current = null;
         void deleteQuickNotePermanent(noteId).then(() => {
@@ -242,7 +241,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
       }
       void saveNow();
     };
-  }, [noteId, queryClient, saveNow]);
+  }, [noteId, queryClient, saveNow, shouldAutoFocus]);
 
   const togglePin = useMutation({
     mutationFn: () => updateQuickNote(noteId, { pinned: !(note?.pinned ?? false) }),
