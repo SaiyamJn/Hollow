@@ -1,5 +1,6 @@
 -- AlterTable
-ALTER TABLE "QuickNote" ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "QuickNote" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
 
--- Backfill from createdAt so existing newest-first order is preserved (desc sortOrder)
-UPDATE "QuickNote" SET "sortOrder" = (EXTRACT(EPOCH FROM "createdAt") * 1000)::bigint;
+-- Backfill from createdAt (seconds fit in INT4; ms do not and would overflow)
+UPDATE "QuickNote" SET "sortOrder" = FLOOR(EXTRACT(EPOCH FROM "createdAt"))::integer
+WHERE "sortOrder" = 0;
