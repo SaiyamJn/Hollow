@@ -1,17 +1,17 @@
 ---
-description: Hollow mobile APK versioning — bump on every release/build the user requests
+description: Hollow mobile versioning — bump on every code change/fix, and on release builds
 alwaysApply: true
 ---
 
 # Mobile release versioning
 
-When the user asks to build an APK, ship a release, or bump the app version:
+**Always bump the app version** when you finish a user-facing change or fix in this repo (features, bug fixes, UX polish — not pure docs/rules-only edits unless the user asks).
 
 1. Edit `mobile/appVersion.js` only (single source of truth):
-   - Bump `version` (SemVer, e.g. `1.0.1` → `1.0.2` for fixes, `1.1.0` for features)
+   - Bump `version` (SemVer): patch `x.y.Z` for fixes/polish, minor `x.Y.0` for features
    - Always increment `versionCode` by 1 (Android integer; never reuse)
 2. Sync `mobile/package.json` `"version"` to the same SemVer string
 3. Keep `EXPO_PUBLIC_API_URL` in `mobile/eas.json` aligned with the live server (must end with `/api`)
 4. Default `npm run build:android` is the **production** Play Store **AAB**. Sideload APKs use `npm run build:apk` and are named `Hollow Ver-{version}.apk` via `plugins/withHollowAndroid.js`.
 
-Do not leave `version` / `versionCode` unchanged across a new store or sideload build the user asked for.
+Do this at the end of the work that introduced the change — do not leave `version` / `versionCode` unchanged after shipping fixes or features in a session.
