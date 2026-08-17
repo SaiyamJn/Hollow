@@ -612,7 +612,7 @@ function NoteCard({
               <p className="text-sm font-semibold text-primary line-clamp-2">{note.title}</p>
             )}
             {!!note.content.trim() && (
-              <p className="text-sm whitespace-pre-wrap text-primary line-clamp-6">{note.content}</p>
+              <p className="text-sm whitespace-pre-wrap text-primary line-clamp-[14]">{note.content}</p>
             )}
             {!note.title?.trim() && !note.content.trim() && (
               <p className="text-xs text-secondary">Empty note</p>

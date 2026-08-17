@@ -168,11 +168,13 @@ export default function CalendarScreen() {
   }
 
   function openEdit(task: CalendarTask) {
+    // Series anchor dueAt — never rewrite schedule from a virtual occurrence day.
+    const seriesDue = task.dueAt ? new Date(task.dueAt) : task.due;
     setEditing({
       id: task.sourceId ?? task.id,
       title: task.title,
       description: task.description ?? "",
-      due: task.virtual ? task.due : task.dueAt ? new Date(task.dueAt) : task.due,
+      due: seriesDue,
       repeat: task.repeatRule,
       repeatDays: task.repeatDays ?? null,
       repeatInterval: task.repeatInterval ?? 1,

@@ -135,7 +135,8 @@ router.post("/reorder", async (req: AuthedRequest, res) => {
   });
   if (owned.length !== ids.length) return res.status(400).json({ error: "Invalid note ids" });
 
-  const base = Date.now();
+  // Seconds fit in INT4; Date.now() ms overflow Postgres INTEGER.
+  const base = Math.floor(Date.now() / 1000);
   // First id in the list sits at the top (highest sortOrder)
   await prisma.$transaction(
     ids.map((id, index) =>
@@ -176,7 +177,7 @@ router.post("/", async (req: AuthedRequest, res) => {
       kind,
       items: kind === "list" ? sealItems(parsed.data.items ?? []) : null,
       ownerId: req.userId!,
-      sortOrder: Date.now(),
+      sortOrder: Math.floor(Date.now() / 1000),
     },
   });
   res.status(201).json(publicNote(note));

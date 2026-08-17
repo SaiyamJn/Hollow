@@ -11,7 +11,7 @@ function moveItem<T>(list: T[], from: number, to: number): T[] {
   return next;
 }
 
-/** Desktop rearrange — drag by the grip (or the card in arrange mode). Smooth slot transitions. */
+/** Desktop rearrange — masonry columns (height follows content), drag by grip. */
 export function SortableNotesSection({
   notes,
   enabled,
@@ -46,7 +46,6 @@ export function SortableNotesSection({
     setDraggingId(id);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", id);
-    // Slight delay so the browser captures a tidy drag image
     requestAnimationFrame(() => {
       const el = e.currentTarget as HTMLElement;
       el.style.opacity = "0.4";
@@ -72,7 +71,12 @@ export function SortableNotesSection({
   }
 
   return (
-    <div className={clsx("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4", className)}>
+    <div
+      className={clsx(
+        "columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 [column-fill:_balance]",
+        className
+      )}
+    >
       {ordered.map((note, index) => {
         const dragging = draggingId === note.id;
         return (
@@ -84,7 +88,7 @@ export function SortableNotesSection({
             onDragOver={(e) => onDragOver(note.id, index, e)}
             onDrop={(e) => e.preventDefault()}
             className={clsx(
-              "relative group transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              "mb-4 break-inside-avoid relative group transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
               dragging && "scale-[1.02] z-10",
               overId === note.id && draggingId && overId !== draggingId && "translate-y-1"
             )}

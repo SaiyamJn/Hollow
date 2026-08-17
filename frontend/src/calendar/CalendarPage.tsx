@@ -171,11 +171,14 @@ export default function CalendarPage() {
   }
 
   function beginEdit(t: CalendarTask) {
+    // Always edit the series anchor (dueAt), not a virtual occurrence day —
+    // otherwise saving from a future occurrence rewrites the whole schedule.
+    const seriesDue = t.dueAt ? new Date(t.dueAt) : t.due;
     setEditing({
       id: t.sourceId ?? t.id,
       title: t.title,
       description: t.description ?? "",
-      due: t.due,
+      due: seriesDue,
       repeat: t.repeatRule ?? null,
       repeatDays: t.repeatDays ?? null,
       repeatInterval: t.repeatInterval ?? 1,
@@ -229,13 +232,13 @@ export default function CalendarPage() {
         >
           {day.getDate()}
         </span>
-        <div className="mt-1 w-[70%] max-h-3 space-y-0.5 overflow-hidden">
+        <div className="mt-1 w-[70%] min-h-[10px] max-h-[12px] space-y-0.5 overflow-hidden flex flex-col items-stretch">
           {open.slice(0, 3).map((t) => (
             <div
               key={t.id}
               className={clsx(
-                "h-[3px] rounded-full",
-                t.starred ? "bg-accent" : "bg-secondary/50",
+                "h-[3px] w-full rounded-full",
+                t.starred ? "bg-accent" : "bg-secondary/70",
                 t.virtual && "opacity-40"
               )}
             />
@@ -309,16 +312,16 @@ export default function CalendarPage() {
             </div>
             <div
               className="overflow-hidden transition-[max-height] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]"
-              style={{ maxHeight: expanded ? 320 : 56 }}
+              style={{ maxHeight: expanded ? 360 : 64 }}
             >
               {expanded ? (
                 Array.from({ length: 6 }, (_, row) => (
-                  <div key={row} className="grid grid-cols-7 h-[52px]">
+                  <div key={row} className="grid grid-cols-7 h-[56px]">
                     {cells.slice(row * 7, row * 7 + 7).map((day) => renderDayCell(day))}
                   </div>
                 ))
               ) : (
-                <div className="grid grid-cols-7 h-[52px]">
+                <div className="grid grid-cols-7 h-[56px]">
                   {weekStrip.map((day) => renderDayCell(day))}
                 </div>
               )}
@@ -434,14 +437,33 @@ export default function CalendarPage() {
                   <span className="text-xs text-secondary w-8">
                     {day.toLocaleDateString(undefined, { weekday: "short" })}
                   </span>
-                  <span
-                    className={clsx(
-                      "inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
-                      isToday && "bg-accent text-surface-0"
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span
+                      className={clsx(
+                        "inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
+                        isToday && "bg-accent text-surface-0"
+                      )}
+                    >
+                      {day.getDate()}
+                    </span>
+                    {list.filter((t) => !t.done).length > 0 && (
+                      <div className="flex gap-0.5">
+                        {list
+                          .filter((t) => !t.done)
+                          .slice(0, 3)
+                          .map((t) => (
+                            <span
+                              key={t.id}
+                              className={clsx(
+                                "h-1 w-2.5 rounded-full",
+                                t.starred ? "bg-accent" : "bg-secondary/70",
+                                t.virtual && "opacity-40"
+                              )}
+                            />
+                          ))}
+                      </div>
                     )}
-                  >
-                    {day.getDate()}
-                  </span>
+                  </div>
                   <button
                     type="button"
                     className="ml-auto text-accent"

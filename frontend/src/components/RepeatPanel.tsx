@@ -12,7 +12,6 @@ import {
   normalizeRepeatEnd,
   type RepeatEnd,
 } from "../lib/taskRepeat";
-import { Dialog, DialogContent } from "./ui/dialog";
 import { Button } from "./ui/button";
 
 export type RepeatDraft = {
@@ -321,7 +320,10 @@ function RepeatEditor({
   );
 }
 
-/** One-line trigger on the task form → opens a dedicated repeat dialog. */
+/**
+ * One-line trigger → expands an inline repeat editor (not a nested Dialog —
+ * nesting Radix dialogs closed the parent task form before schedule could save).
+ */
 export function RepeatField({
   due,
   value,
@@ -352,25 +354,28 @@ export function RepeatField({
   });
 
   return (
-    <>
+    <div className="space-y-2">
       <button
         type="button"
         disabled={disabled}
-        onClick={openPanel}
+        onClick={() => (open ? setOpen(false) : openPanel())}
         className={clsx(
           "w-full flex items-center gap-2 rounded-lg border border-border glass-input px-3 py-2.5 text-left text-sm transition-colors",
-          disabled ? "opacity-50 cursor-not-allowed" : "hover:border-secondary"
+          disabled ? "opacity-50 cursor-not-allowed" : "hover:border-secondary",
+          open && "border-accent/40"
         )}
       >
         <Repeat size={14} className="text-secondary shrink-0" />
-        <span className="flex-1 min-w-0 truncate text-secondary">{disabled ? "Repeat (pick a date first)" : label}</span>
-        <span className="text-secondary text-xs">›</span>
+        <span className="flex-1 min-w-0 truncate text-secondary">
+          {disabled ? "Repeat (pick a date first)" : label}
+        </span>
+        <span className="text-secondary text-xs">{open ? "▾" : "›"}</span>
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent title="Repeat" className="max-w-sm">
+      {open && !disabled && (
+        <div className="rounded-xl border border-border bg-surface-1/80 p-3 space-y-3">
           <RepeatEditor due={due} value={draft} onChange={setDraft} />
-          <div className="flex gap-2 pt-3">
+          <div className="flex gap-2 pt-1">
             <Button className="flex-1" variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -385,9 +390,9 @@ export function RepeatField({
               Done
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+      )}
+    </div>
   );
 }
 
