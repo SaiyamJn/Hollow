@@ -25,7 +25,8 @@ import { useLayout } from "../lib/layout";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date" | "Completed";
 
-/** Next occurrence of a repeat stays off the Tasks list until its day starts. */
+/** Next occurrence of a repeat stays off Tasks (incl. Upcoming) until its day starts.
+ *  One-off future tasks still appear under Upcoming. */
 function isDeferredRepeat(task: Task, endOfToday: Date) {
   if (task.done || !task.repeatRule || !task.dueAt) return false;
   return new Date(task.dueAt) >= endOfToday;

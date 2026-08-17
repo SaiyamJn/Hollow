@@ -155,7 +155,7 @@ export function CollapsibleMonth({
                 styles.bar,
                 {
                   backgroundColor: t.starred ? colors.accent : colors.textSecondary,
-                  opacity: t.starred ? 0.95 : 0.55,
+                              opacity: t.virtual ? 0.35 : t.starred ? 0.95 : 0.55,
                 },
               ]}
             />

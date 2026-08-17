@@ -31,7 +31,7 @@ import {
   startOfDay,
   startOfMonth,
 } from "./dateUtils";
-import { datedTasks, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
+import { datedTasks, expandForRange, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
 import { CollapsibleMonth, ensureSelectedInMonth } from "./CollapsibleMonth";
 import EmptyState from "../components/EmptyState";
 import { animatePanel } from "../lib/motion";
@@ -66,15 +66,22 @@ export default function CalendarScreen() {
 
   const scrollY = useRef(0);
   const listDragging = useRef(false);
+  const pullStartY = useRef<number | null>(null);
   const fade = useRef(new Animated.Value(1)).current;
 
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const dated = useMemo(() => datedTasks(tasks), [tasks]);
-  // One row per real due date — calendar shows the next occurrence early;
-  // Tasks panel waits until that day starts.
-  const byDay = useMemo(() => groupByDay(dated), [dated]);
+  // Recurring tasks: project onto every occurrence day in the visible window.
+  // Tasks panel still only surfaces a repeat on its live due day.
+  const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -7), [cursor]);
+  const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 2)), -1), [cursor]);
+  const expandedTasks = useMemo(
+    () => expandForRange(dated, rangeStart, rangeEnd),
+    [dated, rangeStart, rangeEnd]
+  );
+  const byDay = useMemo(() => groupByDay(expandedTasks), [expandedTasks]);
   const dayTasks = tasksOnDay(byDay, selected);
 
   function setCalendarExpanded(next: boolean) {
@@ -147,10 +154,10 @@ export default function CalendarScreen() {
 
   function openEdit(task: CalendarTask) {
     setEditing({
-      id: task.id,
+      id: task.sourceId ?? task.id,
       title: task.title,
       description: task.description ?? "",
-      due: task.dueAt ? new Date(task.dueAt) : task.due,
+      due: task.virtual ? task.due : task.dueAt ? new Date(task.dueAt) : task.due,
       repeat: task.repeatRule,
     });
   }
@@ -163,6 +170,33 @@ export default function CalendarScreen() {
     // can emit scroll events and would otherwise yank the month closed.
     if (!listDragging.current) return;
     if (y > 24 && y > prev && expanded) setCalendarExpanded(false);
+  }
+
+  /** Swipe down on the day list (or empty area) while at the top → open month. */
+  function onListTouchStart(pageY: number) {
+    if (expanded || view !== "schedule" || scrollY.current > 4) {
+      pullStartY.current = null;
+      return;
+    }
+    pullStartY.current = pageY;
+  }
+
+  function onListTouchMove(pageY: number) {
+    if (pullStartY.current == null || expanded || view !== "schedule") return;
+    if (scrollY.current > 4) {
+      pullStartY.current = null;
+      return;
+    }
+    const dy = pageY - pullStartY.current;
+    if (dy > 40) {
+      pullStartY.current = null;
+      setCalendarExpanded(true);
+      void Haptics.selectionAsync();
+    }
+  }
+
+  function onListTouchEnd() {
+    pullStartY.current = null;
   }
 
   const weekStrip = useMemo(() => {
@@ -257,7 +291,16 @@ export default function CalendarScreen() {
                   paddingBottom: listBottomClearance(false) + 24,
                   flexGrow: 1,
                 }}
-                onScroll={(e) => onListScroll(e.nativeEvent.contentOffset.y)}
+                onScroll={(e) => {
+                  const y = e.nativeEvent.contentOffset.y;
+                  onListScroll(y);
+                  // iOS rubber-band overscroll while pulling down
+                  if (!expanded && listDragging.current && y < -24) {
+                    pullStartY.current = null;
+                    setCalendarExpanded(true);
+                    void Haptics.selectionAsync();
+                  }
+                }}
                 onScrollBeginDrag={() => {
                   listDragging.current = true;
                 }}
@@ -267,16 +310,25 @@ export default function CalendarScreen() {
                 onMomentumScrollEnd={() => {
                   listDragging.current = false;
                 }}
+                onTouchStart={(e) => onListTouchStart(e.nativeEvent.pageY)}
+                onTouchMove={(e) => onListTouchMove(e.nativeEvent.pageY)}
+                onTouchEnd={onListTouchEnd}
+                onTouchCancel={onListTouchEnd}
                 scrollEventThrottle={16}
+                bounces
+                overScrollMode="always"
                 ListEmptyComponent={
-                  <Pressable onPress={() => openCreate(selected)} style={styles.emptyDay}>
+                  <View style={styles.emptyDay}>
                     <EmptyState
                       compact
                       icon="sunrise"
                       title="A clean slate"
-                      subtitle="Nothing due this day — tap to add a task."
+                      subtitle="Swipe down to open the calendar · tap to add a task."
                     />
-                  </Pressable>
+                    <Pressable onPress={() => openCreate(selected)} hitSlop={12} style={{ marginTop: 8, alignSelf: "center" }}>
+                      <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "600" }}>Add a task</Text>
+                    </Pressable>
+                  </View>
                 }
                 renderItem={({ item }) => (
                   <TaskRow
@@ -284,10 +336,11 @@ export default function CalendarScreen() {
                     colors={colors}
                     onPress={() => openEdit(item)}
                     onToggle={() => {
+                      if (item.virtual) return;
                       update.mutate({ id: item.id, patch: { done: !item.done } });
                     }}
                     onReschedule={(dir) => {
-                      if (!item.dueAt) return;
+                      if (item.virtual || !item.dueAt) return;
                       const next = addDays(item.due, dir);
                       update.mutate({
                         id: item.id,

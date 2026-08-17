@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Plus, Repeat } from "lucide-react";
 import clsx from "clsx";
@@ -24,7 +24,7 @@ import {
   startOfMonth,
   weekDays,
 } from "./dateUtils";
-import { datedTasks, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
+import { datedTasks, expandForRange, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
 
 type CalView = "schedule" | "week" | "day" | "agenda";
 type Draft = {
@@ -54,13 +54,21 @@ export default function CalendarPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
+  const pullStartY = useRef<number | null>(null);
 
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const dated = useMemo(() => datedTasks(tasks), [tasks]);
-  // One occurrence per real due date; Tasks panel hides future repeats until that day.
-  const byDay = useMemo(() => groupByDay(dated), [dated]);
+  // Recurring: show on every occurrence day in the calendar. Tasks panel still
+  // only lists a repeat on its live due day (Upcoming stays for one-off futures).
+  const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -7), [cursor]);
+  const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 2)), -1), [cursor]);
+  const expandedTasks = useMemo(
+    () => expandForRange(dated, rangeStart, rangeEnd),
+    [dated, rangeStart, rangeEnd]
+  );
+  const byDay = useMemo(() => groupByDay(expandedTasks), [expandedTasks]);
   const dayTasks = tasksOnDay(byDay, selected);
   const cells = useMemo(() => monthGrid(cursor), [cursor]);
 
@@ -120,6 +128,10 @@ export default function CalendarPage() {
   }
 
   function onDragStart(e: React.DragEvent, task: CalendarTask) {
+    if (task.virtual) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData("text/task-id", task.id);
     e.dataTransfer.setData("text/due-at", task.dueAt ?? "");
     e.dataTransfer.effectAllowed = "move";
@@ -130,7 +142,7 @@ export default function CalendarPage() {
     setDropKey(null);
     const id = e.dataTransfer.getData("text/task-id");
     const dueAt = e.dataTransfer.getData("text/due-at");
-    if (!id || !dueAt) return;
+    if (!id || !dueAt || id.includes("__")) return;
     const next = moveDueToDate(dueAt, day);
     if (next === dueAt) return;
     update.mutate({ id, patch: { dueAt: next } });
@@ -139,7 +151,7 @@ export default function CalendarPage() {
 
   function beginEdit(t: CalendarTask) {
     setEditing({
-      id: t.id,
+      id: t.sourceId ?? t.id,
       title: t.title,
       description: t.description ?? "",
       due: t.due,
@@ -148,6 +160,7 @@ export default function CalendarPage() {
   }
 
   function toggleTask(t: CalendarTask) {
+    if (t.virtual) return;
     update.mutate({ id: t.id, patch: { done: !t.done } });
   }
 
@@ -194,7 +207,11 @@ export default function CalendarPage() {
           {open.slice(0, 3).map((t) => (
             <div
               key={t.id}
-              className={clsx("h-[3px] rounded-full", t.starred ? "bg-accent" : "bg-secondary/50")}
+              className={clsx(
+                "h-[3px] rounded-full",
+                t.starred ? "bg-accent" : "bg-secondary/50",
+                t.virtual && "opacity-40"
+              )}
             />
           ))}
         </div>
@@ -304,19 +321,55 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          <div className="space-y-2 min-h-[180px]">
+          <div
+            className="space-y-2 min-h-[220px]"
+            onPointerDown={(e) => {
+              if (expanded) {
+                pullStartY.current = null;
+                return;
+              }
+              // Only start a pull when the target isn't a task control.
+              const el = e.target as HTMLElement;
+              if (el.closest("button") && !el.closest("[data-day-empty]")) {
+                pullStartY.current = null;
+                return;
+              }
+              pullStartY.current = e.clientY;
+            }}
+            onPointerMove={(e) => {
+              if (pullStartY.current == null || expanded) return;
+              if (e.clientY - pullStartY.current > 48) {
+                pullStartY.current = null;
+                setExpanded(true);
+              }
+            }}
+            onPointerUp={() => {
+              pullStartY.current = null;
+            }}
+            onPointerCancel={() => {
+              pullStartY.current = null;
+            }}
+          >
             {dayTasks.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => openCreate(selected)}
-                className="w-full py-10 flex flex-col items-center gap-3 text-secondary hover:text-accent"
+              <div
+                data-day-empty
+                className="w-full py-10 flex flex-col items-center gap-3 text-secondary select-none"
               >
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent text-xl">
                   ✦
                 </span>
                 <span className="text-sm font-semibold text-primary">A clean slate</span>
-                <span className="text-xs">Nothing due this day — click to add a task.</span>
-              </button>
+                <span className="text-xs text-center px-4">
+                  Swipe down to open the calendar · click to add a task.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openCreate(selected)}
+                  className="text-sm text-accent font-medium hover:underline"
+                >
+                  Add a task
+                </button>
+              </div>
             ) : (
               dayTasks.map((t) => (
                 <TaskRow
@@ -578,22 +631,29 @@ function TaskRow({
 }) {
   return (
     <div
-      draggable
+      draggable={!task.virtual}
       onDragStart={(e) => onDragStart(e, task)}
-      className="flex items-center gap-3 rounded-xl border border-border glass px-3 py-2.5 cursor-grab active:cursor-grabbing transition-colors duration-200"
+      className={clsx(
+        "flex items-center gap-3 rounded-xl border border-border glass px-3 py-2.5 transition-colors duration-200",
+        task.virtual ? "cursor-pointer opacity-90" : "cursor-grab active:cursor-grabbing"
+      )}
     >
       <button
         type="button"
         onClick={onToggle}
+        disabled={!!task.virtual}
         className={clsx(
           "h-4 w-4 shrink-0 rounded border flex items-center justify-center",
-          task.done ? "bg-accent border-accent text-surface-0" : "border-border"
+          task.done ? "bg-accent border-accent text-surface-0" : "border-border",
+          task.virtual && "opacity-40"
         )}
       >
         {task.done && <Check size={11} strokeWidth={3} />}
       </button>
       <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
-        <span className={clsx("text-sm text-primary", task.done && "line-through text-secondary")}>{task.title}</span>
+        <span className={clsx("text-sm text-primary", task.done && "line-through text-secondary")}>
+          {task.title}
+        </span>
       </button>
       {task.repeatRule && <Repeat size={12} className="text-secondary shrink-0" />}
     </div>
