@@ -75,7 +75,7 @@ export default function QuickNotesScreen({ navigation }: any) {
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance, fabBottom } = useLayout();
   const { width } = useWindowDimensions();
-  const cardWidth = width - screenPad * 2;
+  const cardWidth = (width - screenPad * 2 - GRID_GAP) / NUM_COLUMNS;
   const selecting = selectMode || selected.size > 0;
   const selectAnim = useRef(new Animated.Value(0)).current;
 
@@ -557,6 +557,9 @@ export default function QuickNotesScreen({ navigation }: any) {
               <ReorderableNoteList
                 notes={item.notes}
                 enabled={!selecting && !showArchived}
+                columns={NUM_COLUMNS}
+                columnWidth={cardWidth}
+                gap={GRID_GAP}
                 onReorder={(ids) => void persistOrder(item.notes, ids)}
                 renderCard={(note, { dragging }) => (
                   <NoteCard
