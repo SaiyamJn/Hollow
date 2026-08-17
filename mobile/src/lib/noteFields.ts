@@ -7,7 +7,7 @@ export function packNoteBody(title: string, body: string) {
   return `${TITLE_MARK}${t}\n${body}`;
 }
 
-export function unpackNoteBody(raw: string): { title: string; content: string } {
+function unpackNoteBody(raw: string): { title: string; content: string } {
   if (!raw.startsWith(TITLE_MARK)) return { title: "", content: raw };
   const rest = raw.slice(TITLE_MARK.length);
   const nl = rest.indexOf("\n");

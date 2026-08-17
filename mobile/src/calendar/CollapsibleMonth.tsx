@@ -14,7 +14,6 @@ import {
   dayKey,
   monthGrid,
   sameDay,
-  startOfMonth,
   startOfWeek,
   weekDays,
 } from "./dateUtils";
@@ -38,7 +37,7 @@ type Props = {
   onSwipeMonth?: (dir: -1 | 1) => void;
 };
 
-/** TickTick-style month that rolls between full grid and a single week. */
+/** TickTick-style month: one week when collapsed, full grid when expanded. */
 export function CollapsibleMonth({
   colors,
   anchor,
@@ -50,50 +49,43 @@ export function CollapsibleMonth({
   onSelectDay,
   onSwipeMonth,
 }: Props) {
-  const anim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+  const heightAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   const dragY = useRef(0);
 
   const cells = useMemo(() => monthGrid(anchor), [anchor]);
+  const weekStrip = useMemo(() => {
+    const start = startOfWeek(selected, 0);
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }, [selected]);
+
   const weekLabels = useMemo(
     () => weekDays(today).map((d) => d.toLocaleDateString(undefined, { weekday: "narrow" })),
     [today]
   );
 
-  const selectedWeekIndex = useMemo(() => {
-    const gridStart = startOfWeek(startOfMonth(anchor), 0);
-    const diff = Math.round((startOfWeek(selected, 0).getTime() - gridStart.getTime()) / 86400000);
-    const idx = Math.floor(diff / 7);
-    return Math.max(0, Math.min(ROWS - 1, idx));
-  }, [anchor, selected]);
-
   useEffect(() => {
-    Animated.spring(anim, {
+    Animated.spring(heightAnim, {
       toValue: expanded ? 1 : 0,
       useNativeDriver: false,
       friction: 12,
       tension: 48,
       overshootClamping: true,
     }).start();
-  }, [expanded, anim]);
+  }, [expanded, heightAnim]);
 
-  const height = anim.interpolate({
+  const height = heightAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [ROW_H, ROW_H * ROWS],
   });
 
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-selectedWeekIndex * ROW_H, 0],
-  });
-
-  const handleRot = anim.interpolate({
+  const handleRot = heightAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "180deg"],
   });
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2,
       onPanResponderGrant: () => {
         dragY.current = 0;
       },
@@ -103,13 +95,75 @@ export function CollapsibleMonth({
       onPanResponderRelease: (_, g) => {
         if (g.dy < -28 || g.vy < -0.4) onExpandedChange(false);
         else if (g.dy > 28 || g.vy > 0.4) onExpandedChange(true);
-        // horizontal flick → month change
         if (Math.abs(g.dx) > 48 && Math.abs(g.dx) > Math.abs(g.dy)) {
           onSwipeMonth?.(g.dx < 0 ? 1 : -1);
         }
       },
     })
   ).current;
+
+  function renderDay(day: Date) {
+    const inMonth = day.getMonth() === anchor.getMonth();
+    const isToday = sameDay(day, today);
+    const isSelected = sameDay(day, selected);
+    const open = tasksOnDay(byDay, day).filter((t) => !t.done);
+    const bars = open.slice(0, 3);
+
+    // High-contrast fill + ink so the selected day never "vanishes" into the page bg.
+    const bubbleBg = isSelected ? colors.accent : "transparent";
+    const bubbleBorderW = !isSelected && isToday ? 1.5 : 0;
+    const bubbleBorderC = colors.accent;
+    const labelColor = isSelected
+      ? colors.surface0
+      : inMonth
+        ? colors.textPrimary
+        : colors.textSecondary;
+
+    return (
+      <Pressable
+        key={dayKey(day)}
+        onPress={() => onSelectDay(day)}
+        style={styles.cell}
+        hitSlop={4}
+      >
+        <View
+          style={[
+            styles.dayBubble,
+            {
+              backgroundColor: bubbleBg,
+              borderWidth: bubbleBorderW,
+              borderColor: bubbleBorderC,
+            },
+          ]}
+        >
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: isToday || isSelected ? "700" : "400",
+              color: labelColor,
+              opacity: inMonth || isSelected ? 1 : 0.4,
+            }}
+          >
+            {day.getDate()}
+          </Text>
+        </View>
+        <View style={styles.bars}>
+          {bars.map((t) => (
+            <View
+              key={t.id}
+              style={[
+                styles.bar,
+                {
+                  backgroundColor: t.starred ? colors.accent : colors.textSecondary,
+                  opacity: t.starred ? 0.95 : 0.55,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -121,74 +175,20 @@ export function CollapsibleMonth({
         ))}
       </View>
 
+      {/*
+        Collapsed: render only the selected week (no translate clipping).
+        Expanded: full month grid. Height still springs between 1 and 6 rows.
+      */}
       <Animated.View style={[styles.clip, { height }]} {...pan.panHandlers}>
-        <Animated.View style={{ transform: [{ translateY }] }}>
-          {Array.from({ length: ROWS }, (_, row) => (
+        {expanded ? (
+          Array.from({ length: ROWS }, (_, row) => (
             <View key={row} style={styles.row}>
-              {cells.slice(row * 7, row * 7 + 7).map((day) => {
-                const inMonth = day.getMonth() === anchor.getMonth();
-                const isToday = sameDay(day, today);
-                const isSelected = sameDay(day, selected);
-                const list = tasksOnDay(byDay, day);
-                const open = list.filter((t) => !t.done);
-                const bars = open.slice(0, 3);
-                return (
-                  <Pressable
-                    key={dayKey(day)}
-                    onPress={() => onSelectDay(day)}
-                    style={styles.cell}
-                  >
-                    <View
-                      style={[
-                        styles.dayBubble,
-                        isSelected && {
-                          backgroundColor: colors.accent,
-                          borderWidth: 0,
-                        },
-                        // Keep today's ring even when another day is selected.
-                        isToday &&
-                          !isSelected && {
-                            backgroundColor: "transparent",
-                            borderWidth: 1.5,
-                            borderColor: colors.accent,
-                          },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontWeight: isToday || isSelected ? "600" : "400",
-                          color: isSelected
-                            ? colors.surface0
-                            : inMonth
-                              ? colors.textPrimary
-                              : colors.textSecondary,
-                          opacity: inMonth ? 1 : 0.35,
-                        }}
-                      >
-                        {day.getDate()}
-                      </Text>
-                    </View>
-                    <View style={styles.bars}>
-                      {bars.map((t) => (
-                        <View
-                          key={t.id}
-                          style={[
-                            styles.bar,
-                            {
-                              backgroundColor: t.starred ? colors.accent : colors.textSecondary,
-                              opacity: t.starred ? 0.95 : 0.5,
-                            },
-                          ]}
-                        />
-                      ))}
-                    </View>
-                  </Pressable>
-                );
-              })}
+              {cells.slice(row * 7, row * 7 + 7).map((day) => renderDay(day))}
             </View>
-          ))}
-        </Animated.View>
+          ))
+        ) : (
+          <View style={styles.row}>{weekStrip.map((day) => renderDay(day))}</View>
+        )}
       </Animated.View>
 
       <Pressable
@@ -212,15 +212,9 @@ export function ensureSelectedInMonth(selected: Date, monthAnchor: Date): Date {
   if (selected.getMonth() === monthAnchor.getMonth() && selected.getFullYear() === monthAnchor.getFullYear()) {
     return selected;
   }
-  // Prefer same day-of-month, else last day of month
   const last = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
   const day = Math.min(selected.getDate(), last);
   return new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), day);
-}
-
-export function weekContaining(d: Date): Date[] {
-  const start = startOfWeek(d, 0);
-  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
 const styles = StyleSheet.create({
@@ -253,7 +247,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 999,
-    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -283,11 +276,3 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 });
-
-export const COLLAPSIBLE_MONTH_HEIGHT = {
-  weekday: WEEKDAY_H,
-  row: ROW_H,
-  handle: HANDLE_H,
-  expanded: WEEKDAY_H + ROW_H * ROWS + HANDLE_H,
-  collapsed: WEEKDAY_H + ROW_H + HANDLE_H,
-};

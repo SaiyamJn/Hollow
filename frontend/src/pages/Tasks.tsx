@@ -58,11 +58,11 @@ function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => voi
     <button
       onClick={onToggle}
       className={clsx(
-        "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors",
-        checked ? "bg-accent border-accent text-surface-0" : "border-border hover:border-secondary"
+        "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-all duration-300",
+        checked ? "bg-accent border-accent text-surface-0 scale-95" : "border-border hover:border-secondary"
       )}
     >
-      {checked && <Check size={11} strokeWidth={3} />}
+      {checked && <Check size={11} strokeWidth={3} className="animate-fade-in" />}
     </button>
   );
 }
@@ -446,7 +446,10 @@ function TaskRow({
         </button>
         <Checkbox checked={task.done} onToggle={() => onPatch(task.id, { done: !task.done })} />
         <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
-          <span className={clsx("block text-sm truncate", task.done && "line-through text-secondary")}>
+          <span className={clsx(
+            "block text-sm truncate transition-all duration-300",
+            task.done && "line-through text-secondary opacity-70"
+          )}>
             {task.title}
           </span>
           {task.description ? (

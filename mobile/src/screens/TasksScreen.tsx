@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import { syncTaskReminders } from "../lib/notifications";
-import { animateListChange } from "../lib/motion";
+import { animateListChange, animateTaskComplete } from "../lib/motion";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { Fab } from "../components/Fab";
@@ -118,8 +118,30 @@ export default function TasksScreen() {
         description?: string;
       };
     }) => updateTask(id, patch),
-    onSuccess: () => {
-      animateListChange();
+    onMutate: async ({ id, patch }) => {
+      if (patch.done !== undefined) animateTaskComplete();
+      else animateListChange();
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const prev = queryClient.getQueryData<Task[]>(["tasks"]);
+      if (patch.done !== undefined || patch.starred !== undefined) {
+        queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+          (old ?? []).map((t) => {
+            if (t.id !== id) {
+              return {
+                ...t,
+                subtasks: t.subtasks?.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+              };
+            }
+            return { ...t, ...patch };
+          })
+        );
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["tasks"], ctx.prev);
+    },
+    onSettled: () => {
       invalidate();
     },
   });

@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -28,6 +29,7 @@ import { PromptModal } from "../components/PromptModal";
 import { TaskFormModal, type TaskDraft } from "../components/TaskFormModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
+import { animateTaskComplete } from "../lib/motion";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 
@@ -99,8 +101,27 @@ export default function HomeScreen({ navigation }: any) {
 
   const toggleTask = useMutation({
     mutationFn: (id: string) => updateTask(id, { done: true }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const prev = queryClient.getQueryData<Task[]>(["tasks"]);
+      // Optimistic: mark done so the row can animate out without a flicker/reappear.
+      queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+        (old ?? []).map((t) => (t.id === id ? { ...t, done: true } : t))
+      );
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["tasks"], ctx.prev);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
   });
+
+  const [completing, setCompleting] = useState<Record<string, boolean>>({});
+
+  function completeHomeTask(id: string) {
+    if (completing[id]) return;
+    setCompleting((m) => ({ ...m, [id]: true }));
+  }
 
   function openRecent(p: RecentPage) {
     navigation.navigate("Page", {
@@ -117,20 +138,35 @@ export default function HomeScreen({ navigation }: any) {
   endOfToday.setDate(endOfToday.getDate() + 1);
 
   const open = (tasks ?? []).filter((t) => {
+    // Keep the row mounted briefly while the check-off animation plays.
+    if (completing[t.id]) return true;
     if (t.done) return false;
     // Future repeating occurrences wait for their day (calendar still shows them).
     if (t.repeatRule && t.dueAt && new Date(t.dueAt) >= endOfToday) return false;
     return true;
   });
-  const overdue = open.filter((t) => t.dueAt && new Date(t.dueAt) < startOfToday);
+  const overdue = open.filter((t) => !completing[t.id] && t.dueAt && new Date(t.dueAt) < startOfToday);
   const dueToday = open.filter(
-    (t) => t.dueAt && new Date(t.dueAt) >= startOfToday && new Date(t.dueAt) < endOfToday
+    (t) =>
+      !completing[t.id] &&
+      t.dueAt &&
+      new Date(t.dueAt) >= startOfToday &&
+      new Date(t.dueAt) < endOfToday
   );
+  const completingRows = open.filter((t) => completing[t.id]);
+  const liveOpen = open.filter((t) => !completing[t.id]);
   const scheduled: { task: Task; overdue: boolean }[] = [
     ...overdue.map((t) => ({ task: t, overdue: true })),
     ...dueToday.map((t) => ({ task: t, overdue: false })),
   ];
-  const list = (scheduled.length > 0 ? scheduled : open.slice(0, 5).map((t) => ({ task: t, overdue: false }))).slice(0, 7);
+  const list = (
+    scheduled.length > 0
+      ? [...scheduled, ...completingRows.map((t) => ({ task: t, overdue: false as boolean }))]
+      : [
+          ...liveOpen.slice(0, 5).map((t) => ({ task: t, overdue: false as boolean })),
+          ...completingRows.map((t) => ({ task: t, overdue: false as boolean })),
+        ]
+  ).slice(0, 8);
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
@@ -284,17 +320,29 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       )}
       {list.map(({ task, overdue: isOverdue }) => (
-        <View key={task.id} style={styles.taskRow}>
-          <Pressable onPress={() => toggleTask.mutate(task.id)} hitSlop={8}>
-            <Feather name="square" size={16} color={colors.textSecondary} />
-          </Pressable>
-          <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1, minWidth: 0 }} numberOfLines={1}>
-            {task.title}
-          </Text>
-          {isOverdue && (
-            <Text style={{ color: colors.danger, fontSize: 12, flexShrink: 0 }}>overdue</Text>
-          )}
-        </View>
+        <HomeTaskRow
+          key={task.id}
+          title={task.title}
+          overdue={isOverdue}
+          completing={!!completing[task.id]}
+          accent={colors.accent}
+          textPrimary={colors.textPrimary}
+          textSecondary={colors.textSecondary}
+          danger={colors.danger}
+          onComplete={() => completeHomeTask(task.id)}
+          onFinished={() => {
+            animateTaskComplete();
+            toggleTask.mutate(task.id, {
+              onSettled: () => {
+                setCompleting((m) => {
+                  const next = { ...m };
+                  delete next[task.id];
+                  return next;
+                });
+              },
+            });
+          }}
+        />
       ))}
     </ScrollView>
 
@@ -356,6 +404,78 @@ export default function HomeScreen({ navigation }: any) {
       }}
     />
     </KeyboardSafe>
+  );
+}
+
+function HomeTaskRow({
+  title,
+  overdue,
+  completing,
+  accent,
+  textPrimary,
+  textSecondary,
+  danger,
+  onComplete,
+  onFinished,
+}: {
+  title: string;
+  overdue: boolean;
+  completing: boolean;
+  accent: string;
+  textPrimary: string;
+  textSecondary: string;
+  danger: string;
+  onComplete: () => void;
+  onFinished: () => void;
+}) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const finishedRef = useRef(onFinished);
+  const fired = useRef(false);
+  finishedRef.current = onFinished;
+
+  useEffect(() => {
+    if (!completing || fired.current) return;
+    const anim = Animated.parallel([
+      Animated.timing(opacity, { toValue: 0, duration: 340, useNativeDriver: true }),
+      Animated.timing(translateX, { toValue: 12, duration: 340, useNativeDriver: true }),
+    ]);
+    anim.start(({ finished }) => {
+      if (finished && !fired.current) {
+        fired.current = true;
+        finishedRef.current();
+      }
+    });
+    return () => anim.stop();
+  }, [completing, opacity, translateX]);
+
+  return (
+    <Animated.View
+      style={[styles.taskRow, { opacity, transform: [{ translateX }] }]}
+    >
+      <Pressable onPress={onComplete} hitSlop={8} disabled={completing}>
+        <Feather
+          name={completing ? "check-square" : "square"}
+          size={16}
+          color={completing ? accent : textSecondary}
+        />
+      </Pressable>
+      <Text
+        style={{
+          color: completing ? textSecondary : textPrimary,
+          fontSize: 14,
+          flex: 1,
+          minWidth: 0,
+          textDecorationLine: completing ? "line-through" : "none",
+        }}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+      {overdue && !completing && (
+        <Text style={{ color: danger, fontSize: 12, flexShrink: 0 }}>overdue</Text>
+      )}
+    </Animated.View>
   );
 }
 

@@ -65,6 +65,7 @@ export default function CalendarScreen() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
 
   const scrollY = useRef(0);
+  const listDragging = useRef(false);
   const fade = useRef(new Animated.Value(1)).current;
 
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
@@ -158,7 +159,9 @@ export default function CalendarScreen() {
     const prev = scrollY.current;
     scrollY.current = y;
     if (view !== "schedule") return;
-    // Scrolling the list collapses an open calendar; expand only via handle/drag.
+    // Only collapse from a real drag — FlatList content swaps on day change
+    // can emit scroll events and would otherwise yank the month closed.
+    if (!listDragging.current) return;
     if (y > 24 && y > prev && expanded) setCalendarExpanded(false);
   }
 
@@ -255,6 +258,15 @@ export default function CalendarScreen() {
                   flexGrow: 1,
                 }}
                 onScroll={(e) => onListScroll(e.nativeEvent.contentOffset.y)}
+                onScrollBeginDrag={() => {
+                  listDragging.current = true;
+                }}
+                onScrollEndDrag={() => {
+                  listDragging.current = false;
+                }}
+                onMomentumScrollEnd={() => {
+                  listDragging.current = false;
+                }}
                 scrollEventThrottle={16}
                 ListEmptyComponent={
                   <Pressable onPress={() => openCreate(selected)} style={styles.emptyDay}>

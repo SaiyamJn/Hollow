@@ -236,7 +236,7 @@ export default function QuickNotes() {
   const rest = notes.filter((n) => !n.pinned);
 
   return (
-    <div className="max-w-5xl mx-auto px-7 py-10 pb-28">
+    <div className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-14 xl:px-16 py-10 pb-28">
       <div className="text-center mb-6">
         <h1 className="text-xl font-medium">{showArchived ? "Archive" : "Capture"}</h1>
         <p className="text-sm text-secondary mt-1">

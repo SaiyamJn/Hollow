@@ -34,6 +34,28 @@ export function animateListChange() {
   });
 }
 
+/** Softer exit when checking off a task (fade + collapse). */
+export function animateTaskComplete() {
+  configureMotion();
+  LayoutAnimation.configureNext({
+    duration: 380,
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+      duration: 220,
+    },
+    update: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      duration: 380,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+      duration: 320,
+    },
+  });
+}
+
 /** Softer layout transition for expand/collapse panels. */
 export function animatePanel() {
   configureMotion();

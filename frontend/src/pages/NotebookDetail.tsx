@@ -196,7 +196,7 @@ export default function NotebookDetail() {
     (rename.error as any)?.response?.data?.error ?? (rename.error ? "Couldn't save." : null);
 
   return (
-    <div className="max-w-2xl mx-auto px-7 py-10 animate-rise-in">
+    <div className="w-full max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-14 py-10 animate-rise-in">
       <Link
         to="/notebooks"
         className="inline-flex items-center gap-1.5 text-xs text-secondary hover:text-accent mb-5"

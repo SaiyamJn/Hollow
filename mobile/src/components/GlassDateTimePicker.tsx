@@ -41,7 +41,7 @@ function startOfDay(d: Date) {
 }
 
 /** Date-only due times are stored at local midnight. */
-export function isDateOnlyDue(due: Date) {
+function isDateOnlyDue(due: Date) {
   return due.getHours() === 0 && due.getMinutes() === 0 && due.getSeconds() === 0;
 }
 

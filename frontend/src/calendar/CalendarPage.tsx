@@ -22,7 +22,6 @@ import {
   sameDay,
   startOfDay,
   startOfMonth,
-  startOfWeek,
   weekDays,
 } from "./dateUtils";
 import { datedTasks, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
@@ -65,11 +64,7 @@ export default function CalendarPage() {
   const dayTasks = tasksOnDay(byDay, selected);
   const cells = useMemo(() => monthGrid(cursor), [cursor]);
 
-  const selectedWeekIndex = useMemo(() => {
-    const gridStart = startOfWeek(startOfMonth(cursor), 0);
-    const diff = Math.round((startOfWeek(selected, 0).getTime() - gridStart.getTime()) / 86400000);
-    return Math.max(0, Math.min(5, Math.floor(diff / 7)));
-  }, [cursor, selected]);
+  const weekStrip = useMemo(() => weekDays(selected), [selected]);
 
   const create = useMutation({
     mutationFn: createTask,
@@ -164,6 +159,49 @@ export default function CalendarPage() {
         ? selected.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
         : formatMonthTitle(cursor);
 
+  function renderDayCell(day: Date) {
+    const key = dayKey(day);
+    const inMonth = day.getMonth() === cursor.getMonth();
+    const isToday = sameDay(day, today);
+    const isSelected = sameDay(day, selected);
+    const open = tasksOnDay(byDay, day).filter((t) => !t.done);
+    const isDrop = dropKey === key;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => selectDay(day)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDropKey(key);
+        }}
+        onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
+        onDrop={(e) => onDropDay(e, day)}
+        className={clsx("flex flex-col items-center pt-0.5", isDrop && "bg-accent-soft/60 rounded-xl")}
+      >
+        <span
+          className={clsx(
+            "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+            isSelected && "bg-accent text-surface-0 font-semibold shadow-sm",
+            !isSelected && isToday && "border-[1.5px] border-accent font-semibold text-primary",
+            !isSelected && !isToday && inMonth && "text-primary",
+            !isSelected && !isToday && !inMonth && "text-secondary/40"
+          )}
+        >
+          {day.getDate()}
+        </span>
+        <div className="mt-1 w-[70%] max-h-3 space-y-0.5 overflow-hidden">
+          {open.slice(0, 3).map((t) => (
+            <div
+              key={t.id}
+              className={clsx("h-[3px] rounded-full", t.starred ? "bg-accent" : "bg-secondary/50")}
+            />
+          ))}
+        </div>
+      </button>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
       <div className="flex items-center gap-1 mb-3">
@@ -230,60 +268,17 @@ export default function CalendarPage() {
               className="overflow-hidden transition-[max-height] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]"
               style={{ maxHeight: expanded ? 320 : 56 }}
             >
-              <div
-                className="transition-transform duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                style={{ transform: expanded ? "translateY(0)" : `translateY(-${selectedWeekIndex * 52}px)` }}
-              >
-                {Array.from({ length: 6 }, (_, row) => (
+              {expanded ? (
+                Array.from({ length: 6 }, (_, row) => (
                   <div key={row} className="grid grid-cols-7 h-[52px]">
-                    {cells.slice(row * 7, row * 7 + 7).map((day) => {
-                      const key = dayKey(day);
-                      const inMonth = day.getMonth() === cursor.getMonth();
-                      const isToday = sameDay(day, today);
-                      const isSelected = sameDay(day, selected);
-                      const open = tasksOnDay(byDay, day).filter((t) => !t.done);
-                      const isDrop = dropKey === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => selectDay(day)}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setDropKey(key);
-                          }}
-                          onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
-                          onDrop={(e) => onDropDay(e, day)}
-                          className={clsx(
-                            "flex flex-col items-center pt-0.5",
-                            isDrop && "bg-accent-soft/60 rounded-xl"
-                          )}
-                        >
-                          <span
-                            className={clsx(
-                              "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm overflow-hidden",
-                              isSelected && "bg-accent text-surface-0 font-semibold",
-                              !isSelected && isToday && "border-[1.5px] border-accent font-semibold text-primary",
-                              !isSelected && !isToday && inMonth && "text-primary",
-                              !isSelected && !isToday && !inMonth && "text-secondary/40"
-                            )}
-                          >
-                            {day.getDate()}
-                          </span>
-                          <div className="mt-1 w-[70%] max-h-3 space-y-0.5 overflow-hidden">
-                            {open.slice(0, 3).map((t) => (
-                              <div
-                                key={t.id}
-                                className={clsx("h-[3px] rounded-full", t.starred ? "bg-accent" : "bg-secondary/50")}
-                              />
-                            ))}
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {cells.slice(row * 7, row * 7 + 7).map((day) => renderDayCell(day))}
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <div className="grid grid-cols-7 h-[52px]">
+                  {weekStrip.map((day) => renderDayCell(day))}
+                </div>
+              )}
             </div>
             <button
               type="button"

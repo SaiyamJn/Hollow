@@ -17,7 +17,16 @@ export function getSocket(): Socket {
         : raw.replace(/\/api\/?$/, "");
     socket = io(base, {
       auth: (cb) => cb({ token: useAuthStore.getState().token }),
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 600,
+      reconnectionDelayMax: 5000,
+      timeout: 8000,
+      autoConnect: true,
     });
+  } else if (socket.disconnected) {
+    socket.connect();
   }
   return socket;
 }

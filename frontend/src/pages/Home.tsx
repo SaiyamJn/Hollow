@@ -261,10 +261,22 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
 function TodayTasks() {
   const queryClient = useQueryClient();
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
+  const [completing, setCompleting] = useState<Record<string, boolean>>({});
 
   const toggle = useMutation({
-    mutationFn: ({ id, done }: { id: string; done: boolean }) => updateTask(id, { done }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    mutationFn: (id: string) => updateTask(id, { done: true }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const prev = queryClient.getQueryData<Task[]>(["tasks"]);
+      queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+        (old ?? []).map((t) => (t.id === id ? { ...t, done: true } : t))
+      );
+      return { prev };
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["tasks"], ctx.prev);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
   });
 
   const startOfToday = new Date();
@@ -273,19 +285,49 @@ function TodayTasks() {
   endOfToday.setDate(endOfToday.getDate() + 1);
 
   const open = (tasks ?? []).filter((t) => {
+    if (completing[t.id]) return true;
     if (t.done) return false;
     if (t.repeatRule && t.dueAt && new Date(t.dueAt) >= endOfToday) return false;
     return true;
   });
-  const overdue = open.filter((t) => t.dueAt && new Date(t.dueAt) < startOfToday);
+  const overdue = open.filter((t) => !completing[t.id] && t.dueAt && new Date(t.dueAt) < startOfToday);
   const dueToday = open.filter(
-    (t) => t.dueAt && new Date(t.dueAt) >= startOfToday && new Date(t.dueAt) < endOfToday
+    (t) =>
+      !completing[t.id] &&
+      t.dueAt &&
+      new Date(t.dueAt) >= startOfToday &&
+      new Date(t.dueAt) < endOfToday
   );
+  const completingRows = open.filter((t) => completing[t.id]);
+  const liveOpen = open.filter((t) => !completing[t.id]);
   const shown: { task: Task; overdue: boolean }[] = [
     ...overdue.map((t) => ({ task: t, overdue: true })),
     ...dueToday.map((t) => ({ task: t, overdue: false })),
   ];
-  const list = (shown.length > 0 ? shown : open.slice(0, 5).map((t) => ({ task: t, overdue: false }))).slice(0, 5);
+  const list = (
+    shown.length > 0
+      ? [...shown, ...completingRows.map((t) => ({ task: t, overdue: false as boolean }))]
+      : [
+          ...liveOpen.slice(0, 5).map((t) => ({ task: t, overdue: false as boolean })),
+          ...completingRows.map((t) => ({ task: t, overdue: false as boolean })),
+        ]
+  ).slice(0, 6);
+
+  function completeTask(id: string) {
+    if (completing[id]) return;
+    setCompleting((m) => ({ ...m, [id]: true }));
+    window.setTimeout(() => {
+      toggle.mutate(id, {
+        onSettled: () => {
+          setCompleting((m) => {
+            const next = { ...m };
+            delete next[id];
+            return next;
+          });
+        },
+      });
+    }, 320);
+  }
 
   return (
     <section>
@@ -306,22 +348,31 @@ function TodayTasks() {
         </p>
       )}
       <ul className="space-y-0.5">
-        {list.map(({ task, overdue: isOverdue }) => (
-          <li
-            key={task.id}
-            className="flex items-center gap-2.5 rounded-lg px-2 py-2 -mx-2 text-sm hover:bg-surface-2 transition-colors"
-          >
-            <button
-              className="shrink-0 text-secondary hover:text-accent transition-colors"
-              onClick={() => toggle.mutate({ id: task.id, done: true })}
-              title="Mark done"
+        {list.map(({ task, overdue: isOverdue }) => {
+          const leaving = !!completing[task.id];
+          return (
+            <li
+              key={task.id}
+              className={clsx(
+                "flex items-center gap-2.5 rounded-lg px-2 py-2 -mx-2 text-sm transition-all duration-300",
+                leaving ? "opacity-0 translate-x-2 pointer-events-none" : "opacity-100 hover:bg-surface-2"
+              )}
             >
-              <Square size={14} />
-            </button>
-            <span className="truncate flex-1">{task.title}</span>
-            {isOverdue && <span className="text-xs text-danger shrink-0">overdue</span>}
-          </li>
-        ))}
+              <button
+                className="shrink-0 text-secondary hover:text-accent transition-colors"
+                onClick={() => completeTask(task.id)}
+                title="Mark done"
+                disabled={leaving}
+              >
+                {leaving ? <CheckSquare size={14} className="text-accent" /> : <Square size={14} />}
+              </button>
+              <span className={clsx("truncate flex-1 transition-colors", leaving && "line-through text-secondary")}>
+                {task.title}
+              </span>
+              {isOverdue && !leaving && <span className="text-xs text-danger shrink-0">overdue</span>}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

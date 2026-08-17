@@ -76,9 +76,14 @@ export default function PageEditor() {
     data: page,
     error,
     isLoading,
+    isFetching,
+    refetch,
   } = useQuery({
     queryKey: ["page", pageId, password ?? null],
     queryFn: () => fetchPage(pageId, password),
+    retry: 2,
+    retryDelay: (n) => Math.min(1000 * 2 ** n, 4000),
+    staleTime: 15_000,
   });
 
   const status = (error as any)?.response?.status;
@@ -117,8 +122,23 @@ export default function PageEditor() {
     );
   }
 
-  if (isLoading) return <div className="p-7 text-sm text-secondary">Loading…</div>;
-  if (error || !page) return <div className="p-7 text-sm text-secondary">Couldn't load this page.</div>;
+  if (isLoading) {
+    return (
+      <div className="w-full px-8 md:px-12 lg:px-16 py-10 text-sm text-secondary">
+        Loading page…
+      </div>
+    );
+  }
+  if (error || !page) {
+    return (
+      <div className="w-full px-8 md:px-12 lg:px-16 py-10 space-y-3">
+        <p className="text-sm text-secondary">Couldn't load this page.</p>
+        <Button variant="ghost" disabled={isFetching} onClick={() => void refetch()}>
+          {isFetching ? "Retrying…" : "Try again"}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <CollabGate
@@ -145,8 +165,20 @@ function CollabGate({
   password?: string;
 }) {
   const { session, error } = usePageCollab(page.id, password);
-  if (error) return <div className="p-7 text-sm text-secondary">Realtime connection failed: {error}</div>;
-  if (!session) return <div className="p-7 text-sm text-secondary">Connecting…</div>;
+  if (error && !session) {
+    return (
+      <div className="w-full px-8 md:px-12 lg:px-16 py-10 text-sm text-secondary">
+        Couldn't open editor: {error}
+      </div>
+    );
+  }
+  if (!session) {
+    return (
+      <div className="w-full px-8 md:px-12 lg:px-16 py-10 text-sm text-secondary">
+        Opening editor…
+      </div>
+    );
+  }
   return (
     <Editor
       page={page}
@@ -407,10 +439,17 @@ function Editor({
   return (
     <div
       className={clsx(
-        "mx-auto animate-rise-in",
-        focusMode ? "max-w-2xl px-7 pt-14 pb-24 focus-prose" : "max-w-3xl px-7 py-6"
+        "w-full mx-auto animate-rise-in",
+        focusMode
+          ? "max-w-5xl px-8 md:px-12 pt-14 pb-24 focus-prose"
+          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16 py-6"
       )}
     >
+      {session.localOnly && (
+        <p className="mb-3 text-[11px] text-secondary">
+          Editing offline from saved content — realtime sync will resume when connected.
+        </p>
+      )}
       <div className="flex items-baseline justify-between gap-4">
         <input
           className="flex-1 bg-transparent text-2xl font-medium focus:outline-none"

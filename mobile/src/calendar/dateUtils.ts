@@ -6,12 +6,6 @@ export function startOfDay(d: Date): Date {
   return x;
 }
 
-export function endOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
 export function sameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -51,30 +45,13 @@ export function dayKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export function parseDayKey(key: string): Date {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
 export function formatMonthTitle(d: Date): string {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-}
-
-export function formatWeekdayShort(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 export function formatDayHeading(d: Date): string {
   return d.toLocaleDateString(undefined, {
     weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-export function formatAgendaDay(d: Date): string {
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
     month: "short",
     day: "numeric",
   });
