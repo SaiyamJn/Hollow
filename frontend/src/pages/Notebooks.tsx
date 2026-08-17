@@ -89,7 +89,7 @@ export default function Notebooks() {
           <div className="h-12 w-12 rounded-2xl bg-accent-soft flex items-center justify-center">
             <Book size={20} className="text-accent" />
           </div>
-          <p className="text-sm text-secondary">No notebooks yet.</p>
+          <p className="text-sm text-secondary">No notebooks yet — start one when inspiration hits.</p>
           <Button variant="accent" onClick={() => setCreateOpen(true)}>
             Create your first
           </Button>

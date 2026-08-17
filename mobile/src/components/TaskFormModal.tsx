@@ -16,28 +16,52 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../contexts/theme";
 import type { TaskRepeatRule } from "../lib/types";
+import {
+  clampInterval,
+  defaultWeeklyDays,
+  formatRepeatLabel,
+  normalizeRepeatDays,
+  normalizeRepeatEnd,
+  type RepeatEnd,
+} from "../lib/taskRepeat";
 import { GlassCard } from "./GlassCard";
 import { GlassDateTimePicker, formatDueLabel } from "./GlassDateTimePicker";
+import { RepeatPanel } from "./RepeatPanel";
 
 export type TaskDraft = {
   title: string;
   description: string;
   due: Date | null;
   repeat: TaskRepeatRule | null;
+  repeatDays?: number[] | null;
+  repeatInterval?: number | null;
+  repeatEnd?: RepeatEnd | null;
+  repeatUntil?: Date | null;
+  repeatCount?: number | null;
 };
 
-const REPEAT_OPTIONS: { value: TaskRepeatRule | null; label: string }[] = [
-  { value: null, label: "Does not repeat" },
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "yearly", label: "Yearly" },
-];
+export { formatRepeatLabel };
 
-export function formatRepeatLabel(rule: TaskRepeatRule | null | undefined) {
-  if (!rule) return "Does not repeat";
-  const hit = REPEAT_OPTIONS.find((o) => o.value === rule);
-  return hit?.label ?? rule;
+export function repeatPayload(draft: TaskDraft) {
+  if (!draft.due || !draft.repeat) {
+    return {
+      repeatRule: null as TaskRepeatRule | null,
+      repeatDays: null as number[] | null,
+      repeatInterval: 1,
+      repeatEnd: null as RepeatEnd | null,
+      repeatUntil: null as string | null,
+      repeatCount: null as number | null,
+    };
+  }
+  const end = normalizeRepeatEnd(draft.repeatEnd);
+  return {
+    repeatRule: draft.repeat,
+    repeatDays: draft.repeat === "weekly" ? normalizeRepeatDays(draft.repeatDays) ?? defaultWeeklyDays(draft.due) : null,
+    repeatInterval: clampInterval(draft.repeatInterval ?? 1),
+    repeatEnd: end,
+    repeatUntil: end === "on" && draft.repeatUntil ? draft.repeatUntil.toISOString() : null,
+    repeatCount: end === "after" ? Math.min(999, Math.max(1, Math.floor(draft.repeatCount ?? 30))) : null,
+  };
 }
 
 function overlayPads(insets: { top: number; bottom: number }, height: number) {
@@ -74,12 +98,15 @@ export function TaskFormModal({
   const { height } = useWindowDimensions();
   const [dueOpen, setDueOpen] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
+  const [untilOpen, setUntilOpen] = useState(false);
   const [dueDraft, setDueDraft] = useState<Date | null>(null);
+  const [untilDraft, setUntilDraft] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!visible) {
       setDueOpen(false);
       setRepeatOpen(false);
+      setUntilOpen(false);
     }
   }, [visible]);
 
@@ -88,11 +115,13 @@ export function TaskFormModal({
   const { padTop, padBottom, maxCardH } = overlayPads(insets, height);
 
   function openDuePicker() {
-    const initial = current.due ?? (() => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      return d;
-    })();
+    const initial =
+      current.due ??
+      (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+      })();
     setDueDraft(initial);
     setDueOpen(true);
   }
@@ -102,13 +131,40 @@ export function TaskFormModal({
       ...current,
       due: dueDraft,
       repeat: dueDraft ? current.repeat : null,
+      repeatDays: dueDraft && current.repeat === "weekly" ? current.repeatDays ?? defaultWeeklyDays(dueDraft) : null,
+      repeatInterval: dueDraft ? current.repeatInterval ?? 1 : 1,
+      repeatEnd: dueDraft ? current.repeatEnd : null,
+      repeatUntil: dueDraft ? current.repeatUntil : null,
+      repeatCount: dueDraft ? current.repeatCount : null,
     });
     setDueOpen(false);
   }
 
   function clearDue() {
-    onChange({ ...current, due: null, repeat: null });
+    onChange({
+      ...current,
+      due: null,
+      repeat: null,
+      repeatDays: null,
+      repeatInterval: 1,
+      repeatEnd: null,
+      repeatUntil: null,
+      repeatCount: null,
+    });
     setDueOpen(false);
+  }
+
+  function openUntilPicker() {
+    const initial =
+      current.repeatUntil ??
+      (() => {
+        const d = current.due ? new Date(current.due) : new Date();
+        d.setMonth(d.getMonth() + 1);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      })();
+    setUntilDraft(initial);
+    setUntilOpen(true);
   }
 
   return (
@@ -120,48 +176,30 @@ export function TaskFormModal({
         >
           <GlassCard
             strong
-            style={{ maxHeight: maxCardH, width: "100%", overflow: "hidden" }}
+            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 440, alignSelf: "center", overflow: "hidden" }}
             contentStyle={[styles.card, { maxHeight: maxCardH }]}
           >
-            <ScrollView
-              style={{ maxHeight: maxCardH - 8 }}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              automaticallyAdjustKeyboardInsets
-              bounces={false}
-              contentContainerStyle={{ paddingBottom: 8 }}
-            >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={[styles.heading, { color: colors.textPrimary }]}>{title}</Text>
               <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.textPrimary,
-                    borderColor: colors.glassBorder,
-                    backgroundColor: colors.glass,
-                  },
-                ]}
-                placeholder="Title"
-                placeholderTextColor={colors.textSecondary}
-                value={current.title}
-                onChangeText={(nextTitle) => onChange({ ...current, title: nextTitle })}
                 autoFocus={autoFocus}
+                value={current.title}
+                onChangeText={(titleText) => onChange({ ...current, title: titleText })}
+                placeholder="What's the plan?"
+                placeholderTextColor={colors.textSecondary}
+                style={[styles.input, { color: colors.textPrimary, borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
               />
               <TextInput
+                value={current.description}
+                onChangeText={(description) => onChange({ ...current, description })}
+                placeholder="A little context, if you like"
+                placeholderTextColor={colors.textSecondary}
+                multiline
                 style={[
                   styles.input,
                   styles.desc,
-                  {
-                    color: colors.textPrimary,
-                    borderColor: colors.glassBorder,
-                    backgroundColor: colors.glass,
-                  },
+                  { color: colors.textPrimary, borderColor: colors.glassBorder, backgroundColor: colors.glass },
                 ]}
-                placeholder="Details"
-                placeholderTextColor={colors.textSecondary}
-                value={current.description}
-                onChangeText={(description) => onChange({ ...current, description })}
-                multiline
               />
 
               <Pressable
@@ -171,7 +209,7 @@ export function TaskFormModal({
               >
                 <Feather name="calendar" size={14} color={colors.textSecondary} />
                 <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
-                  {current.due ? formatDueLabel(current.due) : "Add date/time"}
+                  {current.due ? formatDueLabel(current.due) : "When is it due?"}
                 </Text>
                 <Feather name="chevron-right" size={14} color={colors.textSecondary} />
               </Pressable>
@@ -185,15 +223,24 @@ export function TaskFormModal({
                 hitSlop={6}
               >
                 <Feather name="repeat" size={14} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
-                  {current.due ? formatRepeatLabel(current.repeat) : "Repeat (needs a date)"}
+                <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }} numberOfLines={2}>
+                  {current.due
+                    ? formatRepeatLabel({
+                        rule: current.repeat,
+                        days: current.repeatDays,
+                        interval: current.repeatInterval,
+                        end: current.repeatEnd,
+                        until: current.repeatUntil,
+                        count: current.repeatCount,
+                      })
+                    : "Repeat (pick a date first)"}
                 </Text>
                 <Feather name="chevron-right" size={14} color={colors.textSecondary} />
               </Pressable>
 
               <View style={styles.actions}>
                 <Pressable onPress={onClose}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Never mind</Text>
                 </Pressable>
                 <Pressable disabled={!current.title.trim() || busy} onPress={onSubmit}>
                   <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>{submitLabel}</Text>
@@ -204,7 +251,6 @@ export function TaskFormModal({
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Separate compact popup — sibling Modal so it stacks cleanly over the form */}
       <Modal
         visible={visible && dueOpen}
         transparent
@@ -227,7 +273,7 @@ export function TaskFormModal({
               <GlassDateTimePicker value={dueDraft} onChange={setDueDraft} />
               <View style={[styles.actions, { marginTop: 12 }]}>
                 <Pressable onPress={clearDue}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Remove</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Clear</Text>
                 </Pressable>
                 <View style={{ flexDirection: "row", gap: 20 }}>
                   <Pressable onPress={() => setDueOpen(false)}>
@@ -252,44 +298,61 @@ export function TaskFormModal({
         <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
           <GlassCard
             strong
-            style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}
-            contentStyle={styles.card}
+            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 420, alignSelf: "center", overflow: "hidden" }}
+            contentStyle={[styles.card, { maxHeight: maxCardH }]}
           >
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>Repeat</Text>
-            {REPEAT_OPTIONS.map((opt) => {
-              const selected = (current.repeat ?? null) === opt.value;
-              return (
-                <Pressable
-                  key={opt.label}
-                  onPress={() => {
-                    onChange({ ...current, repeat: opt.value });
-                    setRepeatOpen(false);
-                  }}
-                  style={[
-                    styles.repeatOption,
-                    {
-                      borderColor: selected ? colors.accent : colors.glassBorder,
-                      backgroundColor: selected ? colors.accentSoft : colors.glass,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: selected ? colors.accent : colors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: selected ? "600" : "400",
-                      flex: 1,
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                  {selected && <Feather name="check" size={16} color={colors.accent} />}
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <RepeatPanel
+                due={current.due}
+                value={current}
+                onChange={(next) => onChange({ ...current, ...next })}
+                onPickUntil={openUntilPicker}
+              />
+              <Pressable
+                onPress={() => setRepeatOpen(false)}
+                style={{ alignSelf: "flex-end", marginTop: 12 }}
+              >
+                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+              </Pressable>
+            </ScrollView>
+          </GlassCard>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={visible && untilOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUntilOpen(false)}
+      >
+        <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
+          <GlassCard
+            strong
+            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 400, alignSelf: "center", overflow: "hidden" }}
+            contentStyle={[styles.card, { maxHeight: maxCardH }]}
+          >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={[styles.heading, { color: colors.textPrimary }]}>Last day</Text>
+              <GlassDateTimePicker value={untilDraft} onChange={setUntilDraft} />
+              <View style={[styles.actions, { marginTop: 12 }]}>
+                <Pressable onPress={() => setUntilOpen(false)}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
                 </Pressable>
-              );
-            })}
-            <Pressable onPress={() => setRepeatOpen(false)} style={{ alignSelf: "flex-end", marginTop: 8 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
-            </Pressable>
+                <Pressable
+                  onPress={() => {
+                    onChange({
+                      ...current,
+                      repeatEnd: "on",
+                      repeatUntil: untilDraft,
+                      repeatCount: null,
+                    });
+                    setUntilOpen(false);
+                  }}
+                >
+                  <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </GlassCard>
         </View>
       </Modal>
@@ -335,14 +398,5 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 14,
-  },
-  repeatOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 8,
   },
 });

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, Check, Moon, Sun } from "lucide-react";
+import { Bell, BellOff, Moon, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import clsx from "clsx";
 import { useTheme } from "../theme/ThemeProvider";
 import { useFont } from "../theme/FontProvider";
 import { useAuthStore } from "../stores/auth";
@@ -182,7 +181,7 @@ export default function Settings() {
     <div className="max-w-lg mx-auto px-7 py-10 space-y-4">
       <div className="text-center mb-2">
         <h1 className="text-xl font-medium">Settings</h1>
-        <p className="text-sm text-secondary mt-1">Account, appearance, and shortcuts.</p>
+        <p className="text-sm text-secondary mt-1">Make it feel like yours.</p>
       </div>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-1">
@@ -209,41 +208,27 @@ export default function Settings() {
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
         <div>
           <h2 className="text-sm font-medium text-primary">Font</h2>
-          <p className="text-sm text-secondary mt-0.5">Applies across the whole app</p>
+          <p className="text-sm text-secondary mt-0.5">The voice of your words on screen</p>
         </div>
-        <ul className="space-y-1.5 text-left">
-          {FONT_OPTIONS.map((opt) => {
-            const active = font === opt.id;
-            return (
-              <li key={opt.id}>
-                <button
-                  type="button"
-                  onClick={() => setFont(opt.id)}
-                  className={clsx(
-                    "w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                    active
-                      ? "border-accent bg-accent-soft"
-                      : "border-border hover:border-secondary hover:bg-surface-2/60"
-                  )}
-                  style={{ fontFamily: opt.family }}
-                >
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-medium text-primary">{opt.label}</span>
-                    <span className="block text-xs text-secondary mt-0.5">{opt.sample}</span>
-                  </span>
-                  {active && <Check size={15} className="text-accent shrink-0" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <select
+          className="w-full rounded-lg border border-border glass-input px-3 py-2.5 text-sm text-primary focus:outline-none focus:border-accent"
+          value={font}
+          onChange={(e) => setFont(e.target.value as typeof font)}
+          style={{ fontFamily: FONT_OPTIONS.find((o) => o.id === font)?.family }}
+        >
+          {FONT_OPTIONS.map((opt) => (
+            <option key={opt.id} value={opt.id} style={{ fontFamily: opt.family }}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </section>
 
       <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
         <div>
           <h2 className="text-sm font-medium text-primary">Task reminders</h2>
           <p className="text-sm text-secondary mt-0.5">
-            Notify me when a task is due (while the app is open)
+            A little tap on the shoulder when something's due (while you're here)
           </p>
           {reminderError && <p className="text-sm text-danger mt-2">{reminderError}</p>}
         </div>

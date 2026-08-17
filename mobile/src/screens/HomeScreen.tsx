@@ -26,20 +26,13 @@ import { useAuth } from "../contexts/auth";
 import { useUnlock } from "../contexts/unlock";
 import { Fab } from "../components/Fab";
 import { PromptModal } from "../components/PromptModal";
-import { TaskFormModal, type TaskDraft } from "../components/TaskFormModal";
+import { TaskFormModal, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { animateTaskComplete } from "../lib/motion";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 5) return "Up late";
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
+import { pickGreeting } from "../lib/greetings";
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -65,9 +58,17 @@ export default function HomeScreen({ navigation }: any) {
   const [prompt, setPrompt] = useState<"notebook" | null>(null);
   const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null);
   const [taskBusy, setTaskBusy] = useState(false);
+  const [hello, setHello] = useState(() => pickGreeting());
   const captureRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
+
+  useEffect(() => {
+    const tick = () => setHello(pickGreeting());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const {
     data: recent,
@@ -178,12 +179,19 @@ export default function HomeScreen({ navigation }: any) {
     >
       {/* greeting + daily note */}
       <View style={[styles.headerRow, isNarrow && styles.headerStacked]}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.greeting, { color: colors.textPrimary, fontSize: isNarrow ? 18 : 20 }]} numberOfLines={1}>
-            {greeting()}
-            {user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+        <View style={{ flex: 1, minWidth: 0, paddingRight: isNarrow ? 0 : 12 }}>
+          <Text style={[styles.greeting, { color: colors.textPrimary, fontSize: isNarrow ? 18 : 20 }]}>
+            {hello}
           </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+          {!!user?.name && (
+            <Text
+              style={[styles.greetingName, { color: colors.textPrimary, fontSize: isNarrow ? 18 : 20 }]}
+              numberOfLines={2}
+            >
+              {user.name.split(" ")[0]}
+            </Text>
+          )}
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4 }} numberOfLines={1}>
             {new Date().toLocaleDateString(undefined, {
               weekday: isNarrow ? "short" : "long",
               month: "long",
@@ -213,7 +221,7 @@ export default function HomeScreen({ navigation }: any) {
         <TextInput
           ref={captureRef}
           style={[styles.captureInput, { color: colors.textPrimary }]}
-          placeholder="Capture a thought…"
+          placeholder="What's on your mind?"
           placeholderTextColor={colors.textSecondary}
           value={draft}
           onChangeText={setDraft}
@@ -353,7 +361,18 @@ export default function HomeScreen({ navigation }: any) {
           key: "task",
           label: "New task",
           icon: "check-square",
-          onPress: () => setTaskDraft({ title: "", description: "", due: null, repeat: null }),
+          onPress: () =>
+            setTaskDraft({
+              title: "",
+              description: "",
+              due: null,
+              repeat: null,
+              repeatDays: null,
+              repeatInterval: 1,
+              repeatEnd: null,
+              repeatUntil: null,
+              repeatCount: null,
+            }),
         },
         { key: "notebook", label: "New notebook", icon: "book", onPress: () => setPrompt("notebook") },
       ]}
@@ -376,7 +395,7 @@ export default function HomeScreen({ navigation }: any) {
             title: taskDraft.title.trim(),
             description: taskDraft.description.trim() || undefined,
             dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
-            repeatRule: taskDraft.due ? taskDraft.repeat : null,
+            ...repeatPayload(taskDraft),
           });
           queryClient.invalidateQueries({ queryKey: ["tasks"] });
           setTaskDraft(null);
@@ -483,6 +502,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerStacked: { flexDirection: "column", alignItems: "stretch", gap: 10 },
   greeting: { fontWeight: "500" },
+  greetingName: { fontWeight: "600", marginTop: 2 },
   dailyBtn: {
     flexDirection: "row",
     alignItems: "center",

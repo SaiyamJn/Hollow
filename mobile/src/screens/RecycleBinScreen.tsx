@@ -157,8 +157,8 @@ export default function RecycleBinScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="trash-2"
-            title="Recycle bin is empty"
-            subtitle="Deleted notes and lists will appear here for 7 days."
+            title="Nothing in the bin"
+            subtitle="Deleted notes hang out here for a week, just in case."
           />
         }
       />

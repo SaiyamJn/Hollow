@@ -1,72 +1,18 @@
 import type { Task } from "../lib/types";
-import { addDays, dayKey, startOfDay } from "./dateUtils";
+import { dayKey, startOfDay } from "./dateUtils";
+import {
+  clampInterval,
+  nextDueAt,
+  normalizeRepeatDays,
+  normalizeRepeatEnd,
+  withinRepeatBounds,
+} from "../lib/taskRepeat";
 
 export type CalendarTask = Task & {
   due: Date;
-  /** Projected recurrence occurrence (not the live dueAt row). */
   virtual?: boolean;
-  /** Real task id when virtual. */
   sourceId?: string;
 };
-
-function advance(from: Date, rule: NonNullable<Task["repeatRule"]>): Date {
-  const next = new Date(from);
-  switch (rule) {
-    case "daily":
-      next.setDate(next.getDate() + 1);
-      break;
-    case "weekly":
-      next.setDate(next.getDate() + 7);
-      break;
-    case "monthly": {
-      const day = next.getDate();
-      next.setMonth(next.getMonth() + 1);
-      if (next.getDate() < day) next.setDate(0);
-      break;
-    }
-    case "yearly":
-      next.setFullYear(next.getFullYear() + 1);
-      break;
-  }
-  return startOfDay(next);
-}
-
-/** First occurrence on or after `onOrAfter`, walking from `anchor` (inclusive). */
-function firstOnOrAfter(
-  anchor: Date,
-  onOrAfter: Date,
-  rule: NonNullable<Task["repeatRule"]>
-): Date {
-  let cursor = startOfDay(anchor);
-  const target = startOfDay(onOrAfter);
-  if (cursor >= target) return cursor;
-
-  switch (rule) {
-    case "daily":
-      return target;
-    case "weekly": {
-      const days = Math.ceil((target.getTime() - cursor.getTime()) / 86400000);
-      const weeks = Math.ceil(days / 7);
-      cursor = addDays(cursor, Math.max(0, weeks) * 7);
-      while (cursor < target) cursor = advance(cursor, rule);
-      return cursor;
-    }
-    case "monthly": {
-      const months =
-        (target.getFullYear() - cursor.getFullYear()) * 12 +
-        (target.getMonth() - cursor.getMonth());
-      for (let i = 0; i < Math.max(0, months); i++) cursor = advance(cursor, rule);
-      while (cursor < target) cursor = advance(cursor, rule);
-      return cursor;
-    }
-    case "yearly": {
-      const years = target.getFullYear() - cursor.getFullYear();
-      for (let i = 0; i < Math.max(0, years); i++) cursor = advance(cursor, rule);
-      while (cursor < target) cursor = advance(cursor, rule);
-      return cursor;
-    }
-  }
-}
 
 function withTime(day: Date, template: Date): Date {
   return new Date(
@@ -80,7 +26,6 @@ function withTime(day: Date, template: Date): Date {
   );
 }
 
-/** Flatten top-level + subtasks; keep only items with a valid due date. */
 export function datedTasks(tasks: Task[] | undefined): CalendarTask[] {
   if (!tasks?.length) return [];
   const out: CalendarTask[] = [];
@@ -99,11 +44,6 @@ export function datedTasks(tasks: Task[] | undefined): CalendarTask[] {
   return out;
 }
 
-/**
- * Expand recurring tasks across a visible range so they appear on each
- * occurrence day in the calendar. Tasks panel still hides future repeats
- * until that day starts.
- */
 export function expandForRange(
   items: CalendarTask[],
   rangeStart: Date,
@@ -116,17 +56,32 @@ export function expandForRange(
 
   for (const t of items) {
     const dueDay = startOfDay(t.due);
+    const days = t.repeatRule === "weekly" ? normalizeRepeatDays(t.repeatDays) : null;
+    const interval = clampInterval(t.repeatInterval ?? 1);
+    const endMode = normalizeRepeatEnd(t.repeatEnd);
+    const until = t.repeatUntil ? new Date(t.repeatUntil) : null;
+    const count = t.repeatCount ?? null;
+
     if (dueDay >= start && dueDay <= end) {
       out.push(t);
     }
 
     if (!t.repeatRule || t.done) continue;
 
-    const firstAfterDue = advance(dueDay, t.repeatRule);
-    let cursor = firstOnOrAfter(firstAfterDue, start, t.repeatRule);
+    let cursor = nextDueAt(dueDay, t.repeatRule, days, interval, dueDay);
     let n = 0;
+    // occurrenceIndex 1 = first projected after the live due
     while (cursor <= end && n < maxPerTask) {
-      if (cursor >= start && cursor.getTime() !== dueDay.getTime()) {
+      if (
+        cursor >= start &&
+        cursor.getTime() !== dueDay.getTime() &&
+        withinRepeatBounds(cursor, {
+          end: endMode,
+          until,
+          count,
+          occurrenceIndex: n + 1,
+        })
+      ) {
         out.push({
           ...t,
           id: `${t.id}__${dayKey(cursor)}`,
@@ -136,7 +91,17 @@ export function expandForRange(
           done: false,
         });
       }
-      cursor = advance(cursor, t.repeatRule);
+      if (
+        !withinRepeatBounds(cursor, {
+          end: endMode,
+          until,
+          count,
+          occurrenceIndex: n + 1,
+        })
+      ) {
+        break;
+      }
+      cursor = nextDueAt(cursor, t.repeatRule, days, interval, dueDay);
       n += 1;
     }
   }

@@ -85,6 +85,15 @@ export interface Task {
   dueAt: string | null;
   /** daily | weekly | monthly | yearly */
   repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;
+  /** Weekdays 0=Sun…6=Sat when weekly */
+  repeatDays?: number[] | null;
+  /** Every N units of repeatRule */
+  repeatInterval?: number | null;
+  /** never | on | after */
+  repeatEnd?: "never" | "on" | "after" | null;
+  repeatUntil?: string | null;
+  /** Remaining occurrences (incl. current) when end = after */
+  repeatCount?: number | null;
   parentTaskId: string | null;
   subtasks?: Task[];
   createdAt: string;

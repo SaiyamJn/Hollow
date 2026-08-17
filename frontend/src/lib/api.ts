@@ -281,6 +281,11 @@ export async function createTask(input: {
   parentTaskId?: string;
   starred?: boolean;
   repeatRule?: TaskRepeatRule | null;
+  repeatDays?: number[] | null;
+  repeatInterval?: number | null;
+  repeatEnd?: "never" | "on" | "after" | null;
+  repeatUntil?: string | null;
+  repeatCount?: number | null;
 }) {
   const { data } = await api.post<Task>("/tasks", input);
   return data;
@@ -295,6 +300,11 @@ export async function updateTask(
     starred?: boolean;
     dueAt?: string | null;
     repeatRule?: TaskRepeatRule | null;
+    repeatDays?: number[] | null;
+    repeatInterval?: number | null;
+    repeatEnd?: "never" | "on" | "after" | null;
+    repeatUntil?: string | null;
+    repeatCount?: number | null;
   }
 ) {
   const { data } = await api.patch<Task>(`/tasks/${id}`, patch);

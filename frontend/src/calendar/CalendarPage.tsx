@@ -7,8 +7,9 @@ import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { DateTimePicker } from "../components/DateTimePicker";
-import { REPEAT_OPTIONS } from "../lib/taskRepeat";
 import type { TaskRepeatRule } from "../lib/types";
+import { RepeatPanel, repeatPayload } from "../components/RepeatPanel";
+import type { RepeatEnd } from "../lib/taskRepeat";
 import {
   addDays,
   addMonths,
@@ -32,6 +33,11 @@ type Draft = {
   description: string;
   due: Date | null;
   repeat: TaskRepeatRule | null;
+  repeatDays?: number[] | null;
+  repeatInterval?: number | null;
+  repeatEnd?: RepeatEnd | null;
+  repeatUntil?: Date | null;
+  repeatCount?: number | null;
 };
 type EditDraft = Draft & { id: string };
 
@@ -93,6 +99,11 @@ export default function CalendarPage() {
         done?: boolean;
         dueAt?: string | null;
         repeatRule?: TaskRepeatRule | null;
+        repeatDays?: number[] | null;
+        repeatInterval?: number | null;
+        repeatEnd?: RepeatEnd | null;
+        repeatUntil?: string | null;
+        repeatCount?: number | null;
       };
     }) => updateTask(id, patch),
     onSuccess: () => {
@@ -124,7 +135,17 @@ export default function CalendarPage() {
   }
 
   function openCreate(day: Date) {
-    setDraft({ title: "", description: "", due: dateOnlyDue(day), repeat: null });
+    setDraft({
+      title: "",
+      description: "",
+      due: dateOnlyDue(day),
+      repeat: null,
+      repeatDays: null,
+      repeatInterval: 1,
+      repeatEnd: null,
+      repeatUntil: null,
+      repeatCount: null,
+    });
   }
 
   function onDragStart(e: React.DragEvent, task: CalendarTask) {
@@ -156,6 +177,11 @@ export default function CalendarPage() {
       description: t.description ?? "",
       due: t.due,
       repeat: t.repeatRule ?? null,
+      repeatDays: t.repeatDays ?? null,
+      repeatInterval: t.repeatInterval ?? 1,
+      repeatEnd: t.repeatEnd ?? null,
+      repeatUntil: t.repeatUntil ? new Date(t.repeatUntil) : null,
+      repeatCount: t.repeatCount ?? null,
     });
   }
 
@@ -324,11 +350,6 @@ export default function CalendarPage() {
           <div
             className="space-y-2 min-h-[220px]"
             onPointerDown={(e) => {
-              if (expanded) {
-                pullStartY.current = null;
-                return;
-              }
-              // Only start a pull when the target isn't a task control.
               const el = e.target as HTMLElement;
               if (el.closest("button") && !el.closest("[data-day-empty]")) {
                 pullStartY.current = null;
@@ -337,10 +358,14 @@ export default function CalendarPage() {
               pullStartY.current = e.clientY;
             }}
             onPointerMove={(e) => {
-              if (pullStartY.current == null || expanded) return;
-              if (e.clientY - pullStartY.current > 48) {
+              if (pullStartY.current == null) return;
+              const dy = e.clientY - pullStartY.current;
+              if (!expanded && dy > 48) {
                 pullStartY.current = null;
                 setExpanded(true);
+              } else if (expanded && dy < -48) {
+                pullStartY.current = null;
+                setExpanded(false);
               }
             }}
             onPointerUp={() => {
@@ -358,16 +383,18 @@ export default function CalendarPage() {
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent text-xl">
                   ✦
                 </span>
-                <span className="text-sm font-semibold text-primary">A clean slate</span>
+                <span className="text-sm font-semibold text-primary">Nothing planned</span>
                 <span className="text-xs text-center px-4">
-                  Swipe down to open the calendar · click to add a task.
+                  {expanded
+                    ? "Swipe up for the week view · click to add something."
+                    : "Swipe down for the full month · click to add something."}
                 </span>
                 <button
                   type="button"
                   onClick={() => openCreate(selected)}
                   className="text-sm text-accent font-medium hover:underline"
                 >
-                  Add a task
+                  Add something
                 </button>
               </div>
             ) : (
@@ -509,29 +536,46 @@ export default function CalendarPage() {
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => !o && setDraft(null)}>
-        <DialogContent title="New task" className="max-w-md">
+        <DialogContent title="New task" className="max-w-md max-h-[90vh] overflow-y-auto">
           {draft && (
             <div className="space-y-3">
-              <Input autoFocus placeholder="Title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+              <Input
+                autoFocus
+                placeholder="What's the plan?"
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px]"
-                placeholder="Description (optional)"
+                placeholder="A little context, if you like"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
-              <DateTimePicker value={draft.due} onChange={(due) => setDraft({ ...draft, due, repeat: due ? draft.repeat : null })} />
+              <DateTimePicker
+                value={draft.due}
+                onChange={(due) =>
+                  setDraft({
+                    ...draft,
+                    due,
+                    ...(due
+                      ? {}
+                      : {
+                          repeat: null,
+                          repeatDays: null,
+                          repeatInterval: 1,
+                          repeatEnd: null,
+                          repeatUntil: null,
+                          repeatCount: null,
+                        }),
+                  })
+                }
+              />
               {draft.due && (
-                <select
-                  className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm"
-                  value={draft.repeat ?? ""}
-                  onChange={(e) => setDraft({ ...draft, repeat: (e.target.value || null) as TaskRepeatRule | null })}
-                >
-                  {REPEAT_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value ?? ""}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <RepeatPanel
+                  due={draft.due}
+                  value={draft}
+                  onChange={(next) => setDraft({ ...draft, ...next })}
+                />
               )}
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
@@ -546,7 +590,7 @@ export default function CalendarPage() {
                       title: draft.title.trim(),
                       description: draft.description.trim() || undefined,
                       dueAt: draft.due ? draft.due.toISOString() : undefined,
-                      repeatRule: draft.due ? draft.repeat : null,
+                      ...repeatPayload(draft),
                     })
                   }
                 >
@@ -559,7 +603,7 @@ export default function CalendarPage() {
       </Dialog>
 
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent title="Edit task" className="max-w-md">
+        <DialogContent title="Edit task" className="max-w-md max-h-[90vh] overflow-y-auto">
           {editing && (
             <div className="space-y-3">
               <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
@@ -570,22 +614,29 @@ export default function CalendarPage() {
               />
               <DateTimePicker
                 value={editing.due}
-                onChange={(due) => setEditing({ ...editing, due, repeat: due ? editing.repeat : null })}
+                onChange={(due) =>
+                  setEditing({
+                    ...editing,
+                    due,
+                    ...(due
+                      ? {}
+                      : {
+                          repeat: null,
+                          repeatDays: null,
+                          repeatInterval: 1,
+                          repeatEnd: null,
+                          repeatUntil: null,
+                          repeatCount: null,
+                        }),
+                  })
+                }
               />
               {editing.due && (
-                <select
-                  className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm"
-                  value={editing.repeat ?? ""}
-                  onChange={(e) =>
-                    setEditing({ ...editing, repeat: (e.target.value || null) as TaskRepeatRule | null })
-                  }
-                >
-                  {REPEAT_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value ?? ""}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <RepeatPanel
+                  due={editing.due}
+                  value={editing}
+                  onChange={(next) => setEditing({ ...editing, ...next })}
+                />
               )}
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
@@ -602,7 +653,7 @@ export default function CalendarPage() {
                         title: editing.title.trim(),
                         description: editing.description.trim(),
                         dueAt: editing.due ? editing.due.toISOString() : null,
-                        repeatRule: editing.due ? editing.repeat : null,
+                        ...repeatPayload(editing),
                       },
                     })
                   }

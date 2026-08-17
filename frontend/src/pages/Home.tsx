@@ -1,4 +1,4 @@
-import { KeyboardEvent, useState } from "react";
+import { KeyboardEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -29,14 +29,7 @@ import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { formatCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { Button } from "../components/ui/button";
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 5) return "Up late";
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
+import { pickGreeting } from "../lib/greetings";
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -59,6 +52,14 @@ export default function Home() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [hello, setHello] = useState(() => pickGreeting());
+
+  useEffect(() => {
+    const tick = () => setHello(pickGreeting());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const { data: recent } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(6) });
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
@@ -72,15 +73,14 @@ export default function Home() {
   });
 
   const empty = notebooks && notebooks.length === 0;
+  const firstName = user?.name?.split(" ")[0];
 
   return (
     <div className="max-w-2xl mx-auto px-7 py-10 animate-rise-in">
       {/* Header — one purpose */}
       <div className="text-center">
-        <h1 className="text-xl font-medium">
-          {greeting()}
-          {user?.name ? `, ${user.name.split(" ")[0]}` : ""}
-        </h1>
+        <h1 className="text-xl font-medium">{hello}</h1>
+        {firstName ? <p className="text-xl font-semibold text-primary mt-0.5">{firstName}</p> : null}
         <p className="text-sm text-secondary mt-1">
           {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
         </p>
@@ -109,7 +109,7 @@ export default function Home() {
           <div className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center">
             <NotebookPen size={18} className="text-accent" />
           </div>
-          <p className="text-sm text-secondary">Create a notebook to get started.</p>
+          <p className="text-sm text-secondary">A notebook is waiting for your first page.</p>
           <Button variant="accent" onClick={() => navigate("/notebooks")}>
             Open notebooks
           </Button>
@@ -204,7 +204,7 @@ function QuickCapture() {
         <textarea
           className="flex-1 bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary leading-6"
           rows={1}
-          placeholder="Capture a thought…"
+          placeholder="What's on your mind?"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}

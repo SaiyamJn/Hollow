@@ -194,7 +194,7 @@ export default function NotebookScreen({ route, navigation }: any) {
           <EmptyState
             icon="layers"
             title="Empty notebook"
-            subtitle="Add a section, then fill it with pages. Tap + to begin."
+            subtitle="Start a section, then fill it with pages — tap + whenever you're ready."
           />
         )}
       </ScrollView>

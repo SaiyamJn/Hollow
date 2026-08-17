@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN "repeatInterval" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "Task" ADD COLUMN "repeatEnd" TEXT;
+ALTER TABLE "Task" ADD COLUMN "repeatUntil" TIMESTAMP(3);
+ALTER TABLE "Task" ADD COLUMN "repeatCount" INTEGER;

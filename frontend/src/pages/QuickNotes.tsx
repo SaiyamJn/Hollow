@@ -241,8 +241,8 @@ export default function QuickNotes() {
         <h1 className="text-xl font-medium">{showArchived ? "Archive" : "Capture"}</h1>
         <p className="text-sm text-secondary mt-1">
           {showArchived
-            ? "Notes you've put aside — restore anytime."
-            : "Sticky notes & checklists — pin what matters."}
+            ? "Things you've set aside — bring them back whenever."
+            : "Sticky thoughts & little lists — pin what matters."}
         </p>
       </div>
 
@@ -276,7 +276,7 @@ export default function QuickNotes() {
             <textarea
               className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary text-left"
               rows={2}
-              placeholder="Quick capture…"
+              placeholder="A quick thought…"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onDraftKeyDown}
@@ -317,7 +317,7 @@ export default function QuickNotes() {
 
       {notes.length === 0 && (
         <p className="text-sm text-secondary text-center">
-          {showArchived ? "Archive is empty." : "Nothing captured yet."}
+          {showArchived ? "Nothing tucked away." : "Your pocket is empty — jot something when it hits."}
         </p>
       )}
 

@@ -139,6 +139,16 @@ model Task {
   dueAt        DateTime?
   /// daily | weekly | monthly | yearly — only meaningful when dueAt is set
   repeatRule   String?
+  /// JSON array of weekdays 0=Sun…6=Sat when weekly (e.g. "[1,3,5]")
+  repeatDays   String?
+  /// Every N units of repeatRule (default 1)
+  repeatInterval Int       @default(1)
+  /// never | on | after — null treated as never
+  repeatEnd    String?
+  /// End date when repeatEnd = on
+  repeatUntil  DateTime?
+  /// Remaining occurrences (incl. current) when repeatEnd = after
+  repeatCount  Int?
   owner        User      @relation(fields: [ownerId], references: [id])
   ownerId      String
   parentTask   Task?     @relation("SubTasks", fields: [parentTaskId], references: [id])

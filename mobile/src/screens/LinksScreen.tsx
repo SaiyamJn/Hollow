@@ -97,7 +97,7 @@ export default function LinksScreen({ navigation }: any) {
         <EmptyState
           icon="share-2"
           title="No links yet"
-          subtitle="Create a notebook and a page first — then connect pages with [[Title]]."
+          subtitle="Open a page and type [[Another Page]] — the graph grows as you write."
         />
       )}
 
@@ -105,7 +105,7 @@ export default function LinksScreen({ navigation }: any) {
         <EmptyState
           icon="git-branch"
           title="No pages to link"
-          subtitle="Create a page, then type [[Another Page]] to grow your graph."
+          subtitle="Write a page first, then weave it into others with [[links]]."
         />
       )}
     </ScrollView>

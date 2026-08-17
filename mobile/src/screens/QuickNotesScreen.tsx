@@ -534,11 +534,11 @@ export default function QuickNotesScreen({ navigation }: any) {
         ListEmptyComponent={
           <EmptyState
             icon={showArchived ? "archive" : "feather"}
-            title={showArchived ? "Archive is empty" : "Nothing captured yet"}
+            title={showArchived ? "Nothing tucked away" : "Your pocket is empty"}
             subtitle={
               showArchived
-                ? "Long-press notes and tap archive to move them here."
-                : "Tap Note for a sticky thought, or List for a checklist that stays together."
+                ? "Long-press a note and archive it when you're done with it for now."
+                : "A sticky thought, a little list — whatever's buzzing around."
             }
           />
         }

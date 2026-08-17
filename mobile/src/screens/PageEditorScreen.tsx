@@ -321,7 +321,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
             void savePagePosition(pageId, { selection: sel.start, scrollOffset: y });
           }, 250);
         }}
-        placeholder="Start writing…  Type [[ to link a page"
+        placeholder="Write freely…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
       />
       {wikiSuggestions.length > 0 && (

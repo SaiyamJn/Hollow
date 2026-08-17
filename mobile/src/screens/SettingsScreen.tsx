@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
 import { useFont } from "../contexts/font";
@@ -58,6 +59,7 @@ export default function SettingsScreen({ navigation }: any) {
   const queryClient = useQueryClient();
   const { screenPad, stackBottomClearance } = useLayout();
   const [notifOn, setNotifOn] = useState(false);
+  const [fontOpen, setFontOpen] = useState(false);
 
   const { data: health } = useQuery({
     queryKey: ["health"],
@@ -88,6 +90,8 @@ export default function SettingsScreen({ navigation }: any) {
     : health === undefined
       ? "Checking…"
       : "Unavailable";
+
+  const activeFont = FONT_OPTIONS.find((o) => o.id === font) ?? FONT_OPTIONS[0];
 
   return (
     <ScrollView
@@ -121,7 +125,7 @@ export default function SettingsScreen({ navigation }: any) {
               Devices
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-              See where you’re signed in and sign out remotely
+              Peek at where you're signed in — kick a device if you need to
             </Text>
           </View>
           <Text style={{ color: colors.textSecondary, fontSize: 18 }}>›</Text>
@@ -142,46 +146,85 @@ export default function SettingsScreen({ navigation }: any) {
       </GlassCard>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>FONT</Text>
-      <GlassCard contentStyle={{ paddingVertical: 4 }}>
-        {FONT_OPTIONS.map((opt, i) => {
-          const active = font === opt.id;
-          const face = opt.id === "system" ? undefined : `${opt.id}-regular`;
-          return (
-            <Pressable
-              key={opt.id}
-              onPress={() => setFont(opt.id)}
-              style={[
-                styles.fontRow,
-                i < FONT_OPTIONS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-                active && { backgroundColor: colors.accentSoft },
-              ]}
+      <Pressable onPress={() => setFontOpen(true)}>
+        <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
+          <View style={{ flex: 1, paddingRight: 12, minWidth: 0 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }}>Typeface</Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                marginTop: 2,
+                fontFamily: activeFont?.id === "system" ? undefined : `${activeFont?.id}-regular`,
+              }}
+              numberOfLines={1}
             >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", fontFamily: face }}
-                  numberOfLines={1}
-                >
-                  {opt.label}
-                </Text>
-                <Text
-                  style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: face }}
-                  numberOfLines={1}
-                >
-                  {opt.sample}
-                </Text>
-              </View>
-              {active && <Text style={{ color: colors.accent, fontSize: 13 }}>✓</Text>}
-            </Pressable>
-          );
-        })}
-      </GlassCard>
+              {activeFont?.label ?? "Sora"}
+              {activeFont?.sample ? ` · ${activeFont.sample.replace(/^Aa · /, "")}` : ""}
+            </Text>
+          </View>
+          <Feather name="chevron-down" size={18} color={colors.textSecondary} />
+        </GlassCard>
+      </Pressable>
+
+      <Modal visible={fontOpen} transparent animationType="fade" onRequestClose={() => setFontOpen(false)}>
+        <Pressable style={styles.fontOverlay} onPress={() => setFontOpen(false)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={[styles.fontSheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600", marginBottom: 8, textAlign: "center" }}>
+              Choose a font
+            </Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {FONT_OPTIONS.map((opt, i) => {
+                const active = font === opt.id;
+                const face = opt.id === "system" ? undefined : `${opt.id}-regular`;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => {
+                      setFont(opt.id);
+                      setFontOpen(false);
+                    }}
+                    style={[
+                      styles.fontRow,
+                      i < FONT_OPTIONS.length - 1 && {
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: colors.border,
+                      },
+                      active && { backgroundColor: colors.accentSoft },
+                    ]}
+                  >
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", fontFamily: face }}
+                        numberOfLines={1}
+                      >
+                        {opt.label}
+                      </Text>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: face }}
+                        numberOfLines={1}
+                      >
+                        {opt.sample}
+                      </Text>
+                    </View>
+                    {active && <Feather name="check" size={16} color={colors.accent} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>NOTIFICATIONS</Text>
       <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={{ color: colors.textPrimary, fontSize: 14 }}>Task reminders</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-            Notify at each task’s due date/time. Tasks without a due date notify once when added.
+            A gentle nudge when something's due — undated ones ping once when you add them.
           </Text>
         </View>
         <Switch
@@ -237,6 +280,19 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  fontOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  fontSheet: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: 16,
+    paddingBottom: 8,
+    overflow: "hidden",
   },
   detailRow: {
     flexDirection: "row",

@@ -8,8 +8,10 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { DateTimePicker, formatDueLabel } from "../components/DateTimePicker";
-import { REPEAT_OPTIONS, formatRepeatLabel } from "../lib/taskRepeat";
+import { formatRepeatLabel } from "../lib/taskRepeat";
 import type { TaskRepeatRule } from "../lib/types";
+import { RepeatPanel, repeatPayload } from "../components/RepeatPanel";
+import type { RepeatEnd } from "../lib/taskRepeat";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 
@@ -73,6 +75,11 @@ type Draft = {
   description: string;
   due: Date | null;
   repeat: TaskRepeatRule | null;
+  repeatDays?: number[] | null;
+  repeatInterval?: number | null;
+  repeatEnd?: RepeatEnd | null;
+  repeatUntil?: Date | null;
+  repeatCount?: number | null;
 };
 type EditDraft = Draft & { id: string };
 
@@ -125,6 +132,11 @@ export default function Tasks() {
         description: string;
         dueAt: string | null;
         repeatRule?: TaskRepeatRule | null;
+        repeatDays?: number[] | null;
+        repeatInterval?: number | null;
+        repeatEnd?: RepeatEnd | null;
+        repeatUntil?: string | null;
+        repeatCount?: number | null;
       };
     }) => updateTask(id, patch),
     onSuccess: () => {
@@ -135,7 +147,17 @@ export default function Tasks() {
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", due: null, repeat: null });
+    setDraft({
+      title: title.trim(),
+      description: "",
+      due: null,
+      repeat: null,
+      repeatDays: null,
+      repeatInterval: 1,
+      repeatEnd: null,
+      repeatUntil: null,
+      repeatCount: null,
+    });
     create.reset();
   }
 
@@ -149,7 +171,7 @@ export default function Tasks() {
       title: draft.title.trim(),
       description: draft.description.trim() || undefined,
       dueAt: draft.due ? draft.due.toISOString() : undefined,
-      repeatRule: draft.due ? draft.repeat : null,
+      ...repeatPayload(draft),
     });
   }
 
@@ -161,7 +183,7 @@ export default function Tasks() {
         title: editing.title.trim(),
         description: editing.description.trim(),
         dueAt: editing.due ? editing.due.toISOString() : null,
-        repeatRule: editing.due ? editing.repeat : null,
+        ...repeatPayload(editing),
       },
     });
   }
@@ -178,11 +200,11 @@ export default function Tasks() {
     <div className="max-w-2xl mx-auto px-7 py-10">
       <div className="text-center mb-6">
         <h1 className="text-xl font-medium">Tasks</h1>
-        <p className="text-sm text-secondary mt-1">Star what matters — due dates keep you honest.</p>
+        <p className="text-sm text-secondary mt-1">Star the important bits — dates keep you honest.</p>
       </div>
 
       <Input
-        placeholder="Add a task, press Enter"
+        placeholder="What's next? Press Enter"
         value={quickAdd}
         onChange={(e) => setQuickAdd(e.target.value)}
         onKeyDown={onQuickAdd}
@@ -190,7 +212,7 @@ export default function Tasks() {
       />
 
       {tasks && tasks.length === 0 && (
-        <p className="text-sm text-secondary text-center">No tasks yet.</p>
+        <p className="text-sm text-secondary text-center">Nothing on the list yet — whenever you're ready.</p>
       )}
 
       <div className="space-y-6">
@@ -220,6 +242,11 @@ export default function Tasks() {
                       description: task.description ?? "",
                       due: task.dueAt ? new Date(task.dueAt) : null,
                       repeat: task.repeatRule ?? null,
+                      repeatDays: task.repeatDays ?? null,
+                      repeatInterval: task.repeatInterval ?? 1,
+                      repeatEnd: task.repeatEnd ?? null,
+                      repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+                      repeatCount: task.repeatCount ?? null,
                     });
                   }}
                   onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
@@ -256,6 +283,11 @@ export default function Tasks() {
                         description: task.description ?? "",
                         due: task.dueAt ? new Date(task.dueAt) : null,
                         repeat: task.repeatRule ?? null,
+                        repeatDays: task.repeatDays ?? null,
+                        repeatInterval: task.repeatInterval ?? 1,
+                        repeatEnd: task.repeatEnd ?? null,
+                        repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+                        repeatCount: task.repeatCount ?? null,
                       });
                     }}
                     onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
@@ -276,12 +308,12 @@ export default function Tasks() {
           }
         }}
       >
-        <DialogContent title="New task" className="max-w-md">
+        <DialogContent title="New task" className="max-w-md max-h-[90vh] overflow-y-auto">
           {draft && (
             <div className="space-y-3">
               <Input
                 autoFocus
-                placeholder="Title"
+                placeholder="What's the plan?"
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                 className="text-center"
@@ -292,31 +324,35 @@ export default function Tasks() {
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
                            placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] text-center"
-                placeholder="Description (optional)"
+                placeholder="A little context, if you like"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
               <DateTimePicker
                 value={draft.due}
-                onChange={(due) => setDraft({ ...draft, due, repeat: due ? draft.repeat : null })}
+                onChange={(due) =>
+                  setDraft({
+                    ...draft,
+                    due,
+                    ...(due
+                      ? {}
+                      : {
+                          repeat: null,
+                          repeatDays: null,
+                          repeatInterval: 1,
+                          repeatEnd: null,
+                          repeatUntil: null,
+                          repeatCount: null,
+                        }),
+                  })
+                }
               />
               {draft.due && (
-                <select
-                  className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent"
-                  value={draft.repeat ?? ""}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      repeat: (e.target.value || null) as TaskRepeatRule | null,
-                    })
-                  }
-                >
-                  {REPEAT_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value ?? ""}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <RepeatPanel
+                  due={draft.due}
+                  value={draft}
+                  onChange={(next) => setDraft({ ...draft, ...next })}
+                />
               )}
               {createError && <p className="text-sm text-danger text-center">{createError}</p>}
               <div className="flex gap-2 pt-1">
@@ -346,11 +382,11 @@ export default function Tasks() {
           }
         }}
       >
-        <DialogContent title="Edit task" className="max-w-md">
+        <DialogContent title="Edit task" className="max-w-md max-h-[90vh] overflow-y-auto">
           {editing && (
             <div className="space-y-3">
               <Input
-                placeholder="Title"
+                placeholder="What's the plan?"
                 value={editing.title}
                 onChange={(e) => setEditing({ ...editing, title: e.target.value })}
                 className="text-center"
@@ -358,31 +394,35 @@ export default function Tasks() {
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
                            placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] text-center"
-                placeholder="Description (optional)"
+                placeholder="A little context, if you like"
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               />
               <DateTimePicker
                 value={editing.due}
-                onChange={(due) => setEditing({ ...editing, due, repeat: due ? editing.repeat : null })}
+                onChange={(due) =>
+                  setEditing({
+                    ...editing,
+                    due,
+                    ...(due
+                      ? {}
+                      : {
+                          repeat: null,
+                          repeatDays: null,
+                          repeatInterval: 1,
+                          repeatEnd: null,
+                          repeatUntil: null,
+                          repeatCount: null,
+                        }),
+                  })
+                }
               />
               {editing.due && (
-                <select
-                  className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent"
-                  value={editing.repeat ?? ""}
-                  onChange={(e) =>
-                    setEditing({
-                      ...editing,
-                      repeat: (e.target.value || null) as TaskRepeatRule | null,
-                    })
-                  }
-                >
-                  {REPEAT_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value ?? ""}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <RepeatPanel
+                  due={editing.due}
+                  value={editing}
+                  onChange={(next) => setEditing({ ...editing, ...next })}
+                />
               )}
               {editError && <p className="text-sm text-danger text-center">{editError}</p>}
               <div className="flex gap-2 pt-1">
@@ -459,7 +499,16 @@ function TaskRow({
           {task.dueAt ? (
             <span className="block text-xs text-secondary mt-0.5">
               {formatDueLabel(task.dueAt)}
-              {task.repeatRule ? ` · ${formatRepeatLabel(task.repeatRule)}` : ""}
+              {task.repeatRule
+                ? ` · ${formatRepeatLabel({
+                    rule: task.repeatRule,
+                    days: task.repeatDays,
+                    interval: task.repeatInterval,
+                    end: task.repeatEnd,
+                    until: task.repeatUntil,
+                    count: task.repeatCount,
+                  })}`
+                : ""}
             </span>
           ) : null}
         </button>

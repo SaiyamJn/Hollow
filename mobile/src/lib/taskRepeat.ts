@@ -19,6 +19,7 @@ export const UNIT_OPTIONS: { value: TaskRepeatRule; singular: string; plural: st
   { value: "yearly", singular: "year", plural: "years" },
 ];
 
+/** @deprecated Prefer the rhythm panel — kept for simple labels. */
 export const REPEAT_OPTIONS: { value: TaskRepeatRule | null; label: string }[] = [
   { value: null, label: "Does not repeat" },
   { value: "daily", label: "Every day" },

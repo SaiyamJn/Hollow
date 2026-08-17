@@ -263,7 +263,7 @@ export default function NotebookDetail() {
         <div className="space-y-2">
           {notebook.sections.length === 0 && (
             <p className="text-sm text-secondary py-8 text-center">
-              No sections yet — add one to start writing.
+              No sections yet — add one and start writing.
             </p>
           )}
           {notebook.sections.map((sec) => {

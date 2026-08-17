@@ -92,6 +92,12 @@ export interface Task {
   starred: boolean;
   dueAt: string | null;
   repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
+  /** Weekdays 0=Sun…6=Sat when weekly */
+  repeatDays?: number[] | null;
+  repeatInterval?: number | null;
+  repeatEnd?: "never" | "on" | "after" | null;
+  repeatUntil?: string | null;
+  repeatCount?: number | null;
   parentTaskId: string | null;
   subtasks?: Task[];
   createdAt: string;

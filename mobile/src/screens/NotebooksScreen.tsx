@@ -189,7 +189,7 @@ export default function NotebooksScreen({ navigation }: any) {
           <EmptyState
             icon="book-open"
             title="No notebooks yet"
-            subtitle="Tap + to start a notebook — sections and pages live inside."
+            subtitle="Tap + for a fresh notebook — sections and pages live inside."
           />
         )}
       </ScrollView>

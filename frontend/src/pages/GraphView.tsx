@@ -92,7 +92,7 @@ export default function GraphView() {
   if (!graph || graph.nodes.length === 0)
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm font-medium">No pages in this notebook yet.</p>
+        <p className="text-sm font-medium">This notebook's still blank — write a page to grow the graph.</p>
         <p className="text-xs text-secondary max-w-sm">
           Create pages, then type <span className="text-primary">[[</span> in the editor to link them. Linked pages
           appear here as a graph.

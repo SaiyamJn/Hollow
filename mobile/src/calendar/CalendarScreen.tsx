@@ -15,7 +15,7 @@ import * as Haptics from "expo-haptics";
 import { createTask, fetchTasks, updateTask } from "../lib/api";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
-import { TaskFormModal, formatRepeatLabel, type TaskDraft } from "../components/TaskFormModal";
+import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useLayout } from "../lib/layout";
 import {
@@ -109,6 +109,11 @@ export default function CalendarScreen() {
         dueAt?: string | null;
         description?: string;
         repeatRule?: Task["repeatRule"];
+        repeatDays?: number[] | null;
+        repeatInterval?: number | null;
+        repeatEnd?: Task["repeatEnd"];
+        repeatUntil?: string | null;
+        repeatCount?: number | null;
       };
     }) => updateTask(id, patch),
     onSuccess: () => {
@@ -149,7 +154,17 @@ export default function CalendarScreen() {
   }
 
   function openCreate(day: Date = selected) {
-    setDraft({ title: "", description: "", due: dateOnlyDue(day), repeat: null });
+    setDraft({
+      title: "",
+      description: "",
+      due: dateOnlyDue(day),
+      repeat: null,
+      repeatDays: null,
+      repeatInterval: 1,
+      repeatEnd: null,
+      repeatUntil: null,
+      repeatCount: null,
+    });
   }
 
   function openEdit(task: CalendarTask) {
@@ -159,6 +174,11 @@ export default function CalendarScreen() {
       description: task.description ?? "",
       due: task.virtual ? task.due : task.dueAt ? new Date(task.dueAt) : task.due,
       repeat: task.repeatRule,
+      repeatDays: task.repeatDays ?? null,
+      repeatInterval: task.repeatInterval ?? 1,
+      repeatEnd: task.repeatEnd ?? null,
+      repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+      repeatCount: task.repeatCount ?? null,
     });
   }
 
@@ -172,9 +192,9 @@ export default function CalendarScreen() {
     if (y > 24 && y > prev && expanded) setCalendarExpanded(false);
   }
 
-  /** Swipe down on the day list (or empty area) while at the top → open month. */
+  /** At list top: swipe down expands month; swipe up collapses to week strip. */
   function onListTouchStart(pageY: number) {
-    if (expanded || view !== "schedule" || scrollY.current > 4) {
+    if (view !== "schedule" || scrollY.current > 4) {
       pullStartY.current = null;
       return;
     }
@@ -182,15 +202,19 @@ export default function CalendarScreen() {
   }
 
   function onListTouchMove(pageY: number) {
-    if (pullStartY.current == null || expanded || view !== "schedule") return;
+    if (pullStartY.current == null || view !== "schedule") return;
     if (scrollY.current > 4) {
       pullStartY.current = null;
       return;
     }
     const dy = pageY - pullStartY.current;
-    if (dy > 40) {
+    if (!expanded && dy > 40) {
       pullStartY.current = null;
       setCalendarExpanded(true);
+      void Haptics.selectionAsync();
+    } else if (expanded && dy < -40) {
+      pullStartY.current = null;
+      setCalendarExpanded(false);
       void Haptics.selectionAsync();
     }
   }
@@ -294,8 +318,9 @@ export default function CalendarScreen() {
                 onScroll={(e) => {
                   const y = e.nativeEvent.contentOffset.y;
                   onListScroll(y);
-                  // iOS rubber-band overscroll while pulling down
-                  if (!expanded && listDragging.current && y < -24) {
+                  if (!listDragging.current) return;
+                  // iOS rubber-band: pull down expands, bounce-up collapses
+                  if (!expanded && y < -24) {
                     pullStartY.current = null;
                     setCalendarExpanded(true);
                     void Haptics.selectionAsync();
@@ -322,11 +347,15 @@ export default function CalendarScreen() {
                     <EmptyState
                       compact
                       icon="sunrise"
-                      title="A clean slate"
-                      subtitle="Swipe down to open the calendar · tap to add a task."
+                      title="Nothing planned"
+                      subtitle={
+                        expanded
+                          ? "Swipe up for the week view · tap to add something."
+                          : "Swipe down for the full month · tap to add something."
+                      }
                     />
                     <Pressable onPress={() => openCreate(selected)} hitSlop={12} style={{ marginTop: 8, alignSelf: "center" }}>
-                      <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "600" }}>Add a task</Text>
+                      <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "600" }}>Add something</Text>
                     </Pressable>
                   </View>
                 }
@@ -470,7 +499,7 @@ export default function CalendarScreen() {
               }}
               ListEmptyComponent={
                 <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 24, textAlign: "center" }}>
-                  No dated tasks yet.
+                  No dated tasks yet — give something a day and it'll show up here.
                 </Text>
               }
               renderItem={({ item: key }) => {
@@ -557,7 +586,7 @@ export default function CalendarScreen() {
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
-            repeatRule: draft.due ? draft.repeat : null,
+            ...repeatPayload(draft),
           });
         }}
       />
@@ -578,7 +607,7 @@ export default function CalendarScreen() {
               title: editing.title.trim(),
               description: editing.description.trim(),
               dueAt: editing.due ? editing.due.toISOString() : null,
-              repeatRule: editing.due ? editing.repeat : null,
+              ...repeatPayload(editing),
             },
           });
         }}
@@ -636,7 +665,14 @@ function TaskRow({
           {!!time && <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{time}</Text>}
           {!!task.repeatRule && (
             <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-              {formatRepeatLabel(task.repeatRule)}
+              {formatRepeatLabel({
+                rule: task.repeatRule,
+                days: task.repeatDays,
+                interval: task.repeatInterval,
+                end: task.repeatEnd,
+                until: task.repeatUntil,
+                count: task.repeatCount,
+              })}
             </Text>
           )}
         </View>

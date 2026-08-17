@@ -18,7 +18,7 @@ import { Fab } from "../components/Fab";
 import EmptyState from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { formatDueLabel } from "../components/GlassDateTimePicker";
-import { TaskFormModal, formatRepeatLabel, type TaskDraft } from "../components/TaskFormModal";
+import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
@@ -157,6 +157,11 @@ export default function TasksScreen() {
         description: string;
         dueAt: string | null;
         repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;
+        repeatDays?: number[] | null;
+        repeatInterval?: number | null;
+        repeatEnd?: "never" | "on" | "after" | null;
+        repeatUntil?: string | null;
+        repeatCount?: number | null;
       };
     }) => updateTask(id, patch),
     onSuccess: () => {
@@ -172,7 +177,17 @@ export default function TasksScreen() {
   });
 
   function openCreate(title: string) {
-    setDraft({ title: title.trim(), description: "", due: null, repeat: null });
+    setDraft({
+      title: title.trim(),
+      description: "",
+      due: null,
+      repeat: null,
+      repeatDays: null,
+      repeatInterval: 1,
+      repeatEnd: null,
+      repeatUntil: null,
+      repeatCount: null,
+    });
   }
 
   function openEdit(task: Task) {
@@ -182,6 +197,11 @@ export default function TasksScreen() {
       description: task.description ?? "",
       due: task.dueAt ? new Date(task.dueAt) : null,
       repeat: task.repeatRule ?? null,
+      repeatDays: task.repeatDays ?? null,
+      repeatInterval: task.repeatInterval ?? 1,
+      repeatEnd: task.repeatEnd ?? null,
+      repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+      repeatCount: task.repeatCount ?? null,
     });
   }
 
@@ -222,7 +242,7 @@ export default function TasksScreen() {
               <TextInput
                 ref={quickAddRef}
                 style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "left" }]}
-                placeholder={isNarrow ? "Add a task…" : "Add a task, press return"}
+                placeholder={isNarrow ? "What's next?" : "What's next? Hit return"}
                 placeholderTextColor={colors.textSecondary}
                 value={quickAdd}
                 onChangeText={setQuickAdd}
@@ -234,11 +254,11 @@ export default function TasksScreen() {
             {allDone && (
               <EmptyState
                 icon="check-circle"
-                title="You're all done"
+                title="All clear"
                 subtitle={
                   completedCount === 1
-                    ? "That last task is checked off. Enjoy the quiet."
-                    : `${completedCount} tasks cleared. Nothing left on your plate.`
+                    ? "That one is done. Take a breath."
+                    : `${completedCount} checked off — enjoy the quiet.`
                 }
                 compact
               />
@@ -322,12 +342,28 @@ export default function TasksScreen() {
                   {!!task.dueAt && (
                     <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
                       {formatDueLabel(task.dueAt)}
-                      {task.repeatRule ? ` · ${formatRepeatLabel(task.repeatRule)}` : ""}
+                      {task.repeatRule
+                        ? ` · ${formatRepeatLabel({
+                            rule: task.repeatRule,
+                            days: task.repeatDays,
+                            interval: task.repeatInterval,
+                            end: task.repeatEnd,
+                            until: task.repeatUntil,
+                            count: task.repeatCount,
+                          })}`
+                        : ""}
                     </Text>
                   )}
                   {!task.dueAt && !!task.repeatRule && (
                     <Text style={{ color: colors.accent, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
-                      {formatRepeatLabel(task.repeatRule)}
+                      {formatRepeatLabel({
+                        rule: task.repeatRule,
+                        days: task.repeatDays,
+                        interval: task.repeatInterval,
+                        end: task.repeatEnd,
+                        until: task.repeatUntil,
+                        count: task.repeatCount,
+                      })}
                     </Text>
                   )}
                 </Pressable>
@@ -396,8 +432,8 @@ export default function TasksScreen() {
           noneYet ? (
             <EmptyState
               icon="sunrise"
-              title="A clean slate"
-              subtitle="Add a task when something needs doing — it'll show up here."
+              title="Nothing on the list"
+              subtitle="Whenever something's tugging at you, drop it here."
             />
           ) : null
         }
@@ -424,7 +460,7 @@ export default function TasksScreen() {
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
-            repeatRule: draft.due ? draft.repeat : null,
+            ...repeatPayload(draft),
           });
         }}
       />
@@ -445,7 +481,7 @@ export default function TasksScreen() {
               title: editing.title.trim(),
               description: editing.description.trim(),
               dueAt: editing.due ? editing.due.toISOString() : null,
-              repeatRule: editing.due ? editing.repeat : null,
+              ...repeatPayload(editing),
             },
           });
         }}
