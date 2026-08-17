@@ -119,6 +119,8 @@ model QuickNote {
   color     String    @default("gray")
   pinned    Boolean   @default(false)
   archived  Boolean   @default(false)
+  /// Higher = nearer the top within pinned / unpinned groups
+  sortOrder Int       @default(0)
   /// Soft-delete — purged permanently 7 days after this timestamp
   deletedAt DateTime?
   owner     User      @relation(fields: [ownerId], references: [id])

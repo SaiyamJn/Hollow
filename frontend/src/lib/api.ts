@@ -254,6 +254,10 @@ export async function updateQuickNote(
   return data;
 }
 
+export async function reorderQuickNotes(ids: string[]) {
+  await api.post("/quick-notes/reorder", { ids });
+}
+
 /** Soft-delete into the recycle bin (kept 7 days). */
 export async function deleteQuickNote(id: string) {
   await api.delete(`/quick-notes/${id}`);

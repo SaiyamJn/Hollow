@@ -201,96 +201,106 @@ export function RepeatPanel({
             </View>
           )}
 
-          {/* Ends */}
-          <View style={styles.endSeg}>
-            {(
-              [
-                { id: "never" as const, label: "Forever" },
-                { id: "on" as const, label: "Until" },
-                { id: "after" as const, label: "Times" },
-              ] as const
-            ).map((opt) => {
-              const on = end === opt.id;
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => setEnd(opt.id)}
-                  style={[
-                    styles.endChip,
-                    {
-                      borderColor: on ? colors.accent : colors.glassBorder,
-                      backgroundColor: on ? colors.accentSoft : colors.glass,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: on ? colors.accent : colors.textSecondary, fontSize: 12, fontWeight: "600" }}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {end === "on" && (
-            <Pressable
-              onPress={onPickUntil}
-              style={[styles.field, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
-            >
-              <Feather name="calendar" size={14} color={colors.textSecondary} />
-              <Text style={{ color: colors.textPrimary, fontSize: 14, flex: 1 }}>
-                {value.repeatUntil
-                  ? value.repeatUntil.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                  : "Pick end date"}
-              </Text>
-              <Feather name="chevron-right" size={14} color={colors.textSecondary} />
-            </Pressable>
-          )}
-
-          {end === "after" && (
-            <View style={styles.inlineRow}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>Stop after</Text>
-              <View style={[styles.stepper, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-                <Pressable
-                  onPress={() =>
-                    onChange({ ...value, repeat: rule, repeatEnd: "after", repeatCount: Math.max(1, count - 1) })
-                  }
-                  hitSlop={8}
-                  style={styles.stepBtn}
-                >
-                  <Feather name="minus" size={15} color={colors.textPrimary} />
-                </Pressable>
-                <TextInput
-                  value={String(count)}
-                  keyboardType="number-pad"
-                  onChangeText={(t) => {
-                    const n = parseInt(t.replace(/\D/g, ""), 10);
-                    onChange({
-                      ...value,
-                      repeat: rule,
-                      repeatEnd: "after",
-                      repeatCount: Number.isFinite(n) ? Math.min(999, Math.max(1, n)) : 1,
-                    });
-                  }}
-                  style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600", minWidth: 28, textAlign: "center", padding: 0 }}
-                />
-                <Pressable
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      repeat: rule,
-                      repeatEnd: "after",
-                      repeatCount: Math.min(999, count + 1),
-                    })
-                  }
-                  hitSlop={8}
-                  style={styles.stepBtn}
-                >
-                  <Feather name="plus" size={15} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-              <Text style={{ color: colors.textPrimary, fontSize: 13 }}>times</Text>
+          {/* Ends — forever / until / times in one block */}
+          <View style={[styles.endsCard, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
+            <View style={styles.endSeg}>
+              {(
+                [
+                  { id: "never" as const, label: "Forever" },
+                  { id: "on" as const, label: "Until" },
+                  { id: "after" as const, label: "Times" },
+                ] as const
+              ).map((opt) => {
+                const on = end === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => setEnd(opt.id)}
+                    style={[
+                      styles.endChip,
+                      {
+                        borderColor: on ? colors.accent : "transparent",
+                        backgroundColor: on ? colors.accentSoft : "transparent",
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: on ? colors.accent : colors.textSecondary, fontSize: 12, fontWeight: "600" }}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          )}
+
+            {end === "on" && (
+              <Pressable onPress={onPickUntil} style={styles.endsExtra} hitSlop={4}>
+                <Feather name="calendar" size={14} color={colors.textSecondary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 13, flex: 1 }}>
+                  {value.repeatUntil
+                    ? value.repeatUntil.toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })
+                    : "Pick a date"}
+                </Text>
+                <Feather name="chevron-right" size={14} color={colors.textSecondary} />
+              </Pressable>
+            )}
+
+            {end === "after" && (
+              <View style={styles.endsExtra}>
+                <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>Stop after</Text>
+                <View style={[styles.stepper, { borderColor: colors.glassBorder, backgroundColor: colors.surface0 }]}>
+                  <Pressable
+                    onPress={() =>
+                      onChange({ ...value, repeat: rule, repeatEnd: "after", repeatCount: Math.max(1, count - 1) })
+                    }
+                    hitSlop={8}
+                    style={styles.stepBtn}
+                  >
+                    <Feather name="minus" size={15} color={colors.textPrimary} />
+                  </Pressable>
+                  <TextInput
+                    value={String(count)}
+                    keyboardType="number-pad"
+                    onChangeText={(t) => {
+                      const n = parseInt(t.replace(/\D/g, ""), 10);
+                      onChange({
+                        ...value,
+                        repeat: rule,
+                        repeatEnd: "after",
+                        repeatCount: Number.isFinite(n) ? Math.min(999, Math.max(1, n)) : 1,
+                      });
+                    }}
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: "600",
+                      minWidth: 28,
+                      textAlign: "center",
+                      padding: 0,
+                    }}
+                  />
+                  <Pressable
+                    onPress={() =>
+                      onChange({
+                        ...value,
+                        repeat: rule,
+                        repeatEnd: "after",
+                        repeatCount: Math.min(999, count + 1),
+                      })
+                    }
+                    hitSlop={8}
+                    style={styles.stepBtn}
+                  >
+                    <Feather name="plus" size={15} color={colors.textPrimary} />
+                  </Pressable>
+                </View>
+                <Text style={{ color: colors.textPrimary, fontSize: 13 }}>times</Text>
+              </View>
+            )}
+          </View>
         </>
       )}
     </View>
@@ -324,13 +334,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  endSeg: { flexDirection: "row", gap: 6 },
+  endSeg: { flexDirection: "row", gap: 4 },
   endChip: {
     flex: 1,
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 9,
+    paddingVertical: 8,
+  },
+  endsCard: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 6,
+    gap: 6,
+  },
+  endsExtra: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   field: {
     flexDirection: "row",

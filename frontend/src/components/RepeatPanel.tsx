@@ -218,101 +218,103 @@ function RepeatEditor({
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-1.5">
-            {(
-              [
-                { id: "never" as const, label: "Forever" },
-                { id: "on" as const, label: "Until" },
-                { id: "after" as const, label: "Times" },
-              ] as const
-            ).map((opt) => {
-              const on = end === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setEnd(opt.id)}
-                  className={clsx(
-                    "rounded-lg border py-2 text-xs font-semibold",
-                    on ? "border-accent bg-accent-soft text-accent" : "border-border text-secondary"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {end === "on" && (
-            <input
-              type="date"
-              className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm"
-              value={
-                value.repeatUntil
-                  ? `${value.repeatUntil.getFullYear()}-${String(value.repeatUntil.getMonth() + 1).padStart(2, "0")}-${String(value.repeatUntil.getDate()).padStart(2, "0")}`
-                  : ""
-              }
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const [y, m, d] = e.target.value.split("-").map(Number);
-                onChange({
-                  ...value,
-                  repeat: rule,
-                  repeatEnd: "on",
-                  repeatUntil: new Date(y, m - 1, d),
-                  repeatCount: null,
-                });
-              }}
-            />
-          )}
-
-          {end === "after" && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-secondary flex-1">Stop after</span>
-              <div className="inline-flex items-center rounded-lg border border-border glass-input">
-                <button
-                  type="button"
-                  className="h-8 w-8"
-                  onClick={() =>
-                    onChange({ ...value, repeat: rule, repeatEnd: "after", repeatCount: Math.max(1, count - 1) })
-                  }
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={count}
-                  onChange={(e) => {
-                    const n = parseInt(e.target.value, 10);
-                    onChange({
-                      ...value,
-                      repeat: rule,
-                      repeatEnd: "after",
-                      repeatCount: Number.isFinite(n) ? Math.min(999, Math.max(1, n)) : 1,
-                    });
-                  }}
-                  className="w-12 bg-transparent text-center text-sm font-semibold outline-none"
-                />
-                <button
-                  type="button"
-                  className="h-8 w-8"
-                  onClick={() =>
-                    onChange({
-                      ...value,
-                      repeat: rule,
-                      repeatEnd: "after",
-                      repeatCount: Math.min(999, count + 1),
-                    })
-                  }
-                >
-                  +
-                </button>
-              </div>
-              <span className="text-sm text-primary">times</span>
+          <div className="rounded-xl border border-border glass-input p-1.5 space-y-1.5">
+            <div className="grid grid-cols-3 gap-1">
+              {(
+                [
+                  { id: "never" as const, label: "Forever" },
+                  { id: "on" as const, label: "Until" },
+                  { id: "after" as const, label: "Times" },
+                ] as const
+              ).map((opt) => {
+                const on = end === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setEnd(opt.id)}
+                    className={clsx(
+                      "rounded-lg py-2 text-xs font-semibold",
+                      on ? "bg-accent-soft text-accent" : "text-secondary hover:text-primary"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
-          )}
+
+            {end === "on" && (
+              <input
+                type="date"
+                className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+                value={
+                  value.repeatUntil
+                    ? `${value.repeatUntil.getFullYear()}-${String(value.repeatUntil.getMonth() + 1).padStart(2, "0")}-${String(value.repeatUntil.getDate()).padStart(2, "0")}`
+                    : ""
+                }
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const [y, m, d] = e.target.value.split("-").map(Number);
+                  onChange({
+                    ...value,
+                    repeat: rule,
+                    repeatEnd: "on",
+                    repeatUntil: new Date(y, m - 1, d),
+                    repeatCount: null,
+                  });
+                }}
+              />
+            )}
+
+            {end === "after" && (
+              <div className="flex items-center gap-3 px-1 py-1">
+                <span className="text-sm text-secondary flex-1">Stop after</span>
+                <div className="inline-flex items-center rounded-lg border border-border">
+                  <button
+                    type="button"
+                    className="h-8 w-8"
+                    onClick={() =>
+                      onChange({ ...value, repeat: rule, repeatEnd: "after", repeatCount: Math.max(1, count - 1) })
+                    }
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={count}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      onChange({
+                        ...value,
+                        repeat: rule,
+                        repeatEnd: "after",
+                        repeatCount: Number.isFinite(n) ? Math.min(999, Math.max(1, n)) : 1,
+                      });
+                    }}
+                    className="w-12 bg-transparent text-center text-sm font-semibold outline-none"
+                  />
+                  <button
+                    type="button"
+                    className="h-8 w-8"
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        repeat: rule,
+                        repeatEnd: "after",
+                        repeatCount: Math.min(999, count + 1),
+                      })
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+                <span className="text-sm text-primary">times</span>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

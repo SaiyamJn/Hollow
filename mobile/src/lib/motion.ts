@@ -56,6 +56,29 @@ export function animateTaskComplete() {
   });
 }
 
+/** Springy reorder — cards glide into their new slots. */
+export function animateReorder() {
+  configureMotion();
+  LayoutAnimation.configureNext({
+    duration: 280,
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+      duration: 180,
+    },
+    update: {
+      type: LayoutAnimation.Types.spring,
+      springDamping: 0.78,
+      duration: 280,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+      duration: 160,
+    },
+  });
+}
+
 /** Softer layout transition for expand/collapse panels. */
 export function animatePanel() {
   configureMotion();

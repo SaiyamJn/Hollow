@@ -119,9 +119,33 @@ router.get("/", async (req: AuthedRequest, res) => {
     },
     orderBy: trashed
       ? [{ deletedAt: "desc" }]
-      : [{ pinned: "desc" }, { createdAt: "desc" }],
+      : [{ pinned: "desc" }, { sortOrder: "desc" }, { createdAt: "desc" }],
   });
   res.json(notes.map(publicNote));
+});
+
+router.post("/reorder", async (req: AuthedRequest, res) => {
+  const parsed = z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  const { ids } = parsed.data;
+
+  const owned = await prisma.quickNote.findMany({
+    where: { ownerId: req.userId, id: { in: ids }, deletedAt: null },
+    select: { id: true },
+  });
+  if (owned.length !== ids.length) return res.status(400).json({ error: "Invalid note ids" });
+
+  const base = Date.now();
+  // First id in the list sits at the top (highest sortOrder)
+  await prisma.$transaction(
+    ids.map((id, index) =>
+      prisma.quickNote.update({
+        where: { id },
+        data: { sortOrder: base - index },
+      })
+    )
+  );
+  res.json({ ok: true });
 });
 
 router.post("/", async (req: AuthedRequest, res) => {
@@ -152,6 +176,7 @@ router.post("/", async (req: AuthedRequest, res) => {
       kind,
       items: kind === "list" ? sealItems(parsed.data.items ?? []) : null,
       ownerId: req.userId!,
+      sortOrder: Date.now(),
     },
   });
   res.status(201).json(publicNote(note));

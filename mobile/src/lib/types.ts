@@ -72,6 +72,7 @@ export interface QuickNote {
   color: string;
   pinned: boolean;
   archived: boolean;
+  sortOrder?: number;
   deletedAt?: string | null;
   createdAt: string;
 }

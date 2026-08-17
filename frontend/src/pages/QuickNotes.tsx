@@ -18,11 +18,13 @@ import {
   deleteQuickNote,
   deleteQuickNotePermanent,
   fetchQuickNotes,
+  reorderQuickNotes,
   updateQuickNote,
 } from "../lib/api";
 import type { ChecklistItem, QuickNote } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
+import { SortableNotesSection } from "../components/SortableNotesSection";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -114,6 +116,30 @@ export default function QuickNotes() {
 
   const selecting = selected.size > 0;
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+
+  async function persistOrder(group: QuickNote[], orderedIds: string[]) {
+    const pinnedIds = notes.filter((n) => n.pinned).map((n) => n.id);
+    const restIds = notes.filter((n) => !n.pinned).map((n) => n.id);
+    const isPinnedGroup = group.length > 0 && group.every((n) => n.pinned);
+    const merged = isPinnedGroup ? [...orderedIds, ...restIds] : [...pinnedIds, ...orderedIds];
+
+    queryClient.setQueryData<QuickNote[]>(["quicknotes", "library"], (prev) => {
+      if (!prev) return prev;
+      const rank = new Map(merged.map((id, i) => [id, merged.length - i]));
+      return [...prev]
+        .map((n) => (rank.has(n.id) ? { ...n, sortOrder: rank.get(n.id)! } : n))
+        .sort((a, b) => {
+          if (!!a.archived !== !!b.archived) return a.archived ? 1 : -1;
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+          return (b.sortOrder ?? 0) - (a.sortOrder ?? 0);
+        });
+    });
+    try {
+      await reorderQuickNotes(merged);
+    } catch {
+      invalidate();
+    }
+  }
 
   const create = useMutation({
     mutationFn: () => createQuickNote({ content: draft.trim() || " ", color: draftColor, kind: "note" }),
@@ -321,12 +347,22 @@ export default function QuickNotes() {
         </p>
       )}
 
+      {notes.length > 1 && !showArchived && !selecting && (
+        <p className="text-xs text-secondary text-center mb-4">
+          Hover a note and drag the grip to rearrange
+        </p>
+      )}
+
       {pinned.length > 0 && (
         <>
           <p className="text-[11px] font-semibold tracking-wide text-secondary mb-2">PINNED</p>
-          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 mb-6 space-y-4 [column-fill:_balance]">
-            {pinned.map((note) => (
-              <div key={note.id} className="break-inside-avoid mb-4">
+          <SortableNotesSection
+            notes={pinned}
+            enabled={!showArchived && !selecting}
+            className="mb-6"
+            onReorder={(ids) => void persistOrder(pinned, ids)}
+            renderCard={(note, { dragging }) => (
+              <div className={clsx(dragging && "opacity-70")}>
                 <NoteCard
                   note={note}
                   selected={selected.has(note.id)}
@@ -336,28 +372,33 @@ export default function QuickNotes() {
                   onToggleSelect={() => toggleSelect(note.id)}
                 />
               </div>
-            ))}
-          </div>
+            )}
+          />
         </>
       )}
 
       {rest.length > 0 && pinned.length > 0 && (
         <p className="text-[11px] font-semibold tracking-wide text-secondary mb-2">OTHERS</p>
       )}
-      <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 [column-fill:_balance]">
-        {rest.map((note) => (
-          <div key={note.id} className="break-inside-avoid mb-4">
-            <NoteCard
-              note={note}
-              selected={selected.has(note.id)}
-              selecting={selecting}
-              onOpen={() => openNote(note)}
-              onSelectStart={() => enterSelect(note.id)}
-              onToggleSelect={() => toggleSelect(note.id)}
-            />
-          </div>
-        ))}
-      </div>
+      {rest.length > 0 && (
+        <SortableNotesSection
+          notes={rest}
+          enabled={!showArchived && !selecting}
+          onReorder={(ids) => void persistOrder(rest, ids)}
+          renderCard={(note, { dragging }) => (
+            <div className={clsx(dragging && "opacity-70")}>
+              <NoteCard
+                note={note}
+                selected={selected.has(note.id)}
+                selecting={selecting}
+                onOpen={() => openNote(note)}
+                onSelectStart={() => enterSelect(note.id)}
+                onToggleSelect={() => toggleSelect(note.id)}
+              />
+            </div>
+          )}
+        />
+      )}
 
       {selecting && (
         <div className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-border glass-strong px-3 py-2 shadow-lg">

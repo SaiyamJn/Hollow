@@ -14,7 +14,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { createQuickNote, deleteQuickNote, fetchQuickNotes, updateQuickNote } from "../lib/api";
+import { createQuickNote, deleteQuickNote, fetchQuickNotes, reorderQuickNotes, updateQuickNote } from "../lib/api";
 import type { QuickNote } from "../lib/types";
 import { resolveNoteFields } from "../lib/noteFields";
 import { useTheme } from "../contexts/theme";
@@ -22,6 +22,7 @@ import EmptyState from "../components/EmptyState";
 import { Fab } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
+import { ReorderableNoteList } from "../components/ReorderableNoteList";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 import { animateListChange } from "../lib/motion";
@@ -68,13 +69,14 @@ export default function QuickNotesScreen({ navigation }: any) {
   const [draft, setDraft] = useState("");
   const [draftColor, setDraftColor] = useState("yellow");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance, fabBottom } = useLayout();
   const { width } = useWindowDimensions();
-  const cardWidth = (width - screenPad * 2 - GRID_GAP) / NUM_COLUMNS;
-  const selecting = selected.size > 0;
+  const cardWidth = width - screenPad * 2;
+  const selecting = selectMode || selected.size > 0;
   const selectAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -183,11 +185,39 @@ export default function QuickNotesScreen({ navigation }: any) {
 
   function clearSelection() {
     setSelected(new Set());
+    setSelectMode(false);
   }
 
   function enterSelection(id: string) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectMode(true);
     setSelected(new Set([id]));
+  }
+
+  async function persistOrder(group: QuickNote[], orderedIds: string[]) {
+    const pinnedIds = list.filter((n) => n.pinned).map((n) => n.id);
+    const restIds = list.filter((n) => !n.pinned).map((n) => n.id);
+    const isPinnedGroup = group.length > 0 && group.every((n) => n.pinned);
+    const merged = isPinnedGroup
+      ? [...orderedIds, ...restIds]
+      : [...pinnedIds, ...orderedIds];
+
+    queryClient.setQueryData<QuickNote[]>(["quicknotes", "library"], (prev) => {
+      if (!prev) return prev;
+      const rank = new Map(merged.map((id, i) => [id, merged.length - i]));
+      return [...prev]
+        .map((n) => (rank.has(n.id) ? { ...n, sortOrder: rank.get(n.id)! } : n))
+        .sort((a, b) => {
+          if (!!a.archived !== !!b.archived) return a.archived ? 1 : -1;
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+          return (b.sortOrder ?? 0) - (a.sortOrder ?? 0);
+        });
+    });
+    try {
+      await reorderQuickNotes(merged);
+    } catch {
+      invalidate();
+    }
   }
 
   function toggleSelection(id: string) {
@@ -453,6 +483,36 @@ export default function QuickNotesScreen({ navigation }: any) {
                   {!showArchived && archivedCount > 0 ? ` (${archivedCount})` : ""}
                 </Text>
               </Pressable>
+              {!showArchived && (
+                <Pressable
+                  onPress={() => {
+                    if (selectMode) clearSelection();
+                    else setSelectMode(true);
+                  }}
+                  style={[
+                    styles.libraryChip,
+                    {
+                      borderColor: selectMode ? colors.accent : colors.border,
+                      backgroundColor: selectMode ? colors.accentSoft : colors.surface1,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="check-circle"
+                    size={14}
+                    color={selectMode ? colors.accent : colors.textSecondary}
+                  />
+                  <Text
+                    style={{
+                      color: selectMode ? colors.accent : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
+                  >
+                    {selectMode ? "Done" : "Select"}
+                  </Text>
+                </Pressable>
+              )}
               <Pressable
                 onPress={() => navigation.navigate("RecycleBin")}
                 style={[
@@ -467,6 +527,11 @@ export default function QuickNotesScreen({ navigation }: any) {
                 <Feather name="chevron-right" size={14} color={colors.textSecondary} />
               </Pressable>
             </View>
+            {!showArchived && !selectMode && list.length > 1 && (
+              <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 10 }}>
+                Long-press a note, then drag to rearrange
+              </Text>
+            )}
           </View>
         }
         renderItem={({ item }) => {
@@ -487,47 +552,27 @@ export default function QuickNotesScreen({ navigation }: any) {
               </Text>
             );
           }
-          // Masonry: two independent columns so card height follows content.
-          const left = item.notes.filter((_: QuickNote, i: number) => i % 2 === 0);
-          const right = item.notes.filter((_: QuickNote, i: number) => i % 2 === 1);
           return (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                gap: GRID_GAP,
-                paddingHorizontal: screenPad,
-                marginBottom: GRID_GAP,
-              }}
-            >
-              <View style={{ width: cardWidth, gap: GRID_GAP }}>
-                {left.map((note: QuickNote) => (
+            <View style={{ paddingHorizontal: screenPad, marginBottom: GRID_GAP }}>
+              <ReorderableNoteList
+                notes={item.notes}
+                enabled={!selecting && !showArchived}
+                onReorder={(ids) => void persistOrder(item.notes, ids)}
+                renderCard={(note, { dragging }) => (
                   <NoteCard
-                    key={note.id}
                     note={note}
                     width={cardWidth}
                     selected={selected.has(note.id)}
                     selecting={selecting}
+                    dragging={dragging}
                     onOpen={() => openNote(note)}
-                    onLongPress={() => enterSelection(note.id)}
+                    onLongPress={() => {
+                      if (selectMode) enterSelection(note.id);
+                    }}
                     onToggleSelect={() => toggleSelection(note.id)}
                   />
-                ))}
-              </View>
-              <View style={{ width: cardWidth, gap: GRID_GAP }}>
-                {right.map((note: QuickNote) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    width={cardWidth}
-                    selected={selected.has(note.id)}
-                    selecting={selecting}
-                    onOpen={() => openNote(note)}
-                    onLongPress={() => enterSelection(note.id)}
-                    onToggleSelect={() => toggleSelection(note.id)}
-                  />
-                ))}
-              </View>
+                )}
+              />
             </View>
           );
         }}
@@ -537,7 +582,7 @@ export default function QuickNotesScreen({ navigation }: any) {
             title={showArchived ? "Nothing tucked away" : "Your pocket is empty"}
             subtitle={
               showArchived
-                ? "Long-press a note and archive it when you're done with it for now."
+                ? "Select notes and archive them when you're done for now."
                 : "A sticky thought, a little list — whatever's buzzing around."
             }
           />
@@ -628,6 +673,7 @@ function NoteCard({
   width,
   selected,
   selecting,
+  dragging,
   onOpen,
   onLongPress,
   onToggleSelect,
@@ -636,6 +682,7 @@ function NoteCard({
   width: number;
   selected: boolean;
   selecting: boolean;
+  dragging?: boolean;
   onOpen: () => void;
   onLongPress: () => void;
   onToggleSelect: () => void;
@@ -653,12 +700,12 @@ function NoteCard({
 
   useEffect(() => {
     Animated.spring(cardScale, {
-      toValue: selected ? 0.98 : 1,
+      toValue: selected || dragging ? 0.98 : 1,
       useNativeDriver: true,
       friction: 11,
       tension: 85,
     }).start();
-  }, [selected, cardScale]);
+  }, [selected, dragging, cardScale]);
 
   return (
     <Animated.View style={{ width, transform: [{ scale: cardScale }] }}>
@@ -667,6 +714,7 @@ function NoteCard({
           width: "100%",
           borderColor: selected ? colors.accent : colors.glassBorder,
           borderWidth: selected ? 2 : StyleSheet.hairlineWidth,
+          opacity: dragging ? 0.95 : 1,
         }}
         contentStyle={[
           styles.card,
