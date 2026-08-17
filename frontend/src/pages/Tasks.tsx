@@ -10,7 +10,7 @@ import { Dialog, DialogContent } from "../components/ui/dialog";
 import { DateTimePicker, formatDueLabel } from "../components/DateTimePicker";
 import { formatRepeatLabel } from "../lib/taskRepeat";
 import type { TaskRepeatRule } from "../lib/types";
-import { RepeatPanel, repeatPayload } from "../components/RepeatPanel";
+import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import type { RepeatEnd } from "../lib/taskRepeat";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
@@ -308,7 +308,7 @@ export default function Tasks() {
           }
         }}
       >
-        <DialogContent title="New task" className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent title="New task" className="max-w-md">
           {draft && (
             <div className="space-y-3">
               <Input
@@ -347,12 +347,14 @@ export default function Tasks() {
                   })
                 }
               />
-              {draft.due && (
-                <RepeatPanel
+              {draft.due ? (
+                <RepeatField
                   due={draft.due}
                   value={draft}
                   onChange={(next) => setDraft({ ...draft, ...next })}
                 />
+              ) : (
+                <RepeatField due={null} value={draft} onChange={() => {}} disabled />
               )}
               {createError && <p className="text-sm text-danger text-center">{createError}</p>}
               <div className="flex gap-2 pt-1">
@@ -382,7 +384,7 @@ export default function Tasks() {
           }
         }}
       >
-        <DialogContent title="Edit task" className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent title="Edit task" className="max-w-md">
           {editing && (
             <div className="space-y-3">
               <Input
@@ -417,12 +419,14 @@ export default function Tasks() {
                   })
                 }
               />
-              {editing.due && (
-                <RepeatPanel
+              {editing.due ? (
+                <RepeatField
                   due={editing.due}
                   value={editing}
                   onChange={(next) => setEditing({ ...editing, ...next })}
                 />
+              ) : (
+                <RepeatField due={null} value={editing} onChange={() => {}} disabled />
               )}
               {editError && <p className="text-sm text-danger text-center">{editError}</p>}
               <div className="flex gap-2 pt-1">

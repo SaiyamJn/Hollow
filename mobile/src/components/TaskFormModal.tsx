@@ -298,23 +298,21 @@ export function TaskFormModal({
         <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
           <GlassCard
             strong
-            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 420, alignSelf: "center", overflow: "hidden" }}
-            contentStyle={[styles.card, { maxHeight: maxCardH }]}
+            style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}
+            contentStyle={styles.card}
           >
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <RepeatPanel
-                due={current.due}
-                value={current}
-                onChange={(next) => onChange({ ...current, ...next })}
-                onPickUntil={openUntilPicker}
-              />
-              <Pressable
-                onPress={() => setRepeatOpen(false)}
-                style={{ alignSelf: "flex-end", marginTop: 12 }}
-              >
-                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
-              </Pressable>
-            </ScrollView>
+            <RepeatPanel
+              due={current.due}
+              value={current}
+              onChange={(next) => onChange({ ...current, ...next })}
+              onPickUntil={openUntilPicker}
+            />
+            <Pressable
+              onPress={() => setRepeatOpen(false)}
+              style={{ alignSelf: "flex-end", marginTop: 14 }}
+            >
+              <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+            </Pressable>
           </GlassCard>
         </View>
       </Modal>

@@ -8,7 +8,7 @@ import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { DateTimePicker } from "../components/DateTimePicker";
 import type { TaskRepeatRule } from "../lib/types";
-import { RepeatPanel, repeatPayload } from "../components/RepeatPanel";
+import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import type { RepeatEnd } from "../lib/taskRepeat";
 import {
   addDays,
@@ -536,7 +536,7 @@ export default function CalendarPage() {
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => !o && setDraft(null)}>
-        <DialogContent title="New task" className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent title="New task" className="max-w-md">
           {draft && (
             <div className="space-y-3">
               <Input
@@ -570,12 +570,14 @@ export default function CalendarPage() {
                   })
                 }
               />
-              {draft.due && (
-                <RepeatPanel
+              {draft.due ? (
+                <RepeatField
                   due={draft.due}
                   value={draft}
                   onChange={(next) => setDraft({ ...draft, ...next })}
                 />
+              ) : (
+                <RepeatField due={null} value={draft} onChange={() => {}} disabled />
               )}
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
@@ -603,7 +605,7 @@ export default function CalendarPage() {
       </Dialog>
 
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent title="Edit task" className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent title="Edit task" className="max-w-md">
           {editing && (
             <div className="space-y-3">
               <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
@@ -631,12 +633,14 @@ export default function CalendarPage() {
                   })
                 }
               />
-              {editing.due && (
-                <RepeatPanel
+              {editing.due ? (
+                <RepeatField
                   due={editing.due}
                   value={editing}
                   onChange={(next) => setEditing({ ...editing, ...next })}
                 />
+              ) : (
+                <RepeatField due={null} value={editing} onChange={() => {}} disabled />
               )}
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
