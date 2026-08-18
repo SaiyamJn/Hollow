@@ -1,5 +1,7 @@
 /** Hollow focus classes — important × urgent, in app voice. */
 
+import { formatCompactClockTime } from "./timeFormat";
+
 export type TaskFocus = "none" | "critical" | "steady" | "swift" | "quiet";
 
 type FocusMeta = {
@@ -101,9 +103,5 @@ export function formatTaskTime(iso: string | null | undefined): string | null {
   const h = d.getHours();
   const m = d.getMinutes();
   if (h === 0 && m === 0) return null; // date-only
-  // Compact so calendar cells don't clip (e.g. 9:30a / 2p)
-  const hour12 = h % 12 || 12;
-  const suffix = h < 12 ? "a" : "p";
-  if (m === 0) return `${hour12}${suffix}`;
-  return `${hour12}:${String(m).padStart(2, "0")}${suffix}`;
+  return formatCompactClockTime(d);
 }

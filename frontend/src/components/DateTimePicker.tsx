@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react";
 import clsx from "clsx";
+import { formatClockTime } from "../lib/timeFormat";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const MINUTES = Array.from({ length: 60 }, (_, m) => m);
 
-const ITEM_H = 28;
+const ITEM_H = 30;
 const VISIBLE = 3;
 const PAD = Math.floor(VISIBLE / 2);
 
@@ -35,9 +36,7 @@ export function formatDueLabel(iso: string | null | undefined) {
   const isDateOnly =
     due.getHours() === 0 && due.getMinutes() === 0 && due.getSeconds() === 0;
   if (isDateOnly) return date;
-  const hh = String(due.getHours()).padStart(2, "0");
-  const mm = String(due.getMinutes()).padStart(2, "0");
-  return `${date} · ${hh}:${mm}`;
+  return `${date} · ${formatClockTime(due)}`;
 }
 
 interface DateTimePickerProps {
@@ -95,7 +94,7 @@ function RollingColumn({
   }
 
   return (
-    <div className="relative w-11 select-none" style={{ height: ITEM_H * VISIBLE }} aria-label={ariaLabel}>
+    <div className="relative w-12 select-none" style={{ height: ITEM_H * VISIBLE }} aria-label={ariaLabel}>
       <div
         className="pointer-events-none absolute inset-x-0 z-10 rounded-md bg-accent-soft border border-accent/20"
         style={{ top: ITEM_H * PAD, height: ITEM_H }}
@@ -265,9 +264,9 @@ export function DateTimePicker({ value, onChange, className, defaultOpen = false
             })}
           </div>
 
-          <div className="flex items-center justify-center gap-1 pt-1.5 border-t border-border">
+          <div className="flex items-center justify-center gap-2 pt-2 border-t border-border">
             <RollingColumn items={HOURS} value={hour} onChange={(h) => setTime(h, minute)} ariaLabel="Hour" />
-            <span className="text-secondary text-sm font-medium pb-0.5">:</span>
+            <span className="text-secondary text-sm font-medium tabular-nums">:</span>
             <RollingColumn items={MINUTES} value={minute} onChange={(m) => setTime(hour, m)} ariaLabel="Minute" />
           </div>
         </div>

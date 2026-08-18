@@ -1,10 +1,27 @@
 import { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../contexts/auth";
 import { useTheme } from "../contexts/theme";
 import { useFont } from "../contexts/font";
+import {
+  defaultFocusColor,
+  FOCUS_COLOR_PRESETS,
+  normalizeHex,
+  useFocusColors,
+  type FocusCategory,
+} from "../contexts/focusColors";
 import { useUnlock } from "../contexts/unlock";
 import { fetchHealth, fetchTasks } from "../lib/api";
 import {
@@ -16,6 +33,7 @@ import {
   APP_VERSION,
 } from "../lib/appInfo";
 import { FONT_OPTIONS } from "../lib/fonts";
+import { FOCUS_MATRIX, FOCUS_META } from "../lib/taskFocus";
 import { getNotificationsEnabled, setNotificationsEnabled, syncTaskReminders } from "../lib/notifications";
 import type { Task } from "../lib/types";
 import { BrandMark } from "../components/BrandMark";
@@ -54,12 +72,15 @@ function DetailRow({
 export default function SettingsScreen({ navigation }: any) {
   const { colors, theme, toggle } = useTheme();
   const { font, setFont } = useFont();
+  const { colorFor, setCategoryColor, resetAll, isCustom } = useFocusColors();
   const { user, logout } = useAuth();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
   const { screenPad, stackBottomClearance } = useLayout();
   const [notifOn, setNotifOn] = useState(false);
   const [fontOpen, setFontOpen] = useState(false);
+  const [editingFocus, setEditingFocus] = useState<FocusCategory | null>(null);
+  const [hexDraft, setHexDraft] = useState("");
 
   const { data: health } = useQuery({
     queryKey: ["health"],
@@ -92,6 +113,34 @@ export default function SettingsScreen({ navigation }: any) {
       : "Unavailable";
 
   const activeFont = FONT_OPTIONS.find((o) => o.id === font) ?? FONT_OPTIONS[0];
+
+  function openFocusEditor(id: FocusCategory) {
+    setEditingFocus(id);
+    setHexDraft(colorFor(id) ?? defaultFocusColor(id, theme));
+  }
+
+  function applyHex() {
+    if (!editingFocus) return;
+    const normalized = normalizeHex(hexDraft);
+    if (!normalized) {
+      Alert.alert("Invalid color", "Enter a hex like #0d8a68 or 0d8a68.");
+      return;
+    }
+    setCategoryColor(editingFocus, normalized);
+    setHexDraft(normalized);
+  }
+
+  function pickPreset(hex: string) {
+    if (!editingFocus) return;
+    setCategoryColor(editingFocus, hex);
+    setHexDraft(hex);
+  }
+
+  function resetCategory() {
+    if (!editingFocus) return;
+    setCategoryColor(editingFocus, null);
+    setHexDraft(defaultFocusColor(editingFocus, theme));
+  }
 
   return (
     <ScrollView
@@ -144,6 +193,150 @@ export default function SettingsScreen({ navigation }: any) {
           thumbColor={colors.surface0}
         />
       </GlassCard>
+
+      <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>FOCUS COLORS</Text>
+      <GlassCard contentStyle={{ paddingVertical: 4, paddingHorizontal: 0 }}>
+        {(FOCUS_MATRIX as FocusCategory[]).map((id, i) => {
+          const tint = colorFor(id) ?? defaultFocusColor(id, theme);
+          return (
+            <Pressable
+              key={id}
+              onPress={() => openFocusEditor(id)}
+              style={[
+                styles.focusRow,
+                i < FOCUS_MATRIX.length - 1 && {
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: colors.border,
+                },
+              ]}
+            >
+              <View style={[styles.focusSwatch, { backgroundColor: tint, borderColor: colors.border }]} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
+                  {FOCUS_META[id].label}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                  {isCustom(id) ? tint : `${FOCUS_META[id].hint} · default`}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+            </Pressable>
+          );
+        })}
+      </GlassCard>
+      <Pressable onPress={resetAll} style={{ marginTop: 8 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
+          Reset focus colors to defaults
+        </Text>
+      </Pressable>
+
+      <Modal
+        visible={editingFocus !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingFocus(null)}
+      >
+        <Pressable style={styles.fontOverlay} onPress={() => setEditingFocus(null)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={[styles.fontSheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+          >
+            {editingFocus && (
+              <>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: "600",
+                    marginBottom: 4,
+                    textAlign: "center",
+                  }}
+                >
+                  {FOCUS_META[editingFocus].label} color
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginBottom: 14,
+                  }}
+                >
+                  Pick a swatch or enter a hex
+                </Text>
+
+                <View
+                  style={[
+                    styles.previewRow,
+                    { borderColor: colors.border, backgroundColor: colors.surface0 },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.previewSwatch,
+                      {
+                        backgroundColor: normalizeHex(hexDraft) ?? colorFor(editingFocus) ?? "#888",
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  />
+                  <TextInput
+                    value={hexDraft}
+                    onChangeText={setHexDraft}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="#0d8a68"
+                    placeholderTextColor={colors.textSecondary}
+                    style={[styles.hexInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                    onSubmitEditing={applyHex}
+                  />
+                  <Pressable
+                    onPress={applyHex}
+                    style={[styles.hexApply, { backgroundColor: colors.accentSoft }]}
+                  >
+                    <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "700" }}>Apply</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.presetGrid}>
+                  {FOCUS_COLOR_PRESETS.map((hex) => {
+                    const active = (normalizeHex(hexDraft) ?? "").toLowerCase() === hex.toLowerCase();
+                    return (
+                      <Pressable
+                        key={hex}
+                        onPress={() => pickPreset(hex)}
+                        style={[
+                          styles.presetSwatch,
+                          {
+                            backgroundColor: hex,
+                            borderColor: active ? colors.textPrimary : colors.border,
+                            borderWidth: active ? 2 : StyleSheet.hairlineWidth,
+                          },
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
+
+                <View style={styles.colorActions}>
+                  <Pressable onPress={resetCategory} style={{ paddingVertical: 12, flex: 1 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 14, textAlign: "center" }}>
+                      Use default
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => setEditingFocus(null)} style={{ paddingVertical: 12, flex: 1 }}>
+                    <Text
+                      style={{ color: colors.accent, fontSize: 14, fontWeight: "700", textAlign: "center" }}
+                    >
+                      Done
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>FONT</Text>
       <Pressable onPress={() => setFontOpen(true)}>
@@ -307,5 +500,67 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  focusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  focusSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 14,
+    marginBottom: 14,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  previewSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  hexInput: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    fontVariant: ["tabular-nums"],
+  },
+  hexApply: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  presetGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  presetSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+  },
+  colorActions: {
+    flexDirection: "row",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.25)",
+    marginTop: 8,
   },
 });

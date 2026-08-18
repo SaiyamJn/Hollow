@@ -6,6 +6,6 @@
  * - versionCode → Android integer; must increase every Play upload.
  */
 module.exports = {
-  version: "1.2.7",
-  versionCode: 34,
+  version: "1.3.1",
+  versionCode: 38,
 };

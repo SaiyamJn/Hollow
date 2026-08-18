@@ -11,13 +11,14 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../contexts/theme";
+import { formatClockTime } from "../lib/timeFormat";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const HOURS_24 = Array.from({ length: 24 }, (_, h) => h);
-const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // Google-style 5-min steps
+const MINUTES = Array.from({ length: 60 }, (_, m) => m);
 
-/** Compact wheel metrics — same snap behaviour, less vertical space. */
-const ITEM_H = 28;
+/** Compact wheel — fixed 3-row viewport so the form doesn’t grow / force page scroll. */
+const ITEM_H = 30;
 const VISIBLE = 3;
 const PAD = Math.floor(VISIBLE / 2);
 const CELL_H = 36;
@@ -50,13 +51,7 @@ export function formatDueLabel(iso: string | Date | null | undefined) {
   const due = typeof iso === "string" ? new Date(iso) : iso;
   const date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   if (isDateOnlyDue(due)) return date;
-  const hh = String(due.getHours()).padStart(2, "0");
-  const mm = String(due.getMinutes()).padStart(2, "0");
-  return `${date} · ${hh}:${mm}`;
-}
-
-function snapMinute(m: number) {
-  return Math.min(55, Math.round(m / 5) * 5);
+  return `${date} · ${formatClockTime(due)}`;
 }
 
 /** Finite Apple-style snap wheel — smooth, not infinite. */
@@ -65,7 +60,7 @@ function RollingColumn({
   value,
   onChange,
   format = (n: number | string) => String(n).padStart(2, "0"),
-  width = 44,
+  width = 52,
 }: {
   items: (number | string)[];
   value: number | string;
@@ -191,7 +186,7 @@ export function GlassDateTimePicker({
   }, [selected]);
 
   const hour24 = selected && hasTime ? selected.getHours() : 9;
-  const minute = selected && hasTime ? snapMinute(selected.getMinutes()) : 0;
+  const minute = selected && hasTime ? selected.getMinutes() : 0;
 
   const today = startOfDay(new Date());
   const tomorrow = new Date(today);
@@ -230,7 +225,7 @@ export function GlassDateTimePicker({
 
   function setTime(h: number, m: number) {
     const base = selected ? startOfDay(selected) : startOfDay(new Date());
-    base.setHours(h, snapMinute(m), 0, 0);
+    base.setHours(h, m, 0, 0);
     onChange(base);
   }
 
@@ -364,7 +359,9 @@ export function GlassDateTimePicker({
                 onChange={(h) => setTime(Number(h), minute)}
                 format={(n) => String(n).padStart(2, "0")}
               />
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>:</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: "600", paddingHorizontal: 4 }}>
+                :
+              </Text>
               <RollingColumn
                 items={MINUTES}
                 value={minute}
@@ -422,8 +419,8 @@ const styles = StyleSheet.create({
   cellLabel: { width: "14.28%", textAlign: "center", fontSize: 11, marginBottom: 2, fontWeight: "500" },
   timeBlock: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
-    gap: 6,
+    paddingTop: 10,
+    gap: 8,
   },
   timeHeader: {
     flexDirection: "row",
@@ -442,14 +439,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    gap: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    gap: 6,
+    alignSelf: "center",
+    minWidth: 148,
   },
   wheel: {
-    width: 44,
+    width: 52,
     height: ITEM_H * VISIBLE,
     overflow: "hidden",
   },

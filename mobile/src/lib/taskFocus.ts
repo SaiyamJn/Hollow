@@ -80,7 +80,7 @@ export function focusColor(
 }
 
 /** Hex accent → soft wash that works in light and dark. */
-function withAlpha(hexOrRgb: string, alpha: number): string {
+export function withAlpha(hexOrRgb: string, alpha: number): string {
   if (hexOrRgb.startsWith("#") && (hexOrRgb.length === 7 || hexOrRgb.length === 4)) {
     const h =
       hexOrRgb.length === 4
@@ -96,7 +96,7 @@ function withAlpha(hexOrRgb: string, alpha: number): string {
   return hexOrRgb;
 }
 
-/** Soft washes — pass theme accent so light/dark teal both read correctly. */
+/** Soft washes — prefer `useFocusColors().washFor` when custom tints are enabled. */
 export function focusWash(focus: TaskFocus, accent = "#62d9ae"): string {
   switch (focus) {
     case "critical":

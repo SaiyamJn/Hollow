@@ -19,7 +19,8 @@ import {
 } from "./dateUtils";
 import type { CalendarTask } from "./taskIndex";
 import { tasksOnDay } from "./taskIndex";
-import { focusColor, normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
+import { normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
+import { useFocusColors } from "../contexts/focusColors";
 
 const ROW_H = 52;
 const WEEKDAY_H = 28;
@@ -53,6 +54,7 @@ export function CollapsibleMonth({
   onCreateDay,
   onSwipeMonth,
 }: Props) {
+  const { colorFor } = useFocusColors();
   const heightAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
   const cells = useMemo(() => monthGrid(anchor), [anchor]);
@@ -156,13 +158,7 @@ export function CollapsibleMonth({
         <View style={styles.bars}>
           {bars.map((t) => {
             const focus = normalizeFocus(t.focus);
-            const c =
-              focusColor(focus, {
-                accent: colors.accent,
-                danger: colors.danger,
-                textSecondary: colors.textSecondary,
-                warn: colors.warn,
-              }) || colors.textSecondary;
+            const c = colorFor(focus) || colors.textSecondary;
             return (
               <View
                 key={t.id}

@@ -21,19 +21,18 @@ import { GlassCard } from "../components/GlassCard";
 import { formatDueLabel } from "../components/GlassDateTimePicker";
 import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
 import { FocusDot } from "../components/FocusField";
-import { EisenhowerBoardMobile, KanbanBoardMobile } from "../components/TaskBoards";
+import { FocusBoardMobile } from "../components/TaskBoards";
 import { FOCUS_META, FOCUS_MATRIX, type TaskFocus } from "../lib/taskFocus";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date" | "Completed";
-type TasksLayout = "list" | "matrix" | "kanban";
+type TasksLayout = "list" | "focus";
 
 const LAYOUTS: { id: TasksLayout; label: string; icon: keyof typeof Feather.glyphMap }[] = [
   { id: "list", label: "List", icon: "list" },
-  { id: "matrix", label: "Matrix", icon: "grid" },
-  { id: "kanban", label: "Board", icon: "sidebar" },
+  { id: "focus", label: "Focus", icon: "grid" },
 ];
 
 /** Next occurrence of a repeat stays off Tasks (incl. Upcoming) until its day starts.
@@ -281,11 +280,11 @@ export default function TasksScreen() {
                       },
                     ]}
                   >
-                    <Feather name={l.icon} size={13} color={active ? colors.accent : colors.textSecondary} />
+                    <Feather name={l.icon} size={16} color={active ? colors.accent : colors.textSecondary} />
                     <Text
                       style={{
                         color: active ? colors.accent : colors.textSecondary,
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: "700",
                       }}
                     >
@@ -311,25 +310,15 @@ export default function TasksScreen() {
                 }}
               />
             </GlassCard>
-            {layout !== "list" && tasks && (
+            {layout === "focus" && tasks && (
               <View style={{ marginTop: 14 }}>
-                {layout === "matrix" ? (
-                  <EisenhowerBoardMobile
-                    tasks={boardTasks}
-                    colors={colors}
-                    onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
-                    onEdit={openEdit}
-                    onReclass={openReclass}
-                  />
-                ) : (
-                  <KanbanBoardMobile
-                    tasks={boardTasks}
-                    colors={colors}
-                    onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
-                    onEdit={openEdit}
-                    onReclass={openReclass}
-                  />
-                )}
+                <FocusBoardMobile
+                  tasks={boardTasks}
+                  colors={colors}
+                  onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+                  onEdit={openEdit}
+                  onReclass={openReclass}
+                />
               </View>
             )}
             {layout === "list" && allDone && (
@@ -638,11 +627,12 @@ const styles = StyleSheet.create({
   layoutChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   quickAdd: { paddingVertical: 10, fontSize: 14 },
   groupHeader: {

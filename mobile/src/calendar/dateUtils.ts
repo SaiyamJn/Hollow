@@ -1,5 +1,7 @@
 /** Calendar-only date helpers — intentionally isolated from the rest of the app. */
 
+import { formatCompactClockTime } from "../lib/timeFormat";
+
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -61,11 +63,7 @@ export function formatTime(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   if (h === 0 && m === 0) return "";
-  // Compact so list rows don't clip (e.g. 9:30a / 2p)
-  const hour12 = h % 12 || 12;
-  const suffix = h < 12 ? "a" : "p";
-  if (m === 0) return `${hour12}${suffix}`;
-  return `${hour12}:${String(m).padStart(2, "0")}${suffix}`;
+  return formatCompactClockTime(d);
 }
 
 /** 6×7 month grid (Sunday-start), including leading/trailing days. */

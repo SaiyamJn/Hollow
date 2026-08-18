@@ -1,38 +1,36 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { Task } from "../lib/types";
 import type { ThemeColors } from "../theme";
+import { useFocusColors } from "../contexts/focusColors";
 import {
   FOCUS_MATRIX,
   FOCUS_META,
-  focusColor,
-  focusWash,
   normalizeFocus,
   sortByFocusPriority,
   type TaskFocus,
 } from "../lib/taskFocus";
 import { formatDueLabel } from "./GlassDateTimePicker";
 
+/** "all" shows every focus as stacked sections; otherwise one focus list. */
+type FocusFilter = "all" | TaskFocus;
+
 function CompactCard({
   task,
   colors,
+  tint,
   onPress,
   onToggle,
   onReclass,
 }: {
   task: Task;
   colors: ThemeColors;
+  tint: string | null;
   onPress: () => void;
   onToggle: () => void;
   onReclass: () => void;
 }) {
-  const focus = normalizeFocus(task.focus);
-  const accent = focusColor(focus, {
-    accent: colors.accent,
-    danger: colors.danger,
-    textSecondary: colors.textSecondary,
-    warn: colors.warn,
-  });
   return (
     <Pressable
       onPress={onPress}
@@ -62,7 +60,7 @@ function CompactCard({
         </Text>
         {!!task.dueAt && (
           <Text
-            style={{ color: accent || colors.textSecondary, fontSize: 10, marginTop: 2, fontWeight: "600" }}
+            style={{ color: tint || colors.textSecondary, fontSize: 10, marginTop: 2, fontWeight: "600" }}
             numberOfLines={1}
           >
             {formatDueLabel(task.dueAt)}
@@ -73,59 +71,71 @@ function CompactCard({
   );
 }
 
-function QuadHeader({
-  focus,
-  count,
-  colors,
-}: {
-  focus: TaskFocus;
-  count: number;
-  colors: ThemeColors;
-}) {
-  const c = focusColor(focus, {
-    accent: colors.accent,
-    danger: colors.danger,
-    textSecondary: colors.textSecondary,
-    warn: colors.warn,
-  });
-  return (
-    <View style={styles.quadHead}>
-      <View style={[styles.dot, { backgroundColor: c || colors.textSecondary }]} />
-      <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: "700", flex: 1 }} numberOfLines={1}>
-        {FOCUS_META[focus].label}
-      </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: "600" }}>{count}</Text>
-    </View>
-  );
-}
-
 function SectionHead({
   focus,
   count,
   colors,
+  tint,
 }: {
   focus: TaskFocus;
   count: number;
   colors: ThemeColors;
+  tint: string | null;
 }) {
-  const c = focusColor(focus, {
-    accent: colors.accent,
-    danger: colors.danger,
-    textSecondary: colors.textSecondary,
-    warn: colors.warn,
-  });
   const label = focus === "none" ? "Unsorted" : FOCUS_META[focus].label;
   return (
     <View style={styles.sectionHead}>
-      <View style={[styles.dot, { backgroundColor: c || colors.textSecondary }]} />
+      <View style={[styles.dot, { backgroundColor: tint || colors.textSecondary }]} />
       <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "700", flex: 1 }}>{label}</Text>
       <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }}>{count}</Text>
     </View>
   );
 }
 
-/** Mobile Eisenhower — quiet 2×2; long-press a card to reclassify. */
-export function EisenhowerBoardMobile({
+function TaskList({
+  list,
+  colors,
+  colorFor,
+  onToggle,
+  onEdit,
+  onReclass,
+  emptyLabel,
+}: {
+  list: Task[];
+  colors: ThemeColors;
+  colorFor: (f: TaskFocus) => string | null;
+  onToggle: (t: Task) => void;
+  onEdit: (t: Task) => void;
+  onReclass: (t: Task) => void;
+  emptyLabel: string;
+}) {
+  if (list.length === 0) {
+    return (
+      <Text style={{ color: colors.textSecondary, fontSize: 13, paddingVertical: 10 }}>{emptyLabel}</Text>
+    );
+  }
+  return (
+    <View style={{ gap: 6 }}>
+      {list.map((t) => (
+        <CompactCard
+          key={t.id}
+          task={t}
+          colors={colors}
+          tint={colorFor(normalizeFocus(t.focus))}
+          onPress={() => onEdit(t)}
+          onToggle={() => onToggle(t)}
+          onReclass={() => onReclass(t)}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Single mobile Focus view (Matrix + Board merged).
+ * Chips filter one focus; All stacks sections. Long-press a card to reclassify.
+ */
+export function FocusBoardMobile({
   tasks,
   colors,
   onToggle,
@@ -138,161 +148,157 @@ export function EisenhowerBoardMobile({
   onEdit: (t: Task) => void;
   onReclass: (t: Task) => void;
 }) {
+  const { colorFor, washFor } = useFocusColors();
   const open = sortByFocusPriority(tasks.filter((t) => !t.done));
-  const by = (f: TaskFocus) => open.filter((t) => normalizeFocus(t.focus) === f);
-  const unsorted = by("none");
+  const countFor = (f: TaskFocus) => open.filter((t) => normalizeFocus(t.focus) === f).length;
+  const hasUnsorted = countFor("none") > 0;
+
+  const chipIds: FocusFilter[] = hasUnsorted
+    ? ["all", ...FOCUS_MATRIX, "none"]
+    : ["all", ...FOCUS_MATRIX];
+
+  const [filter, setFilter] = useState<FocusFilter>("all");
+  const active: FocusFilter = chipIds.includes(filter) ? filter : "all";
 
   return (
     <View style={{ gap: 10 }}>
-      <View style={[styles.matrixShell, { borderColor: colors.border, backgroundColor: colors.surface1 }]}>
-        {FOCUS_MATRIX.map((id, i) => {
-          const list = by(id);
-          const right = i % 2 === 1;
-          const bottom = i < 2;
+      <View style={styles.chipRow}>
+        {chipIds.map((id) => {
+          const selected = id === active;
+          const c = id === "all" ? colors.accent : colorFor(id);
+          const label =
+            id === "all" ? "All" : id === "none" ? "Clear" : FOCUS_META[id].label;
+          const n = id === "all" ? open.length : countFor(id);
           return (
-            <View
+            <Pressable
               key={id}
+              onPress={() => setFilter(id)}
               style={[
-                styles.quad,
+                styles.chip,
                 {
-                  borderColor: colors.border,
-                  borderRightWidth: right ? 0 : StyleSheet.hairlineWidth,
-                  borderBottomWidth: bottom ? StyleSheet.hairlineWidth : 0,
-                  backgroundColor: focusWash(id, colors.accent),
+                  borderColor: selected ? c || colors.accent : colors.border,
+                  backgroundColor:
+                    selected && id !== "all"
+                      ? washFor(id)
+                      : selected
+                        ? colors.accentSoft
+                        : colors.surface1,
                 },
               ]}
             >
-              <QuadHeader focus={id} count={list.length} colors={colors} />
-              <ScrollView style={{ maxHeight: 148 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 5 }}>
-                  {list.length === 0 ? (
-                    <Text style={{ color: colors.textSecondary, fontSize: 11, paddingVertical: 6 }}>—</Text>
-                  ) : (
-                    list.map((t) => (
-                      <CompactCard
-                        key={t.id}
-                        task={t}
-                        colors={colors}
-                        onPress={() => onEdit(t)}
-                        onToggle={() => onToggle(t)}
-                        onReclass={() => onReclass(t)}
-                      />
-                    ))
-                  )}
-                </View>
-              </ScrollView>
-            </View>
+              <Text
+                style={{
+                  color: selected ? c || colors.accent : colors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: "700",
+                }}
+              >
+                {label}
+              </Text>
+              <Text
+                style={{
+                  color: selected ? c || colors.accent : colors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: "600",
+                  opacity: 0.85,
+                }}
+              >
+                {n}
+              </Text>
+            </Pressable>
           );
         })}
       </View>
 
-      {unsorted.length > 0 && (
-        <View style={[styles.unsorted, { borderColor: colors.border }]}>
-          <SectionHead focus="none" count={unsorted.length} colors={colors} />
-          <View style={{ gap: 5, paddingTop: 6 }}>
-            {unsorted.map((t) => (
-              <CompactCard
-                key={t.id}
-                task={t}
-                colors={colors}
-                onPress={() => onEdit(t)}
-                onToggle={() => onToggle(t)}
-                onReclass={() => onReclass(t)}
-              />
-            ))}
-          </View>
+      {active === "all" ? (
+        <View style={{ gap: 10 }}>
+          {(["critical", "steady", "swift", "quiet", "none"] as TaskFocus[]).map((id) => {
+            const list = open.filter((t) => normalizeFocus(t.focus) === id);
+            if (list.length === 0) return null;
+            const accent = colorFor(id);
+            return (
+              <View
+                key={id}
+                style={[
+                  styles.stackSection,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface1,
+                    borderLeftColor: accent || colors.border,
+                  },
+                ]}
+              >
+                <SectionHead focus={id} count={list.length} colors={colors} tint={accent} />
+                <View style={{ paddingTop: 6 }}>
+                  <TaskList
+                    list={list}
+                    colors={colors}
+                    colorFor={colorFor}
+                    onToggle={onToggle}
+                    onEdit={onEdit}
+                    onReclass={onReclass}
+                    emptyLabel="Nothing here"
+                  />
+                </View>
+              </View>
+            );
+          })}
+          {open.length === 0 && (
+            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", paddingVertical: 16 }}>
+              No open tasks
+            </Text>
+          )}
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.focusList,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.surface1,
+              borderLeftColor: colorFor(active) || colors.border,
+            },
+          ]}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
+            {active === "none" ? "No focus yet" : FOCUS_META[active].hint}
+          </Text>
+          <TaskList
+            list={open.filter((t) => normalizeFocus(t.focus) === active)}
+            colors={colors}
+            colorFor={colorFor}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onReclass={onReclass}
+            emptyLabel="Nothing in this focus"
+          />
         </View>
       )}
     </View>
   );
 }
 
-/**
- * Mobile board workaround: stacked focus sections (not a horizontal kanban).
- * Same actions — tap edit, check toggle, long-press reclassify — with less visual weight.
- */
-export function KanbanBoardMobile({
-  tasks,
-  colors,
-  onToggle,
-  onEdit,
-  onReclass,
-}: {
-  tasks: Task[];
-  colors: ThemeColors;
-  onToggle: (t: Task) => void;
-  onEdit: (t: Task) => void;
-  onReclass: (t: Task) => void;
-}) {
-  const open = sortByFocusPriority(tasks.filter((t) => !t.done));
-  const columns: TaskFocus[] = ["critical", "steady", "swift", "quiet", "none"];
-
-  return (
-    <View style={{ gap: 10 }}>
-      {columns.map((id) => {
-        const list = open.filter((t) => normalizeFocus(t.focus) === id);
-        if (list.length === 0 && id === "none") return null;
-        const accent = focusColor(id, {
-          accent: colors.accent,
-          danger: colors.danger,
-          textSecondary: colors.textSecondary,
-          warn: colors.warn,
-        });
-        return (
-          <View
-            key={id}
-            style={[
-              styles.stackSection,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.surface1,
-                borderLeftColor: accent || colors.border,
-              },
-            ]}
-          >
-            <SectionHead focus={id} count={list.length} colors={colors} />
-            {list.length === 0 ? (
-              <Text style={{ color: colors.textSecondary, fontSize: 11, paddingTop: 4 }}>Nothing here</Text>
-            ) : (
-              <View style={{ gap: 5, paddingTop: 6 }}>
-                {list.map((t) => (
-                  <CompactCard
-                    key={t.id}
-                    task={t}
-                    colors={colors}
-                    onPress={() => onEdit(t)}
-                    onToggle={() => onToggle(t)}
-                    onReclass={() => onReclass(t)}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  matrixShell: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+  chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    overflow: "hidden",
+    gap: 6,
   },
-  quad: {
-    width: "50%",
-    minHeight: 96,
-  },
-  quadHead: {
+  chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 4,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  focusList: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   sectionHead: {
     flexDirection: "row",
@@ -303,13 +309,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  unsorted: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderStyle: "dashed",
     paddingHorizontal: 10,
     paddingVertical: 10,
   },

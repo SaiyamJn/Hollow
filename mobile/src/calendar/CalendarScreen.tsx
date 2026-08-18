@@ -35,7 +35,8 @@ import { datedTasks, expandForRange, groupByDay, tasksOnDay, type CalendarTask }
 import { CollapsibleMonth, ensureSelectedInMonth } from "./CollapsibleMonth";
 import EmptyState from "../components/EmptyState";
 import { animatePanel } from "../lib/motion";
-import { focusColor, focusWash, normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
+import { normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
+import { useFocusColors } from "../contexts/focusColors";
 
 type EditDraft = TaskDraft & { id: string };
 type CalView = "schedule" | "week" | "day" | "agenda";
@@ -53,6 +54,7 @@ const VIEW_OPTIONS: { id: CalView; label: string; icon: keyof typeof Feather.gly
  */
 export default function CalendarScreen() {
   const { colors } = useTheme();
+  const { colorFor } = useFocusColors();
   const queryClient = useQueryClient();
   const { screenPad, listBottomClearance } = useLayout();
 
@@ -470,13 +472,7 @@ export default function CalendarScreen() {
                     ) : (
                       list.map((t) => {
                         const focus = normalizeFocus(t.focus);
-                        const tint =
-                          focusColor(focus, {
-                            accent: colors.accent,
-                            danger: colors.danger,
-                            textSecondary: colors.textSecondary,
-                            warn: colors.warn,
-                          }) || colors.accent;
+                        const tint = colorFor(focus) || colors.accent;
                         return (
                           <Pressable key={t.id} onPress={() => openEdit(t)} style={styles.weekChip}>
                             <View
@@ -692,14 +688,9 @@ function TaskRow({
 }) {
   const time = formatTime(task.due);
   const focus = normalizeFocus(task.focus);
-  const tint =
-    focusColor(focus, {
-      accent: colors.accent,
-      danger: colors.danger,
-      textSecondary: colors.textSecondary,
-      warn: colors.warn,
-    }) || colors.border;
-  const wash = focusWash(focus, colors.accent);
+  const { colorFor, washFor } = useFocusColors();
+  const tint = colorFor(focus) || colors.border;
+  const wash = washFor(focus);
   return (
     <Pressable
       onPress={onPress}

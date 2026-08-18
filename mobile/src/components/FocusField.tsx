@@ -1,12 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import {
-  FOCUS_MATRIX,
-  FOCUS_META,
-  focusColor,
-  focusWash,
-  normalizeFocus,
-  type TaskFocus,
-} from "../lib/taskFocus";
+import { useFocusColors } from "../contexts/focusColors";
+import { FOCUS_MATRIX, FOCUS_META, normalizeFocus, type TaskFocus } from "../lib/taskFocus";
 import type { ThemeColors } from "../theme";
 
 /** Compact list-row signal. */
@@ -19,14 +13,10 @@ export function FocusDot({
   colors: ThemeColors;
   size?: number;
 }) {
+  const { colorFor } = useFocusColors();
   const id = normalizeFocus(focus);
   if (id === "none") return null;
-  const c = focusColor(id, {
-    accent: colors.accent,
-    danger: colors.danger,
-    textSecondary: colors.textSecondary,
-    warn: colors.warn,
-  });
+  const c = colorFor(id);
   return (
     <View
       style={{
@@ -52,6 +42,7 @@ export function FocusCompass({
   colors: ThemeColors;
   onChange: (next: TaskFocus) => void;
 }) {
+  const { colorFor, washFor } = useFocusColors();
   const current = normalizeFocus(value);
 
   return (
@@ -76,13 +67,8 @@ export function FocusCompass({
           {FOCUS_MATRIX.map((id) => {
             const meta = FOCUS_META[id];
             const active = current === id;
-            const tint = focusColor(id, {
-              accent: colors.accent,
-              danger: colors.danger,
-              textSecondary: colors.textSecondary,
-              warn: colors.warn,
-            });
-            const wash = focusWash(id, colors.accent);
+            const tint = colorFor(id);
+            const wash = washFor(id);
             return (
               <Pressable
                 key={id}

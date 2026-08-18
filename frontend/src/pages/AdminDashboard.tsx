@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { deleteAdminUser, fetchAdminStats } from "../lib/api";
 import type { AdminUserStats } from "../lib/types";
+import { prefers12HourClock } from "../lib/timeFormat";
 import { useAdminStore } from "../stores/admin";
 import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
@@ -45,6 +46,7 @@ function formatDateTime(iso: string | null) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: prefers12HourClock(),
   });
 }
 

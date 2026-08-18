@@ -18,6 +18,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { ThemeProvider, useTheme } from "./src/contexts/theme";
 import { FontProvider, useFont } from "./src/contexts/font";
+import { FocusColorsProvider } from "./src/contexts/focusColors";
 import { AuthProvider, useAuth } from "./src/contexts/auth";
 import { UnlockProvider } from "./src/contexts/unlock";
 import { initOfflineSync } from "./src/lib/api";
@@ -284,11 +285,13 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <FontProvider>
-            <AuthProvider>
-              <UnlockProvider>
-                <Root />
-              </UnlockProvider>
-            </AuthProvider>
+            <FocusColorsProvider>
+              <AuthProvider>
+                <UnlockProvider>
+                  <Root />
+                </UnlockProvider>
+              </AuthProvider>
+            </FocusColorsProvider>
           </FontProvider>
         </ThemeProvider>
       </QueryClientProvider>
