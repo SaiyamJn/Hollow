@@ -110,7 +110,8 @@ export function HollowTabBar({ state, descriptors, navigation }: BottomTabBarPro
               {
                 opacity: pillOpacity,
                 backgroundColor: colors.accentSoft,
-                borderColor: `${colors.accent}55`,
+                borderColor: `${colors.accent}88`,
+                borderWidth: 1.5,
                 transform: [{ translateX: pillX }],
               },
             ]}

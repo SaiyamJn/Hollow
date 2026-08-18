@@ -21,7 +21,11 @@ export default function EmptyState({
         style={[
           styles.icon,
           compact && styles.iconCompact,
-          { backgroundColor: colors.accentSoft },
+          {
+            backgroundColor: colors.accentSoft,
+            borderColor: colors.glassBorder,
+            borderWidth: StyleSheet.hairlineWidth,
+          },
         ]}
       >
         <Feather name={icon} size={compact ? 24 : 36} color={colors.accent} />

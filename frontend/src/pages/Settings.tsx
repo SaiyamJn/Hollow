@@ -184,8 +184,8 @@ export default function Settings() {
         <p className="text-sm text-secondary mt-1">Make it feel like yours.</p>
       </div>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-1">
-        <h2 className="text-xs uppercase tracking-wide text-secondary mb-2">Account</h2>
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-1 panel-accent">
+        <h2 className="section-label justify-center mb-2">Account</h2>
         <p className="text-sm font-medium text-primary">{user?.name}</p>
         <p className="text-sm text-secondary">
           {user?.username ? `@${user.username}` : null}
@@ -194,9 +194,9 @@ export default function Settings() {
         </p>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-3">
         <div>
-          <h2 className="text-sm font-medium text-primary">Theme</h2>
+          <h2 className="section-label justify-center mb-1">Theme</h2>
           <p className="text-sm text-secondary mt-0.5">Currently {theme}</p>
         </div>
         <Button onClick={toggle}>
@@ -205,9 +205,9 @@ export default function Settings() {
         </Button>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-3">
         <div>
-          <h2 className="text-sm font-medium text-primary">Font</h2>
+          <h2 className="section-label justify-center mb-1">Font</h2>
           <p className="text-sm text-secondary mt-0.5">The voice of your words on screen</p>
         </div>
         <select
@@ -224,9 +224,9 @@ export default function Settings() {
         </select>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-3">
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-3">
         <div>
-          <h2 className="text-sm font-medium text-primary">Task reminders</h2>
+          <h2 className="section-label justify-center mb-1">Task reminders</h2>
           <p className="text-sm text-secondary mt-0.5">
             A little tap on the shoulder when something's due (while you're here)
           </p>
@@ -238,9 +238,9 @@ export default function Settings() {
         </Button>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3 text-center">
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card space-y-3 text-center">
         <div>
-          <h2 className="text-sm font-medium text-primary">Keyboard shortcuts</h2>
+          <h2 className="section-label justify-center mb-1">Keyboard shortcuts</h2>
           <p className="text-sm text-secondary mt-0.5">
             Click a shortcut to rebind it. Esc cancels.
           </p>
@@ -283,9 +283,9 @@ export default function Settings() {
         {bindError && <p className="text-sm text-danger">{bindError}</p>}
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card space-y-3">
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card space-y-3">
         <div className="text-center">
-          <h2 className="text-sm font-medium text-primary">Devices</h2>
+          <h2 className="section-label justify-center mb-1">Devices</h2>
           <p className="text-sm text-secondary mt-0.5">
             Where this account is signed in. Sign out remotely anytime.
           </p>
@@ -339,7 +339,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border glass p-5 shadow-card text-center space-y-4">
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-4">
         <div className="flex flex-col items-center gap-3">
           <BrandMark size="xl" />
           <div>

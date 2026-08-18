@@ -54,18 +54,20 @@ export function QuickCreate() {
     <>
       <div ref={menuRef} className="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-2">
         {open && (
-          <div className="glass rounded-2xl border border-border shadow-card p-1.5 animate-fade-in">
+          <div className="glass-strong rounded-2xl border border-border shadow-pop p-1.5 animate-fade-in min-w-[180px]">
             {items.map(({ label, icon: Icon, onClick }) => (
               <button
                 key={label}
                 className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-secondary
-                           hover:text-primary hover:bg-surface-2 transition-colors"
+                           hover:text-primary hover:bg-accent-soft transition-colors"
                 onClick={() => {
                   setOpen(false);
                   onClick();
                 }}
               >
-                <Icon size={15} className="text-accent" />
+                <span className="icon-well h-7 w-7 rounded-lg">
+                  <Icon size={14} />
+                </span>
                 {label}
               </button>
             ))}
@@ -73,7 +75,8 @@ export function QuickCreate() {
         )}
         <button
           title="Create"
-          className="rounded-full bg-accent text-surface-0 p-3.5 shadow-card hover:opacity-90 transition-opacity"
+          className="rounded-full bg-accent text-surface-0 p-3.5 shadow-[0_6px_20px_color-mix(in_srgb,var(--accent)_35%,transparent)]
+                     hover:opacity-95 hover:scale-105 transition-all ring-4 ring-accent-soft"
           onClick={() => setOpen((v) => !v)}
         >
           <Plus size={18} className={open ? "rotate-45 transition-transform" : "transition-transform"} />

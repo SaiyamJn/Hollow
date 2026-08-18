@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Pressable,
   SectionList,
   StyleSheet,
@@ -19,11 +20,21 @@ import EmptyState from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { formatDueLabel } from "../components/GlassDateTimePicker";
 import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
+import { FocusDot } from "../components/FocusField";
+import { EisenhowerBoardMobile, KanbanBoardMobile } from "../components/TaskBoards";
+import { FOCUS_META, FOCUS_MATRIX, type TaskFocus } from "../lib/taskFocus";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date" | "Completed";
+type TasksLayout = "list" | "matrix" | "kanban";
+
+const LAYOUTS: { id: TasksLayout; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { id: "list", label: "List", icon: "list" },
+  { id: "matrix", label: "Matrix", icon: "grid" },
+  { id: "kanban", label: "Board", icon: "sidebar" },
+];
 
 /** Next occurrence of a repeat stays off Tasks (incl. Upcoming) until its day starts.
  *  One-off future tasks still appear under Upcoming. */
@@ -85,6 +96,7 @@ export default function TasksScreen() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
   const [showCompleted, setShowCompleted] = useState(false);
+  const [layout, setLayout] = useState<TasksLayout>("list");
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
@@ -115,6 +127,7 @@ export default function TasksScreen() {
         title?: string;
         done?: boolean;
         starred?: boolean;
+        focus?: TaskFocus;
         dueAt?: string | null;
         description?: string;
       };
@@ -124,7 +137,7 @@ export default function TasksScreen() {
       else animateListChange();
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const prev = queryClient.getQueryData<Task[]>(["tasks"]);
-      if (patch.done !== undefined || patch.starred !== undefined) {
+      if (patch.done !== undefined || patch.starred !== undefined || patch.focus !== undefined) {
         queryClient.setQueryData<Task[]>(["tasks"], (old) =>
           (old ?? []).map((t) => {
             if (t.id !== id) {
@@ -156,6 +169,7 @@ export default function TasksScreen() {
         title: string;
         description: string;
         dueAt: string | null;
+        focus?: "none" | "critical" | "steady" | "swift" | "quiet";
         repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;
         repeatDays?: number[] | null;
         repeatInterval?: number | null;
@@ -181,6 +195,7 @@ export default function TasksScreen() {
       title: title.trim(),
       description: "",
       due: null,
+      focus: "none",
       repeat: null,
       repeatDays: null,
       repeatInterval: 1,
@@ -196,6 +211,7 @@ export default function TasksScreen() {
       title: task.title,
       description: task.description ?? "",
       due: task.dueAt ? new Date(task.dueAt) : null,
+      focus: task.focus ?? "none",
       repeat: task.repeatRule ?? null,
       repeatDays: task.repeatDays ?? null,
       repeatInterval: task.repeatInterval ?? 1,
@@ -203,6 +219,21 @@ export default function TasksScreen() {
       repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
       repeatCount: task.repeatCount ?? null,
     });
+  }
+
+  function openReclass(task: Task) {
+    const options = [
+      ...FOCUS_MATRIX.map((id) => ({
+        text: `${FOCUS_META[id].label} — ${FOCUS_META[id].hint}`,
+        onPress: () => update.mutate({ id: task.id, patch: { focus: id } }),
+      })),
+      {
+        text: "Clear focus",
+        onPress: () => update.mutate({ id: task.id, patch: { focus: "none" } }),
+      },
+      { text: "Cancel", style: "cancel" as const },
+    ];
+    Alert.alert("Move focus", task.title, options);
   }
 
   const groupColor = (name: string) =>
@@ -227,7 +258,7 @@ export default function TasksScreen() {
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <SectionList
-        sections={sections}
+        sections={layout === "list" ? sections : []}
         keyExtractor={(t) => t.id}
         contentContainerStyle={{
           padding: screenPad,
@@ -238,6 +269,35 @@ export default function TasksScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ marginBottom: 12 }}>
+            <View style={styles.layoutRow}>
+              {LAYOUTS.map((l) => {
+                const active = layout === l.id;
+                return (
+                  <Pressable
+                    key={l.id}
+                    onPress={() => setLayout(l.id)}
+                    style={[
+                      styles.layoutChip,
+                      {
+                        borderColor: active ? colors.accent : colors.glassBorder,
+                        backgroundColor: active ? colors.accentSoft : colors.glass,
+                      },
+                    ]}
+                  >
+                    <Feather name={l.icon} size={13} color={active ? colors.accent : colors.textSecondary} />
+                    <Text
+                      style={{
+                        color: active ? colors.accent : colors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {l.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <GlassCard style={{ alignSelf: "stretch" }} contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}>
               <TextInput
                 ref={quickAddRef}
@@ -251,7 +311,28 @@ export default function TasksScreen() {
                 }}
               />
             </GlassCard>
-            {allDone && (
+            {layout !== "list" && tasks && (
+              <View style={{ marginTop: 14 }}>
+                {layout === "matrix" ? (
+                  <EisenhowerBoardMobile
+                    tasks={tasks}
+                    colors={colors}
+                    onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+                    onEdit={openEdit}
+                    onReclass={openReclass}
+                  />
+                ) : (
+                  <KanbanBoardMobile
+                    tasks={tasks}
+                    colors={colors}
+                    onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+                    onEdit={openEdit}
+                    onReclass={openReclass}
+                  />
+                )}
+              </View>
+            )}
+            {layout === "list" && allDone && (
               <EmptyState
                 icon="check-circle"
                 title="All clear"
@@ -265,7 +346,7 @@ export default function TasksScreen() {
             )}
           </View>
         }
-        renderSectionHeader={({ section }) => {
+        renderSectionHeader={layout !== "list" ? () => null : ({ section }) => {
           if (section.title === "Completed") {
             const count = section.completedCount ?? section.data.length;
             return (
@@ -295,6 +376,7 @@ export default function TasksScreen() {
           );
         }}
         renderItem={({ item: task }) => {
+          if (layout !== "list") return null;
           const isOpen = expanded.has(task.id);
           const subtasks = task.subtasks ?? [];
           return (
@@ -324,16 +406,19 @@ export default function TasksScreen() {
                   />
                 </Pressable>
                 <Pressable style={{ flex: 1, minWidth: 0 }} onPress={() => openEdit(task)}>
-                  <Text
-                    style={[
-                      styles.taskTitle,
-                      { color: task.done ? colors.textSecondary : colors.textPrimary },
-                      task.done && styles.strike,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {task.title}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <FocusDot focus={task.focus} colors={colors} />
+                    <Text
+                      style={[
+                        styles.taskTitle,
+                        { color: task.done ? colors.textSecondary : colors.textPrimary, flex: 1 },
+                        task.done && styles.strike,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {task.title}
+                    </Text>
+                  </View>
                   {!!task.description && (
                     <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
                       {task.description}
@@ -460,6 +545,7 @@ export default function TasksScreen() {
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
+            focus: draft.focus ?? "none",
             ...repeatPayload(draft),
           });
         }}
@@ -481,6 +567,7 @@ export default function TasksScreen() {
               title: editing.title.trim(),
               description: editing.description.trim(),
               dueAt: editing.due ? editing.due.toISOString() : null,
+              focus: editing.focus ?? "none",
               ...repeatPayload(editing),
             },
           });
@@ -491,10 +578,25 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
+  layoutRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+    justifyContent: "center",
+  },
+  layoutChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   quickAdd: { paddingVertical: 10, fontSize: 14 },
   groupHeader: {
     fontSize: 11,
-    fontWeight: "500",
+    fontWeight: "700",
     letterSpacing: 0.8,
     marginBottom: 8,
     marginTop: 8,

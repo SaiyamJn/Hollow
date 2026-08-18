@@ -12,9 +12,23 @@
   --accent: #0d8a68;
   --accent-soft: rgba(13, 138, 104, 0.09);
   --danger: #dc2626;
+  --warn: #b45309;
+  --focus-critical: #dc2626;
+  --focus-steady: #0d8a68;
+  --focus-swift: #b45309;
+  --focus-quiet: #64748b;
+  --focus-critical-wash: rgba(220, 38, 38, 0.11);
+  --focus-steady-wash: rgba(13, 138, 104, 0.11);
+  --focus-swift-wash: rgba(180, 83, 9, 0.11);
+  --focus-quiet-wash: rgba(100, 116, 139, 0.1);
+  --focus-critical-pane: rgba(220, 38, 38, 0.06);
+  --focus-steady-pane: rgba(13, 138, 104, 0.06);
+  --focus-swift-pane: rgba(180, 83, 9, 0.06);
+  --focus-quiet-pane: rgba(100, 116, 139, 0.05);
   --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.05);
   --shadow-pop: 0 4px 24px rgba(20, 20, 20, 0.12);
-  --glow: radial-gradient(ellipse 55% 40% at 50% -8%, rgba(13, 138, 104, 0.028), transparent);
+  --glow: radial-gradient(ellipse 60% 45% at 50% -6%, rgba(13, 138, 104, 0.055), transparent 55%),
+    radial-gradient(ellipse 40% 30% at 92% 8%, rgba(180, 83, 9, 0.03), transparent 50%);
   --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
 }
 .dark {
@@ -27,9 +41,24 @@
   --accent: #62d9ae;
   --accent-soft: rgba(98, 217, 174, 0.1);
   --danger: #f87171;
+  --warn: #eab308;
+  --focus-critical: #f87171;
+  --focus-steady: #62d9ae;
+  --focus-swift: #eab308;
+  --focus-quiet: #94a3b8;
+  --focus-critical-wash: rgba(248, 113, 113, 0.26);
+  --focus-steady-wash: rgba(98, 217, 174, 0.24);
+  --focus-swift-wash: rgba(234, 179, 8, 0.24);
+  --focus-quiet-wash: rgba(148, 163, 184, 0.2);
+  --focus-critical-pane: rgba(248, 113, 113, 0.12);
+  --focus-steady-pane: rgba(98, 217, 174, 0.11);
+  --focus-swift-pane: rgba(234, 179, 8, 0.11);
+  --focus-quiet-pane: rgba(148, 163, 184, 0.09);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.45);
-  --glow: radial-gradient(ellipse 55% 40% at 50% -8%, rgba(98, 217, 174, 0.022), transparent);
+  --glow: radial-gradient(ellipse 65% 48% at 50% -4%, rgba(98, 217, 174, 0.09), transparent 55%),
+    radial-gradient(ellipse 42% 32% at 88% 12%, rgba(234, 179, 8, 0.05), transparent 50%),
+    radial-gradient(ellipse 35% 28% at 12% 18%, rgba(248, 113, 113, 0.04), transparent 50%);
 }
 
 body {
@@ -163,4 +192,300 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 .focus-prose .bn-editor {
   font-size: 1.0625rem;
   line-height: 1.75;
+}
+
+/* Focus-class surfaces — calendar pills, matrix panes, kanban columns. */
+.focus-pill {
+  position: relative;
+  border-radius: 0.4rem;
+  border: 1px solid transparent;
+  box-shadow: inset 3px 0 0 0 var(--pill-accent, transparent);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.focus-pill:hover {
+  filter: brightness(1.04);
+  transform: translateY(-0.5px);
+}
+.focus-pill-critical {
+  --pill-accent: var(--focus-critical);
+  background: var(--focus-critical-wash);
+  border-color: color-mix(in srgb, var(--focus-critical) 28%, transparent);
+}
+.focus-pill-steady {
+  --pill-accent: var(--focus-steady);
+  background: var(--focus-steady-wash);
+  border-color: color-mix(in srgb, var(--focus-steady) 28%, transparent);
+}
+.focus-pill-swift {
+  --pill-accent: var(--focus-swift);
+  background: var(--focus-swift-wash);
+  border-color: color-mix(in srgb, var(--focus-swift) 30%, transparent);
+}
+.focus-pill-quiet {
+  --pill-accent: var(--focus-quiet);
+  background: var(--focus-quiet-wash);
+  border-color: color-mix(in srgb, var(--focus-quiet) 26%, transparent);
+}
+.focus-pill-none {
+  --pill-accent: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-2) 85%, transparent);
+  border-color: var(--border);
+}
+
+.focus-pane {
+  background:
+    linear-gradient(160deg, var(--pane-tint, transparent), transparent 55%),
+    color-mix(in srgb, var(--surface-1) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pane-accent, var(--border)) 22%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+    var(--shadow-card);
+}
+.focus-pane-critical { --pane-accent: var(--focus-critical); --pane-tint: var(--focus-critical-pane); }
+.focus-pane-steady { --pane-accent: var(--focus-steady); --pane-tint: var(--focus-steady-pane); }
+.focus-pane-swift { --pane-accent: var(--focus-swift); --pane-tint: var(--focus-swift-pane); }
+.focus-pane-quiet { --pane-accent: var(--focus-quiet); --pane-tint: var(--focus-quiet-pane); }
+.focus-pane-none { --pane-accent: var(--text-secondary); --pane-tint: transparent; }
+
+.focus-dot { background: var(--focus-quiet); }
+.focus-dot-critical { background: var(--focus-critical); }
+.focus-dot-steady { background: var(--focus-steady); }
+.focus-dot-swift { background: var(--focus-swift); }
+.focus-dot-quiet { background: var(--focus-quiet); }
+
+.focus-ink-critical { color: var(--focus-critical); }
+.focus-ink-steady { color: var(--focus-steady); }
+.focus-ink-swift { color: var(--focus-swift); }
+.focus-ink-quiet { color: var(--focus-quiet); }
+
+.focus-count {
+  background: color-mix(in srgb, var(--pane-accent, var(--accent)) 16%, transparent);
+  color: var(--pane-accent, var(--accent));
+}
+
+/* App-wide lively chrome */
+.icon-well {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.section-label::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  flex-shrink: 0;
+}
+.section-label-danger::before {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+.section-label-warn::before {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.section-label-muted::before {
+  background: var(--text-secondary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-secondary) 14%, transparent);
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.status-chip-accent {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.status-chip-danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 25%, transparent);
+}
+.status-chip-warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 25%, transparent);
+}
+.status-chip-muted {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+  border-color: var(--border);
+}
+.panel-accent {
+  border-left: 3px solid var(--accent);
+}
+.row-starred {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 8%, transparent),
+    transparent 40%
+  );
+}
+.chip-idle {
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+}
+.chip-active {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Month calendar — fills viewport; only day cells scroll when crowded. */
+.cal-month-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 11.25rem);
+  min-height: 26rem;
+  max-height: calc(100dvh - 11.25rem);
+}
+.cal-month-board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 5%, transparent),
+      transparent 28%
+    ),
+    color-mix(in srgb, var(--surface-1) 78%, transparent);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: var(--shadow-card);
+}
+.dark .cal-month-board {
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(
+      210deg,
+      color-mix(in srgb, var(--warn) 4%, transparent),
+      transparent 40%
+    ),
+    color-mix(in srgb, var(--surface-1) 72%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
+    var(--shadow-card);
+}
+.cal-month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+}
+.cal-month-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+}
+.cal-day-cell {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.3rem 0.28rem 0.35rem;
+  border-right: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  transition: background 0.15s ease, opacity 0.15s ease;
+  overflow: hidden;
+}
+.cal-day-cell:nth-child(7n) {
+  border-right: none;
+}
+.cal-day-cell.weekend {
+  background: color-mix(in srgb, var(--accent) 3.5%, transparent);
+}
+.dark .cal-day-cell.weekend {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.cal-day-cell.past {
+  opacity: 0.4;
+}
+.cal-day-cell.past:hover {
+  opacity: 0.62;
+}
+.cal-day-cell.out-month {
+  opacity: 0.32;
+  background: color-mix(in srgb, var(--surface-0) 55%, transparent);
+}
+.cal-day-cell.today {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.dark .cal-day-cell.today {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.cal-day-cell.selected:not(.today) {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.cal-day-cell.drop {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.cal-day-tasks {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 1px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border) 80%, transparent) transparent;
+}
+.cal-day-tasks::-webkit-scrollbar {
+  width: 4px;
+}
+.cal-day-tasks::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-secondary) 35%, transparent);
+  border-radius: 4px;
+}
+.cal-day-tasks .focus-pill {
+  flex-shrink: 0;
+}
+.cal-day-tasks .focus-pill:hover {
+  transform: none;
+  filter: brightness(1.06);
 }

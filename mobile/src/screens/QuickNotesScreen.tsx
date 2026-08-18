@@ -3,6 +3,7 @@ import {
   Alert,
   Animated,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -70,6 +71,9 @@ export default function QuickNotesScreen({ navigation }: any) {
   const [draftColor, setDraftColor] = useState("yellow");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  /** After choosing Move from the long-press menu — long-press+drag rearranges. */
+  const [arrangeMode, setArrangeMode] = useState(false);
+  const [actionNote, setActionNote] = useState<QuickNote | null>(null);
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
@@ -190,8 +194,68 @@ export default function QuickNotesScreen({ navigation }: any) {
 
   function enterSelection(id: string) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setArrangeMode(false);
     setSelectMode(true);
     setSelected(new Set([id]));
+  }
+
+  function openNoteActions(note: QuickNote) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setActionNote(note);
+  }
+
+  async function runNoteAction(
+    note: QuickNote,
+    action: "pin" | "archive" | "delete" | "select" | "move"
+  ) {
+    setActionNote(null);
+    if (action === "select") {
+      enterSelection(note.id);
+      return;
+    }
+    if (action === "move") {
+      setArrangeMode(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+    if (action === "pin") {
+      animateListChange();
+      try {
+        await updateQuickNote(note.id, { pinned: !note.pinned });
+        invalidate();
+      } catch (err: any) {
+        Alert.alert("Couldn't update", err?.response?.data?.error ?? "Try again.");
+      }
+      return;
+    }
+    if (action === "archive") {
+      animateListChange();
+      try {
+        await updateQuickNote(note.id, { archived: !note.archived });
+        invalidate();
+      } catch (err: any) {
+        Alert.alert("Couldn't update", err?.response?.data?.error ?? "Try again.");
+      }
+      return;
+    }
+    if (action === "delete") {
+      Alert.alert("Move to recycle bin?", "You can restore it within 7 days.", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Move",
+          style: "destructive",
+          onPress: async () => {
+            animateListChange();
+            try {
+              await deleteQuickNote(note.id);
+              invalidate();
+            } catch (err: any) {
+              Alert.alert("Couldn't delete", err?.response?.data?.error ?? "Try again.");
+            }
+          },
+        },
+      ]);
+    }
   }
 
   async function persistOrder(group: QuickNote[], orderedIds: string[]) {
@@ -216,6 +280,7 @@ export default function QuickNotesScreen({ navigation }: any) {
     });
     try {
       await reorderQuickNotes(merged);
+      setArrangeMode(false);
     } catch {
       invalidate();
     }
@@ -274,6 +339,7 @@ export default function QuickNotesScreen({ navigation }: any) {
 
   function setArchiveView(next: boolean) {
     clearSelection();
+    setArrangeMode(false);
     setShowArchived(next);
   }
 
@@ -484,33 +550,20 @@ export default function QuickNotesScreen({ navigation }: any) {
                   {!showArchived && archivedCount > 0 ? ` (${archivedCount})` : ""}
                 </Text>
               </Pressable>
-              {!showArchived && (
+              {!showArchived && arrangeMode && (
                 <Pressable
-                  onPress={() => {
-                    if (selectMode) clearSelection();
-                    else setSelectMode(true);
-                  }}
+                  onPress={() => setArrangeMode(false)}
                   style={[
                     styles.libraryChip,
                     {
-                      borderColor: selectMode ? colors.accent : colors.border,
-                      backgroundColor: selectMode ? colors.accentSoft : colors.surface1,
+                      borderColor: colors.accent,
+                      backgroundColor: colors.accentSoft,
                     },
                   ]}
                 >
-                  <Feather
-                    name="check-circle"
-                    size={14}
-                    color={selectMode ? colors.accent : colors.textSecondary}
-                  />
-                  <Text
-                    style={{
-                      color: selectMode ? colors.accent : colors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: "500",
-                    }}
-                  >
-                    {selectMode ? "Done" : "Select"}
+                  <Feather name="move" size={14} color={colors.accent} />
+                  <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "500" }}>
+                    Done moving
                   </Text>
                 </Pressable>
               )}
@@ -528,9 +581,11 @@ export default function QuickNotesScreen({ navigation }: any) {
                 <Feather name="chevron-right" size={14} color={colors.textSecondary} />
               </Pressable>
             </View>
-            {!showArchived && !selectMode && list.length > 1 && (
+            {!showArchived && !selectMode && (
               <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 10 }}>
-                Long-press a note, then drag to rearrange
+                {arrangeMode
+                  ? "Long-press a note, then drag to rearrange"
+                  : "Long-press a note for pin, archive, delete, select, or move"}
               </Text>
             )}
           </View>
@@ -557,7 +612,7 @@ export default function QuickNotesScreen({ navigation }: any) {
             <View style={{ paddingHorizontal: screenPad, marginBottom: GRID_GAP }}>
               <ReorderableNoteList
                 notes={item.notes}
-                enabled={!selecting && !showArchived}
+                enabled={arrangeMode && !selecting && !showArchived}
                 columns={NUM_COLUMNS}
                 columnWidth={cardWidth}
                 gap={GRID_GAP}
@@ -571,8 +626,15 @@ export default function QuickNotesScreen({ navigation }: any) {
                     dragging={dragging}
                     onOpen={() => openNote(note)}
                     onLongPress={(pageX, pageY) => {
-                      if (selectMode) enterSelection(note.id);
-                      else startDrag?.(pageX, pageY);
+                      if (selecting) {
+                        toggleSelection(note.id);
+                        return;
+                      }
+                      if (arrangeMode) {
+                        startDrag?.(pageX, pageY);
+                        return;
+                      }
+                      openNoteActions(note);
                     }}
                     onToggleSelect={() => toggleSelection(note.id)}
                   />
@@ -587,7 +649,7 @@ export default function QuickNotesScreen({ navigation }: any) {
             title={showArchived ? "Nothing tucked away" : "Your pocket is empty"}
             subtitle={
               showArchived
-                ? "Select notes and archive them when you're done for now."
+                ? "Long-press notes to restore or clean up the archive."
                 : "A sticky thought, a little list — whatever's buzzing around."
             }
           />
@@ -669,6 +731,90 @@ export default function QuickNotesScreen({ navigation }: any) {
           <Feather name="trash-2" size={18} color={colors.textSecondary} />
         </Pressable>
       </Animated.View>
+
+      <Modal
+        visible={actionNote !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionNote(null)}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={() => setActionNote(null)}>
+          <Pressable
+            style={[styles.sheetCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {actionNote && (
+              <>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600", marginBottom: 4 }}
+                  numberOfLines={2}
+                >
+                  {resolveNoteFields(actionNote).title.trim() ||
+                    (actionNote.kind === "list" ? "List" : "Note")}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 12 }}>
+                  Choose an action
+                </Text>
+                {(
+                  [
+                    ...(!showArchived
+                      ? [{ key: "move" as const, icon: "move" as const, label: "Move / rearrange", danger: false }]
+                      : []),
+                    { key: "select" as const, icon: "check-circle" as const, label: "Select", danger: false },
+                    {
+                      key: "pin" as const,
+                      icon: "star" as const,
+                      label: actionNote.pinned ? "Unpin" : "Pin",
+                      danger: false,
+                    },
+                    {
+                      key: "archive" as const,
+                      icon: (actionNote.archived ? "rotate-ccw" : "archive") as "rotate-ccw" | "archive",
+                      label: actionNote.archived ? "Restore from archive" : "Archive",
+                      danger: false,
+                    },
+                    {
+                      key: "delete" as const,
+                      icon: "trash-2" as const,
+                      label: "Move to recycle bin",
+                      danger: true,
+                    },
+                  ] as const
+                ).map((row) => (
+                  <Pressable
+                    key={row.key}
+                    onPress={() => void runNoteAction(actionNote, row.key)}
+                    style={[styles.sheetRow, { borderColor: colors.border }]}
+                  >
+                    <Feather
+                      name={row.icon}
+                      size={18}
+                      color={row.danger ? "#f87171" : colors.textPrimary}
+                    />
+                    <Text
+                      style={{
+                        color: row.danger ? "#f87171" : colors.textPrimary,
+                        fontSize: 15,
+                        flex: 1,
+                      }}
+                    >
+                      {row.label}
+                    </Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={() => setActionNote(null)}
+                  style={[styles.sheetCancel, { backgroundColor: colors.surface2 }]}
+                >
+                  <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: "600", textAlign: "center" }}>
+                    Cancel
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardSafe>
   );
 }
@@ -858,6 +1004,32 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
   },
   selectIconBtn: { padding: 8 },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
+  },
+  sheetCard: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 28,
+    gap: 4,
+  },
+  sheetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sheetCancel: {
+    marginTop: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
   composer: {
     alignSelf: "stretch",
     padding: 14,

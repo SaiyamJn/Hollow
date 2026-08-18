@@ -106,6 +106,7 @@ export function CollapsibleMonth({
     const inMonth = day.getMonth() === anchor.getMonth();
     const isToday = sameDay(day, today);
     const isSelected = sameDay(day, selected);
+    const isPast = day < today;
     const open = tasksOnDay(byDay, day).filter((t) => !t.done);
     const bars = open.slice(0, 3);
 
@@ -123,7 +124,7 @@ export function CollapsibleMonth({
       <Pressable
         key={dayKey(day)}
         onPress={() => onSelectDay(day)}
-        style={styles.cell}
+        style={[styles.cell, isPast && inMonth && !isSelected && { opacity: 0.4 }]}
         hitSlop={4}
       >
         <View
@@ -155,7 +156,7 @@ export function CollapsibleMonth({
                 styles.bar,
                 {
                   backgroundColor: t.starred ? colors.accent : colors.textSecondary,
-                              opacity: t.virtual ? 0.35 : t.starred ? 0.95 : 0.55,
+                  opacity: t.virtual ? 0.35 : t.starred ? 0.95 : 0.55,
                 },
               ]}
             />

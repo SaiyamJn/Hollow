@@ -83,6 +83,8 @@ export interface Task {
   description: string;
   done: boolean;
   starred: boolean;
+  /** Important × urgent focus class */
+  focus?: "none" | "critical" | "steady" | "swift" | "quiet";
   dueAt: string | null;
   /** daily | weekly | monthly | yearly */
   repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;

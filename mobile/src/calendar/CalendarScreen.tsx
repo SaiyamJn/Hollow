@@ -112,6 +112,7 @@ export default function CalendarScreen() {
         done?: boolean;
         dueAt?: string | null;
         description?: string;
+        focus?: Task["focus"];
         repeatRule?: Task["repeatRule"];
         repeatDays?: number[] | null;
         repeatInterval?: number | null;
@@ -162,6 +163,7 @@ export default function CalendarScreen() {
       title: "",
       description: "",
       due: dateOnlyDue(day),
+      focus: "none",
       repeat: null,
       repeatDays: null,
       repeatInterval: 1,
@@ -184,6 +186,7 @@ export default function CalendarScreen() {
       title: task.title,
       description: task.description ?? "",
       due: seriesDue,
+      focus: task.focus ?? "none",
       repeat: task.repeatRule,
       repeatDays: task.repeatDays ?? null,
       repeatInterval: task.repeatInterval ?? 1,
@@ -406,8 +409,8 @@ export default function CalendarScreen() {
                     style={[
                       styles.weekBlock,
                       {
-                        borderColor: isSel ? colors.accent : colors.border,
-                        backgroundColor: isSel ? colors.accentSoft : colors.surface1,
+                        borderColor: isSel ? colors.accent : colors.glassBorder,
+                        backgroundColor: isSel ? colors.accentSoft : colors.glass,
                       },
                     ]}
                   >
@@ -594,6 +597,7 @@ export default function CalendarScreen() {
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
+            focus: draft.focus ?? "none",
             ...repeatPayload(draft),
           });
         }}
@@ -615,6 +619,7 @@ export default function CalendarScreen() {
               title: editing.title.trim(),
               description: editing.description.trim(),
               dueAt: editing.due ? editing.due.toISOString() : null,
+              focus: editing.focus ?? "none",
               ...repeatPayload(editing),
             },
           });
@@ -642,7 +647,13 @@ function TaskRow({
     <Pressable
       onPress={onPress}
       onLongPress={() => onReschedule?.(1)}
-      style={[styles.taskRow, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+      style={[
+        styles.taskRow,
+        {
+          backgroundColor: colors.glass,
+          borderColor: colors.glassBorder,
+        },
+      ]}
     >
       <Pressable
         onPress={onToggle}

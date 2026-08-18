@@ -98,7 +98,7 @@ export default function SettingsScreen({ navigation }: any) {
       style={{ flex: 1, backgroundColor: colors.surface0 }}
       contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(false) }}
     >
-      <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>ACCOUNT</Text>
+      <Text style={[styles.groupHeader, { color: colors.accent }]}>ACCOUNT</Text>
       <GlassCard contentStyle={[styles.card, styles.centered]}>
         <Text
           style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", textAlign: "center" }}
@@ -270,7 +270,13 @@ export default function SettingsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  groupHeader: { fontSize: 11, fontWeight: "500", letterSpacing: 0.8, marginBottom: 8, marginTop: 16 },
+  groupHeader: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 16,
+  },
   card: { padding: 14 },
   centered: { alignItems: "center", justifyContent: "center" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

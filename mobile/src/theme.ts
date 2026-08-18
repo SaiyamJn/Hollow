@@ -11,6 +11,7 @@ export const darkColors = {
   accent: "#62d9ae",
   accentSoft: "rgba(98, 217, 174, 0.1)",
   danger: "#f87171",
+  warn: "#eab308",
   // Translucent surface tint layered over BlurView for glass chrome.
   glass: "rgba(22, 24, 27, 0.42)",
   glassBorder: "rgba(255, 255, 255, 0.05)",
@@ -26,6 +27,7 @@ export const lightColors = {
   accent: "#0d8a68",
   accentSoft: "rgba(13, 138, 104, 0.09)",
   danger: "#dc2626",
+  warn: "#b45309",
   glass: "rgba(255, 255, 255, 0.48)",
   glassBorder: "rgba(0, 0, 0, 0.06)",
 };

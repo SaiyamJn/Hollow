@@ -25,6 +25,7 @@ import type { ChecklistItem, QuickNote } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { SortableNotesSection } from "../components/SortableNotesSection";
+import { EmptyState } from "../components/EmptyState";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -307,18 +308,22 @@ export default function QuickNotes() {
               type="button"
               disabled={createBlank.isPending}
               onClick={() => createBlank.mutate("note")}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass px-3 py-3 text-sm font-medium hover:border-accent"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-[rgb(234,179,8)]/50 hover:bg-[rgb(234,179,8)]/8 transition-colors"
             >
-              <StickyNote size={16} className="text-[rgb(234,179,8)]" />
+              <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center bg-[rgb(234,179,8)]/15 text-[rgb(180,83,9)] dark:text-[rgb(234,179,8)]">
+                <StickyNote size={15} />
+              </span>
               Note
             </button>
             <button
               type="button"
               disabled={createBlank.isPending}
               onClick={() => createBlank.mutate("list")}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass px-3 py-3 text-sm font-medium hover:border-accent"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-accent/50 hover:bg-accent-soft transition-colors"
             >
-              <ListTodo size={16} className="text-[rgb(93,202,165)]" />
+              <span className="icon-well h-8 w-8 rounded-xl">
+                <ListTodo size={15} />
+              </span>
               List
             </button>
           </div>
@@ -353,8 +358,8 @@ export default function QuickNotes() {
             setSelected(new Set());
           }}
           className={clsx(
-            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
-            showArchived ? "border-accent bg-accent-soft text-accent" : "border-border text-secondary"
+            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+            showArchived ? "chip-active" : "chip-idle hover:text-primary"
           )}
         >
           <Archive size={13} />
@@ -362,7 +367,7 @@ export default function QuickNotes() {
         </button>
         <Link
           to="/recycle-bin"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-secondary hover:text-primary"
+          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
         >
           <Trash2 size={13} />
           Recycle bin
@@ -370,9 +375,12 @@ export default function QuickNotes() {
       </div>
 
       {notes.length === 0 && (
-        <p className="text-sm text-secondary text-center">
-          {showArchived ? "Nothing tucked away." : "Your pocket is empty — jot something when it hits."}
-        </p>
+        <EmptyState
+          icon={StickyNote}
+          title={showArchived ? "Nothing tucked away" : "Your pocket is empty"}
+          subtitle={showArchived ? "Archived notes will land here." : "Jot something when it hits — notes or lists."}
+          className="mb-6 max-w-md mx-auto py-10"
+        />
       )}
 
       {notes.length > 1 && !showArchived && !selecting && (
@@ -383,7 +391,7 @@ export default function QuickNotes() {
 
       {pinned.length > 0 && (
         <>
-          <p className="text-[11px] font-semibold tracking-wide text-secondary mb-2">PINNED</p>
+          <p className="section-label mb-2">Pinned</p>
           <SortableNotesSection
             notes={pinned}
             enabled={!showArchived && !selecting}
@@ -406,7 +414,7 @@ export default function QuickNotes() {
       )}
 
       {rest.length > 0 && pinned.length > 0 && (
-        <p className="text-[11px] font-semibold tracking-wide text-secondary mb-2">OTHERS</p>
+        <p className="section-label section-label-muted mb-2">Others</p>
       )}
       {rest.length > 0 && (
         <SortableNotesSection

@@ -9,7 +9,16 @@ import { Input } from "../components/ui/input";
 import { DateTimePicker } from "../components/DateTimePicker";
 import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
+import { FocusField } from "../components/FocusField";
 import type { RepeatEnd } from "../lib/taskRepeat";
+import {
+  FOCUS_DOT,
+  FOCUS_SOFT_BG,
+  FOCUS_TEXT,
+  formatTaskTime,
+  normalizeFocus,
+  type TaskFocus,
+} from "../lib/taskFocus";
 import {
   addDays,
   addMonths,
@@ -27,11 +36,12 @@ import {
 } from "./dateUtils";
 import { datedTasks, expandForRange, groupByDay, tasksOnDay, type CalendarTask } from "./taskIndex";
 
-type CalView = "schedule" | "week" | "day" | "agenda";
+type CalView = "month" | "schedule" | "week" | "day" | "agenda";
 type Draft = {
   title: string;
   description: string;
   due: Date | null;
+  focus: TaskFocus;
   repeat: TaskRepeatRule | null;
   repeatDays?: number[] | null;
   repeatInterval?: number | null;
@@ -42,13 +52,14 @@ type Draft = {
 type EditDraft = Draft & { id: string };
 
 const VIEWS: { id: CalView; label: string }[] = [
+  { id: "month", label: "Month" },
   { id: "schedule", label: "Schedule" },
   { id: "week", label: "Week" },
   { id: "day", label: "Day" },
   { id: "agenda", label: "Agenda" },
 ];
 
-/** TickTick-style collapsible month + day list. */
+/** TickTick-inspired month board + schedule / week / day / agenda. */
 export default function CalendarPage() {
   const queryClient = useQueryClient();
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -56,8 +67,9 @@ export default function CalendarPage() {
     const id = setInterval(() => setNowMs(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
+
   const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
-  const [view, setView] = useState<CalView>("schedule");
+  const [view, setView] = useState<CalView>("month");
   const [menuOpen, setMenuOpen] = useState(false);
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
@@ -66,6 +78,18 @@ export default function CalendarPage() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const pullStartY = useRef<number | null>(null);
+
+  /** Month board is viewport-sized — lock the app shell scroll so only day cells scroll. */
+  useEffect(() => {
+    if (view !== "month") return;
+    const main = document.querySelector("main");
+    if (!(main instanceof HTMLElement)) return;
+    const prev = main.style.overflowY;
+    main.style.overflowY = "hidden";
+    return () => {
+      main.style.overflowY = prev;
+    };
+  }, [view]);
 
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -102,6 +126,7 @@ export default function CalendarPage() {
         description?: string;
         done?: boolean;
         dueAt?: string | null;
+        focus?: TaskFocus;
         repeatRule?: TaskRepeatRule | null;
         repeatDays?: number[] | null;
         repeatInterval?: number | null;
@@ -143,6 +168,7 @@ export default function CalendarPage() {
       title: "",
       description: "",
       due: dateOnlyDue(day),
+      focus: "none",
       repeat: null,
       repeatDays: null,
       repeatInterval: 1,
@@ -175,14 +201,13 @@ export default function CalendarPage() {
   }
 
   function beginEdit(t: CalendarTask) {
-    // Always edit the series anchor (dueAt), not a virtual occurrence day —
-    // otherwise saving from a future occurrence rewrites the whole schedule.
     const seriesDue = t.dueAt ? new Date(t.dueAt) : t.due;
     setEditing({
       id: t.sourceId ?? t.id,
       title: t.title,
       description: t.description ?? "",
       due: seriesDue,
+      focus: normalizeFocus(t.focus),
       repeat: t.repeatRule ?? null,
       repeatDays: t.repeatDays ?? null,
       repeatInterval: t.repeatInterval ?? 1,
@@ -197,13 +222,122 @@ export default function CalendarPage() {
     update.mutate({ id: t.id, patch: { done: !t.done } });
   }
 
-  const weekLabels = weekDays(today).map((d) => d.toLocaleDateString(undefined, { weekday: "narrow" }));
+  const weekLabels = weekDays(today).map((d) => d.toLocaleDateString(undefined, { weekday: "short" }));
   const headerTitle =
     view === "agenda"
       ? "Agenda"
       : view === "day"
         ? selected.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
         : formatMonthTitle(cursor);
+
+  function renderMonthCell(day: Date) {
+    const key = dayKey(day);
+    const inMonth = day.getMonth() === cursor.getMonth();
+    const isToday = sameDay(day, today);
+    const isSelected = sameDay(day, selected);
+    const isPast = day < today;
+    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+    const open = tasksOnDay(byDay, day).filter((t) => !t.done);
+    const isDrop = dropKey === key;
+
+    return (
+      <div
+        key={key}
+        onClick={() => selectDay(day)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDropKey(key);
+        }}
+        onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
+        onDrop={(e) => onDropDay(e, day)}
+        className={clsx(
+          "cal-day-cell group",
+          isWeekend && inMonth && "weekend",
+          isPast && inMonth && "past",
+          !inMonth && "out-month",
+          isToday && inMonth && "today",
+          isSelected && inMonth && !isToday && "selected",
+          isDrop && "drop"
+        )}
+      >
+        <div className="flex items-center justify-between gap-1 px-0.5 shrink-0">
+          <span
+            className={clsx(
+              "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-medium transition-colors",
+              isToday && "bg-accent text-surface-0 font-semibold shadow-sm shadow-accent/30",
+              !isToday && isSelected && inMonth && "bg-accent-soft text-accent font-semibold",
+              !isToday && !isSelected && inMonth && "text-primary",
+              !isToday && !inMonth && "text-secondary/40"
+            )}
+          >
+            {day.getDate()}
+          </span>
+          <button
+            type="button"
+            className="opacity-0 group-hover:opacity-100 p-0.5 rounded-md text-secondary hover:text-accent hover:bg-accent-soft transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              openCreate(day);
+            }}
+            title="Add task"
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+        <div className="cal-day-tasks" onWheel={(e) => e.stopPropagation()}>
+          {open.map((t) => {
+            const focus = normalizeFocus(t.focus);
+            const time = formatTaskTime(t.dueAt);
+            return (
+              <div
+                key={t.id}
+                draggable={!t.virtual}
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  onDragStart(e, t);
+                }}
+                className={clsx(
+                  "focus-pill w-full flex items-center gap-1 px-1.5 py-[3px] text-left",
+                  FOCUS_SOFT_BG[focus],
+                  t.virtual && "opacity-55"
+                )}
+              >
+                <button
+                  type="button"
+                  className={clsx(
+                    "h-2.5 w-2.5 shrink-0 rounded-[3px] border bg-surface-1/50",
+                    t.done ? "bg-accent border-accent" : "border-secondary/40 hover:border-accent"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!t.virtual) toggleTask(t);
+                  }}
+                  aria-label={t.done ? "Mark incomplete" : "Mark complete"}
+                />
+                <button
+                  type="button"
+                  className="flex-1 min-w-0 text-left flex items-center gap-1 pl-0.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    beginEdit(t);
+                  }}
+                >
+                  <span className="flex-1 min-w-0 text-[11px] text-primary truncate leading-tight font-medium">
+                    {t.title}
+                  </span>
+                  {time && (
+                    <span className={clsx("text-[10px] shrink-0 tabular-nums font-medium", FOCUS_TEXT[focus])}>
+                      {time}
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   function renderDayCell(day: Date) {
     const key = dayKey(day);
@@ -237,24 +371,32 @@ export default function CalendarPage() {
           {day.getDate()}
         </span>
         <div className="mt-1 w-[70%] min-h-[10px] max-h-[12px] space-y-0.5 overflow-hidden flex flex-col items-stretch">
-          {open.slice(0, 3).map((t) => (
-            <div
-              key={t.id}
-              className={clsx(
-                "h-[3px] w-full rounded-full",
-                t.starred ? "bg-accent" : "bg-secondary/70",
-                t.virtual && "opacity-40"
-              )}
-            />
-          ))}
+          {open.slice(0, 3).map((t) => {
+            const focus = normalizeFocus(t.focus);
+            return (
+              <div
+                key={t.id}
+                className={clsx(
+                  "h-[3px] w-full rounded-full",
+                  FOCUS_DOT[focus],
+                  t.virtual && "opacity-40"
+                )}
+              />
+            );
+          })}
         </div>
       </button>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
-      <div className="flex items-center gap-1 mb-3">
+    <div
+      className={clsx(
+        "mx-auto px-4",
+        view === "month" ? "max-w-[1280px] pt-3 pb-2 cal-month-shell" : "max-w-2xl py-6 pb-28"
+      )}
+    >
+      <div className="flex items-center gap-1 mb-2 shrink-0">
         {view !== "agenda" && (
           <button type="button" onClick={() => (view === "day" ? selectDay(addDays(selected, -1)) : shiftMonth(-1))} className="p-1.5 rounded-lg hover:bg-surface-2 text-primary">
             <ChevronLeft size={20} />
@@ -271,7 +413,7 @@ export default function CalendarPage() {
         <button
           type="button"
           onClick={jumpToday}
-          className="ml-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-accent text-accent"
+          className="ml-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-accent text-accent bg-accent-soft/40 hover:bg-accent-soft transition-colors"
         >
           Today
         </button>
@@ -305,6 +447,23 @@ export default function CalendarPage() {
 
       {isLoading && !tasks ? (
         <p className="text-sm text-secondary text-center py-16">Loading…</p>
+      ) : view === "month" ? (
+        <div className="cal-month-board flex-1 min-h-0">
+          <div className="cal-month-weekdays">
+            {weekLabels.map((l, i) => (
+              <div
+                key={i}
+                className={clsx(
+                  "py-2 text-center text-[11px] font-semibold tracking-wide",
+                  i === 0 || i === 6 ? "text-accent" : "text-secondary"
+                )}
+              >
+                {l}
+              </div>
+            ))}
+          </div>
+          <div className="cal-month-grid">{cells.map((day) => renderMonthCell(day))}</div>
+        </div>
       ) : view === "schedule" ? (
         <>
           {/* Collapsible month — rolls between week and full month */}
@@ -605,6 +764,7 @@ export default function CalendarPage() {
               ) : (
                 <RepeatField due={null} value={draft} onChange={() => {}} disabled />
               )}
+              <FocusField value={draft.focus} onChange={(focus) => setDraft({ ...draft, focus })} />
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
                   Cancel
@@ -618,6 +778,7 @@ export default function CalendarPage() {
                       title: draft.title.trim(),
                       description: draft.description.trim() || undefined,
                       dueAt: draft.due ? draft.due.toISOString() : undefined,
+                      focus: draft.focus,
                       ...repeatPayload(draft),
                     })
                   }
@@ -668,6 +829,10 @@ export default function CalendarPage() {
               ) : (
                 <RepeatField due={null} value={editing} onChange={() => {}} disabled />
               )}
+              <FocusField
+                value={editing.focus}
+                onChange={(focus) => setEditing({ ...editing, focus })}
+              />
               <div className="flex gap-2">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
                   Cancel
@@ -683,6 +848,7 @@ export default function CalendarPage() {
                         title: editing.title.trim(),
                         description: editing.description.trim(),
                         dueAt: editing.due ? editing.due.toISOString() : null,
+                        focus: editing.focus,
                         ...repeatPayload(editing),
                       },
                     })

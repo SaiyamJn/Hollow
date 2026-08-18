@@ -215,13 +215,13 @@ export default function AppShell() {
                 <BrandMark size="sm" wordmark />
               </button>
               <button
-                className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-xs
-                           text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+                className="flex items-center gap-2 rounded-xl border border-border glass-input px-3 py-1.5 text-xs
+                           text-secondary hover:text-primary hover:border-accent/40 transition-colors"
                 onClick={() => setPaletteOpen(true)}
               >
-                <Search size={13} />
+                <Search size={13} className="text-accent" />
                 <span>Search or jump to…</span>
-                <kbd className="border border-border rounded px-1 py-px text-[10px]">
+                <kbd className="border border-border rounded-md px-1.5 py-px text-[10px] bg-surface-2/60 text-secondary">
                   {formatCombo(binds.palette)}
                 </kbd>
               </button>

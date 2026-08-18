@@ -254,9 +254,21 @@ export default function HomeScreen({ navigation }: any) {
             style={[styles.shortcut, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}
             onPress={() => navigation.navigate(item.tab)}
           >
-            <Feather name={item.icon} size={15} color={colors.textSecondary} />
+            <View
+              style={{
+                height: 28,
+                width: 28,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.accentSoft,
+                marginBottom: 4,
+              }}
+            >
+              <Feather name={item.icon} size={14} color={colors.accent} />
+            </View>
             <Text
-              style={{ color: colors.textSecondary, fontSize: isNarrow ? 11 : 12, fontWeight: "500", textAlign: "center" }}
+              style={{ color: colors.textPrimary, fontSize: isNarrow ? 11 : 12, fontWeight: "600", textAlign: "center" }}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
@@ -492,7 +504,18 @@ function HomeTaskRow({
         {title}
       </Text>
       {overdue && !completing && (
-        <Text style={{ color: danger, fontSize: 12, flexShrink: 0 }}>overdue</Text>
+        <View
+          style={{
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 999,
+            backgroundColor: "rgba(220, 38, 38, 0.12)",
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: "rgba(220, 38, 38, 0.28)",
+          }}
+        >
+          <Text style={{ color: danger, fontSize: 11, fontWeight: "700", flexShrink: 0 }}>Overdue</Text>
+        </View>
       )}
     </Animated.View>
   );

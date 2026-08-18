@@ -26,12 +26,15 @@ import {
 } from "../lib/taskRepeat";
 import { GlassCard } from "./GlassCard";
 import { GlassDateTimePicker, formatDueLabel } from "./GlassDateTimePicker";
+import { FocusCompass, FocusDot } from "./FocusField";
 import { RepeatPanel } from "./RepeatPanel";
+import { FOCUS_META, normalizeFocus, type TaskFocus } from "../lib/taskFocus";
 
 export type TaskDraft = {
   title: string;
   description: string;
   due: Date | null;
+  focus?: TaskFocus;
   repeat: TaskRepeatRule | null;
   repeatDays?: number[] | null;
   repeatInterval?: number | null;
@@ -98,6 +101,7 @@ export function TaskFormModal({
   const { height } = useWindowDimensions();
   const [dueOpen, setDueOpen] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [untilOpen, setUntilOpen] = useState(false);
   const [dueDraft, setDueDraft] = useState<Date | null>(null);
   const [untilDraft, setUntilDraft] = useState<Date | null>(null);
@@ -106,12 +110,14 @@ export function TaskFormModal({
     if (!visible) {
       setDueOpen(false);
       setRepeatOpen(false);
+      setFocusOpen(false);
       setUntilOpen(false);
     }
   }, [visible]);
 
   if (!draft) return null;
   const current = draft;
+  const focus = normalizeFocus(current.focus);
   const { padTop, padBottom, maxCardH } = overlayPads(insets, height);
 
   function openDuePicker() {
@@ -215,6 +221,25 @@ export function TaskFormModal({
               </Pressable>
 
               <Pressable
+                onPress={() => setFocusOpen(true)}
+                style={[styles.rowBtn, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
+                hitSlop={6}
+              >
+                {focus === "none" ? (
+                  <Feather name="crosshair" size={14} color={colors.textSecondary} />
+                ) : (
+                  <FocusDot focus={focus} colors={colors} size={8} />
+                )}
+                <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
+                  {focus === "none" ? "Focus (important × urgent)" : FOCUS_META[focus].hint}
+                </Text>
+                <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: "600" }}>
+                  {FOCUS_META[focus].label}
+                </Text>
+                <Feather name="chevron-right" size={14} color={colors.textSecondary} />
+              </Pressable>
+
+              <Pressable
                 onPress={() => {
                   if (!current.due) openDuePicker();
                   else setRepeatOpen(true);
@@ -285,6 +310,37 @@ export function TaskFormModal({
                 </View>
               </View>
             </ScrollView>
+          </GlassCard>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={visible && focusOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFocusOpen(false)}
+      >
+        <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
+          <GlassCard
+            strong
+            style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}
+            contentStyle={styles.card}
+          >
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>Focus</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 12, textAlign: "center" }}>
+              Important × urgent — tap a corner
+            </Text>
+            <FocusCompass
+              value={focus}
+              colors={colors}
+              onChange={(next) => onChange({ ...current, focus: next })}
+            />
+            <Pressable
+              onPress={() => setFocusOpen(false)}
+              style={{ alignSelf: "flex-end", marginTop: 14 }}
+            >
+              <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+            </Pressable>
           </GlassCard>
         </View>
       </Modal>

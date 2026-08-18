@@ -362,6 +362,7 @@ export async function createTask(input: {
   dueAt?: string;
   parentTaskId?: string;
   starred?: boolean;
+  focus?: "none" | "critical" | "steady" | "swift" | "quiet";
   repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
   repeatDays?: number[] | null;
   repeatInterval?: number | null;
@@ -380,6 +381,7 @@ export async function updateTask(
     description?: string;
     done?: boolean;
     starred?: boolean;
+    focus?: "none" | "critical" | "steady" | "swift" | "quiet";
     dueAt?: string | null;
     repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
     repeatDays?: number[] | null;

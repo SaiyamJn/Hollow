@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Book,
-  BookOpenText,
   CalendarDays,
   CheckSquare,
   FileText,
@@ -28,6 +27,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { formatCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
+import { StatusChip } from "../components/StatusChip";
 import { Button } from "../components/ui/button";
 import { pickGreeting } from "../lib/greetings";
 
@@ -159,17 +159,19 @@ function HomeShortcuts({ notebooks }: { notebooks?: { id: string }[] }) {
           disabled={disabled}
           onClick={onClick}
           className={clsx(
-            "flex-1 flex flex-col items-center justify-center gap-1 px-2 py-3 min-w-0",
+            "flex-1 flex flex-col items-center justify-center gap-1.5 px-2 py-3.5 min-w-0",
             "text-secondary transition-colors",
-            i > 0 && "border-l border-border",
+            i > 0 && "border-l border-border/70",
             disabled
               ? "opacity-40 cursor-not-allowed"
-              : "hover:text-primary hover:bg-surface-2/40"
+              : "hover:text-accent hover:bg-accent-soft/50"
           )}
         >
-          <Icon size={15} strokeWidth={1.75} className="shrink-0" />
-          <span className="text-xs font-medium truncate w-full text-center">{label}</span>
-          <kbd className="text-xs text-secondary tabular-nums">{formatCombo(binds[bind])}</kbd>
+          <span className="icon-well h-8 w-8 rounded-xl">
+            <Icon size={14} strokeWidth={1.75} />
+          </span>
+          <span className="text-xs font-medium truncate w-full text-center text-primary">{label}</span>
+          <kbd className="text-[10px] text-secondary tabular-nums">{formatCombo(binds[bind])}</kbd>
         </button>
       ))}
     </div>
@@ -199,7 +201,7 @@ function QuickCapture() {
   }
 
   return (
-    <div className="mt-8 rounded-xl border border-border glass px-3.5 py-3 transition-colors focus-within:border-accent">
+    <div className="mt-8 rounded-xl border border-border glass-strong px-3.5 py-3 transition-colors focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
       <div className="flex items-center gap-2">
         <textarea
           className="flex-1 bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary leading-6"
@@ -232,24 +234,24 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
 
   return (
     <section>
-      <h2 className="text-xs uppercase tracking-wide text-secondary mb-3 flex items-center gap-1.5">
-        <BookOpenText size={13} /> Continue writing
-      </h2>
+      <h2 className="section-label mb-3">Continue writing</h2>
       {list.length === 0 && <p className="text-sm text-secondary">Pages you edit will show up here.</p>}
       <ul className="space-y-0.5">
         {list.map((p) => (
           <li key={p.id}>
             <Link
               to={pageRoute(p)}
-              className="flex items-center gap-2.5 rounded-lg px-2 py-2 -mx-2 text-sm
-                         text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+              className="flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
+                         text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
             >
-              <FileText size={13} className="shrink-0 opacity-70" />
+              <span className="icon-well h-7 w-7 rounded-lg shrink-0">
+                <FileText size={12} />
+              </span>
               <span className="truncate flex-1 text-primary">{p.title}</span>
               {p.section.isLocked && !sectionPasswords[p.section.id] && (
-                <Lock size={11} className="shrink-0" />
+                <Lock size={11} className="shrink-0 text-secondary" />
               )}
-              <span className="text-xs shrink-0 tabular-nums">{relativeTime(p.updatedAt)}</span>
+              <span className="status-chip status-chip-muted shrink-0">{relativeTime(p.updatedAt)}</span>
             </Link>
           </li>
         ))}
@@ -332,10 +334,10 @@ function TodayTasks() {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xs uppercase tracking-wide text-secondary flex items-center gap-1.5">
-          <CheckSquare size={13} /> {shown.length > 0 ? "Today" : "Tasks"}
+        <h2 className={clsx("section-label", overdue.length > 0 && "section-label-danger")}>
+          {shown.length > 0 ? "Today" : "Tasks"}
         </h2>
-        <Link to="/tasks" className="text-xs text-secondary hover:text-accent">
+        <Link to="/tasks" className="text-xs text-accent hover:underline font-medium">
           All
         </Link>
       </div>
@@ -347,15 +349,19 @@ function TodayTasks() {
           </Link>
         </p>
       )}
-      <ul className="space-y-0.5">
+      <ul className="space-y-1">
         {list.map(({ task, overdue: isOverdue }) => {
           const leaving = !!completing[task.id];
           return (
             <li
               key={task.id}
               className={clsx(
-                "flex items-center gap-2.5 rounded-lg px-2 py-2 -mx-2 text-sm transition-all duration-300",
-                leaving ? "opacity-0 translate-x-2 pointer-events-none" : "opacity-100 hover:bg-surface-2"
+                "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm transition-all duration-300 border border-transparent",
+                leaving
+                  ? "opacity-0 translate-x-2 pointer-events-none"
+                  : isOverdue
+                    ? "bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] border-[color-mix(in_srgb,var(--danger)_18%,transparent)]"
+                    : "hover:bg-accent-soft/40"
               )}
             >
               <button
@@ -369,7 +375,7 @@ function TodayTasks() {
               <span className={clsx("truncate flex-1 transition-colors", leaving && "line-through text-secondary")}>
                 {task.title}
               </span>
-              {isOverdue && !leaving && <span className="text-xs text-danger shrink-0">overdue</span>}
+              {isOverdue && !leaving && <StatusChip tone="danger">Overdue</StatusChip>}
             </li>
           );
         })}

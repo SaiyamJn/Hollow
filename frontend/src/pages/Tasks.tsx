@@ -1,19 +1,31 @@
 import { KeyboardEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import type { Task } from "../lib/types";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
-import { DateTimePicker, formatDueLabel } from "../components/DateTimePicker";
+import { DateTimePicker } from "../components/DateTimePicker";
 import { formatRepeatLabel } from "../lib/taskRepeat";
 import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
+import { EisenhowerBoard, KanbanBoard } from "../components/TaskBoards";
+import { FocusChip, FocusDot, FocusField } from "../components/FocusField";
+import { DueChip } from "../components/StatusChip";
+import { EmptyState } from "../components/EmptyState";
 import type { RepeatEnd } from "../lib/taskRepeat";
+import { normalizeFocus, type TaskFocus } from "../lib/taskFocus";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
+type TasksLayout = "list" | "matrix" | "kanban";
+
+const LAYOUTS: { id: TasksLayout; label: string }[] = [
+  { id: "list", label: "List" },
+  { id: "matrix", label: "Matrix" },
+  { id: "kanban", label: "Board" },
+];
 
 /** Next occurrence of a repeat stays off Tasks (incl. Upcoming) until its day starts.
  *  One-off future tasks still appear under Upcoming. */
@@ -74,6 +86,7 @@ type Draft = {
   title: string;
   description: string;
   due: Date | null;
+  focus: TaskFocus;
   repeat: TaskRepeatRule | null;
   repeatDays?: number[] | null;
   repeatInterval?: number | null;
@@ -89,6 +102,7 @@ export default function Tasks() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [layout, setLayout] = useState<TasksLayout>("list");
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -116,6 +130,7 @@ export default function Tasks() {
         description?: string;
         done?: boolean;
         starred?: boolean;
+        focus?: TaskFocus;
         dueAt?: string | null;
       };
     }) => updateTask(id, patch),
@@ -131,6 +146,7 @@ export default function Tasks() {
         title: string;
         description: string;
         dueAt: string | null;
+        focus?: TaskFocus;
         repeatRule?: TaskRepeatRule | null;
         repeatDays?: number[] | null;
         repeatInterval?: number | null;
@@ -151,6 +167,7 @@ export default function Tasks() {
       title: title.trim(),
       description: "",
       due: null,
+      focus: "none",
       repeat: null,
       repeatDays: null,
       repeatInterval: 1,
@@ -171,6 +188,7 @@ export default function Tasks() {
       title: draft.title.trim(),
       description: draft.description.trim() || undefined,
       dueAt: draft.due ? draft.due.toISOString() : undefined,
+      focus: draft.focus,
       ...repeatPayload(draft),
     });
   }
@@ -183,6 +201,7 @@ export default function Tasks() {
         title: editing.title.trim(),
         description: editing.description.trim(),
         dueAt: editing.due ? editing.due.toISOString() : null,
+        focus: editing.focus,
         ...repeatPayload(editing),
       },
     });
@@ -197,10 +216,30 @@ export default function Tasks() {
   const completed = (tasks ?? []).filter((t) => t.done);
 
   return (
-    <div className="max-w-2xl mx-auto px-7 py-10">
-      <div className="text-center mb-6">
+    <div className={clsx("mx-auto px-7 py-10", layout === "list" ? "max-w-2xl" : "max-w-5xl")}>
+      <div className="text-center mb-4">
         <h1 className="text-xl font-medium">Tasks</h1>
-        <p className="text-sm text-secondary mt-1">Star the important bits — dates keep you honest.</p>
+        <p className="text-sm text-secondary mt-1">
+          Star to pin · Focus for important × urgent
+        </p>
+      </div>
+
+      <div className="flex justify-center gap-1 mb-5 p-1 rounded-xl border border-border glass-strong w-fit mx-auto shadow-card">
+        {LAYOUTS.map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            onClick={() => setLayout(l.id)}
+            className={clsx(
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+              layout === l.id
+                ? "bg-accent text-surface-0 shadow-sm"
+                : "text-secondary hover:text-primary hover:bg-surface-2/80"
+            )}
+          >
+            {l.label}
+          </button>
+        ))}
       </div>
 
       <Input
@@ -208,26 +247,80 @@ export default function Tasks() {
         value={quickAdd}
         onChange={(e) => setQuickAdd(e.target.value)}
         onKeyDown={onQuickAdd}
-        className="mb-6 text-center"
+        className="mb-6 text-center max-w-2xl mx-auto"
       />
 
       {tasks && tasks.length === 0 && (
-        <p className="text-sm text-secondary text-center">Nothing on the list yet — whenever you're ready.</p>
+        <EmptyState
+          icon={CheckSquare}
+          title="Nothing on the list yet"
+          subtitle="Add something whenever you're ready — List, Matrix, or Board."
+          className="mb-6"
+        />
       )}
 
+      {layout === "matrix" && tasks && (
+        <EisenhowerBoard
+          tasks={tasks}
+          onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
+          onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+          onEdit={(task) => {
+            saveEdit.reset();
+            setEditing({
+              id: task.id,
+              title: task.title,
+              description: task.description ?? "",
+              due: task.dueAt ? new Date(task.dueAt) : null,
+              focus: normalizeFocus(task.focus),
+              repeat: task.repeatRule ?? null,
+              repeatDays: task.repeatDays ?? null,
+              repeatInterval: task.repeatInterval ?? 1,
+              repeatEnd: task.repeatEnd ?? null,
+              repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+              repeatCount: task.repeatCount ?? null,
+            });
+          }}
+        />
+      )}
+
+      {layout === "kanban" && tasks && (
+        <KanbanBoard
+          tasks={tasks}
+          onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
+          onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+          onEdit={(task) => {
+            saveEdit.reset();
+            setEditing({
+              id: task.id,
+              title: task.title,
+              description: task.description ?? "",
+              due: task.dueAt ? new Date(task.dueAt) : null,
+              focus: normalizeFocus(task.focus),
+              repeat: task.repeatRule ?? null,
+              repeatDays: task.repeatDays ?? null,
+              repeatInterval: task.repeatInterval ?? 1,
+              repeatEnd: task.repeatEnd ?? null,
+              repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+              repeatCount: task.repeatCount ?? null,
+            });
+          }}
+        />
+      )}
+
+      {layout === "list" && (
       <div className="space-y-6">
         {openGroups.map(([name, list]) => (
           <section key={name}>
             <h2
-              className={clsx("text-xs font-medium uppercase tracking-wide mb-2 text-center", {
-                "text-accent": name === "Starred" || name === "Today",
-                "text-danger": name === "Overdue",
-                "text-secondary": name === "Upcoming" || name === "No date",
+              className={clsx("section-label mb-2", {
+                "section-label-danger": name === "Overdue",
+                "section-label-warn": name === "Upcoming",
+                "section-label-muted": name === "No date",
               })}
             >
               {name}
             </h2>
-            <div className="rounded-xl border border-border glass shadow-card divide-y divide-[var(--border)] overflow-hidden">
+            <div className="rounded-2xl border border-border glass-strong shadow-card divide-y divide-[color-mix(in_srgb,var(--border)_70%,transparent)] overflow-hidden">
               {list.map((task) => (
                 <TaskRow
                   key={task.id}
@@ -241,6 +334,7 @@ export default function Tasks() {
                       title: task.title,
                       description: task.description ?? "",
                       due: task.dueAt ? new Date(task.dueAt) : null,
+                      focus: normalizeFocus(task.focus),
                       repeat: task.repeatRule ?? null,
                       repeatDays: task.repeatDays ?? null,
                       repeatInterval: task.repeatInterval ?? 1,
@@ -282,6 +376,7 @@ export default function Tasks() {
                         title: task.title,
                         description: task.description ?? "",
                         due: task.dueAt ? new Date(task.dueAt) : null,
+                        focus: normalizeFocus(task.focus),
                         repeat: task.repeatRule ?? null,
                         repeatDays: task.repeatDays ?? null,
                         repeatInterval: task.repeatInterval ?? 1,
@@ -298,6 +393,7 @@ export default function Tasks() {
           </section>
         )}
       </div>
+      )}
 
       <Dialog
         open={draft !== null}
@@ -356,6 +452,7 @@ export default function Tasks() {
               ) : (
                 <RepeatField due={null} value={draft} onChange={() => {}} disabled />
               )}
+              <FocusField value={draft.focus} onChange={(focus) => setDraft({ ...draft, focus })} />
               {createError && <p className="text-sm text-danger text-center">{createError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
@@ -428,6 +525,10 @@ export default function Tasks() {
               ) : (
                 <RepeatField due={null} value={editing} onChange={() => {}} disabled />
               )}
+              <FocusField
+                value={editing.focus}
+                onChange={(focus) => setEditing({ ...editing, focus })}
+              />
               {editError && <p className="text-sm text-danger text-center">{editError}</p>}
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
@@ -484,47 +585,60 @@ function TaskRow({
   }
 
   return (
-    <div className="px-3.5 py-2.5">
+    <div className={clsx("px-3.5 py-2.5 transition-colors", task.starred && !task.done && "row-starred")}>
       <div className="group flex items-center gap-2.5">
         <button className="text-secondary hover:text-primary" onClick={() => setExpanded((v) => !v)}>
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Checkbox checked={task.done} onToggle={() => onPatch(task.id, { done: !task.done })} />
         <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
-          <span className={clsx(
-            "block text-sm truncate transition-all duration-300",
-            task.done && "line-through text-secondary opacity-70"
-          )}>
-            {task.title}
+          <span className="flex items-center gap-1.5 min-w-0">
+            <FocusDot focus={task.focus} />
+            <span
+              className={clsx(
+                "block text-sm truncate transition-all duration-300 font-medium",
+                task.done && "line-through text-secondary opacity-70"
+              )}
+            >
+              {task.title}
+            </span>
+            <FocusChip focus={task.focus} className="shrink-0" />
           </span>
           {task.description ? (
             <span className="block text-xs text-secondary truncate mt-0.5">{task.description}</span>
           ) : null}
           {task.dueAt ? (
-            <span className="block text-xs text-secondary mt-0.5">
-              {formatDueLabel(task.dueAt)}
-              {task.repeatRule
-                ? ` · ${formatRepeatLabel({
-                    rule: task.repeatRule,
-                    days: task.repeatDays,
-                    interval: task.repeatInterval,
-                    end: task.repeatEnd,
-                    until: task.repeatUntil,
-                    count: task.repeatCount,
-                  })}`
-                : ""}
+            <span className="mt-1 inline-flex">
+              <DueChip
+                dueAt={task.dueAt}
+                prefix={
+                  task.repeatRule
+                    ? formatRepeatLabel({
+                        rule: task.repeatRule,
+                        days: task.repeatDays,
+                        interval: task.repeatInterval,
+                        end: task.repeatEnd,
+                        until: task.repeatUntil,
+                        count: task.repeatCount,
+                      })
+                    : undefined
+                }
+              />
             </span>
           ) : null}
         </button>
         {subtasks.length > 0 && (
-          <span className="text-xs text-secondary shrink-0">
+          <span className="status-chip status-chip-muted shrink-0">
             {subtasks.filter((s) => s.done).length}/{subtasks.length}
           </span>
         )}
         <div className={clsx("row-actions flex items-center gap-1 shrink-0", task.starred && "!opacity-100")}>
           <button
             title={task.starred ? "Unstar" : "Star"}
-            className={clsx("p-1 rounded-md", task.starred ? "text-accent" : "text-secondary hover:text-primary")}
+            className={clsx(
+              "p-1 rounded-md",
+              task.starred ? "text-accent bg-accent-soft" : "text-secondary hover:text-primary"
+            )}
             onClick={() => onPatch(task.id, { starred: !task.starred })}
           >
             <Star size={14} fill={task.starred ? "currentColor" : "none"} />

@@ -13,6 +13,7 @@ import {
   type RepeatEnd,
   type RepeatRule,
 } from "../lib/taskRepeat";
+import { normalizeFocus } from "../lib/taskFocus";
 
 const router = Router();
 router.use(requireAuth);
@@ -26,6 +27,7 @@ const repeatDaysSchema = z
   .nullable()
   .optional();
 const repeatEndSchema = z.enum(["never", "on", "after"]).nullable().optional();
+const focusSchema = z.enum(["none", "critical", "steady", "swift", "quiet"]);
 
 const createSchema = z.object({
   title: z.string().min(1),
@@ -33,6 +35,7 @@ const createSchema = z.object({
   dueAt: isoDate.optional(),
   parentTaskId: z.string().uuid().optional(),
   starred: z.boolean().optional(),
+  focus: focusSchema.optional(),
   repeatRule: repeatRuleSchema.nullable().optional(),
   repeatDays: repeatDaysSchema,
   repeatInterval: z.number().int().min(1).max(99).optional(),
@@ -46,6 +49,7 @@ const patchSchema = z.object({
   description: z.string().optional(),
   done: z.boolean().optional(),
   starred: z.boolean().optional(),
+  focus: focusSchema.optional(),
   dueAt: isoDate.nullable().optional(),
   repeatRule: repeatRuleSchema.nullable().optional(),
   repeatDays: repeatDaysSchema,
@@ -59,6 +63,7 @@ function publicTask<
   T extends {
     title: string;
     description: string;
+    focus?: string | null;
     repeatDays?: string | null;
     repeatInterval?: number | null;
     repeatEnd?: string | null;
@@ -67,6 +72,7 @@ function publicTask<
     subtasks?: Array<{
       title: string;
       description: string;
+      focus?: string | null;
       repeatDays?: string | null;
       repeatInterval?: number | null;
       repeatEnd?: string | null;
@@ -77,6 +83,7 @@ function publicTask<
 >(task: T) {
   const mapRow = <
     U extends {
+      focus?: string | null;
       repeatDays?: string | null;
       repeatInterval?: number | null;
       repeatEnd?: string | null;
@@ -87,6 +94,7 @@ function publicTask<
     row: U
   ) => ({
     ...row,
+    focus: normalizeFocus(row.focus),
     repeatDays: parseRepeatDays(row.repeatDays ?? null),
     repeatInterval: clampInterval(row.repeatInterval ?? 1),
     repeatEnd: row.repeatEnd ? normalizeRepeatEnd(row.repeatEnd) : null,
@@ -159,6 +167,7 @@ router.post("/", async (req: AuthedRequest, res) => {
     dueAt,
     parentTaskId,
     starred,
+    focus,
     repeatRule,
     repeatDays,
     repeatInterval,
@@ -197,6 +206,7 @@ router.post("/", async (req: AuthedRequest, res) => {
       repeatCount: ends.repeatCount,
       parentTaskId: parentTaskId ?? null,
       starred: starred ?? false,
+      focus: normalizeFocus(focus),
     },
     include: { subtasks: true },
   });
@@ -214,6 +224,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
     description,
     done,
     starred,
+    focus,
     dueAt,
     repeatRule,
     repeatDays,
@@ -292,6 +303,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
         ...(description !== undefined ? { description: sealAtRest(description) } : {}),
         ...(done !== undefined ? { done } : {}),
         ...(starred !== undefined ? { starred } : {}),
+        ...(focus !== undefined ? { focus: normalizeFocus(focus) } : {}),
         ...(nextDue !== undefined ? { dueAt: nextDue } : {}),
         ...(nextRule !== undefined ? { repeatRule: nextRule } : {}),
         ...(nextDays !== undefined ? { repeatDays: nextDays } : {}),
@@ -325,6 +337,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
             title: task.title,
             description: task.description,
             starred: task.starred,
+            focus: normalizeFocus(task.focus),
             dueAt: next,
             repeatRule: ruleForSpawn,
             repeatDays: ruleForSpawn === "weekly" ? serializeRepeatDays(daysForSpawn) : null,

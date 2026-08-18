@@ -18,6 +18,12 @@ function moveItem<T>(list: T[], from: number, to: number): T[] {
 }
 
 const ROW_ESTIMATE = 88;
+/** Finger must travel this far before any swap can happen. */
+const ACTIVATE_PX = 36;
+/** Ignore the outer edges of a card so near-misses don't steal the slot. */
+const EDGE_INSET = 0.28;
+/** Minimum time between swaps — stops cascade reshuffles. */
+const SWAP_COOLDOWN_MS = 280;
 
 type Slot = {
   id: string;
@@ -52,7 +58,7 @@ function sameOrder(a: string[], b: string[]) {
 
 /**
  * Long-press + drag reorder in a masonry (multi-column) layout.
- * Order is linear; cards alternate across columns (0→left, 1→right, …).
+ * Swaps only when the finger clearly rests on another card (not on tiny wobble).
  */
 export function ReorderableNoteList({
   notes,
@@ -73,7 +79,6 @@ export function ReorderableNoteList({
     opts: {
       dragging: boolean;
       arranging: boolean;
-      /** Call from the card's onLongPress to start a drag (page coords). */
       startDrag?: (pageX: number, pageY: number) => void;
     }
   ) => React.ReactNode;
@@ -91,7 +96,9 @@ export function ReorderableNoteList({
   const startPageX = useRef(0);
   const startPageY = useRef(0);
   const ghostOrigin = useRef({ left: 0, top: 0 });
-  const lastHover = useRef(-1);
+  const armedRef = useRef(false);
+  const lastSwapAt = useRef(0);
+  const lastTargetId = useRef<string | null>(null);
   const containerX = useRef(0);
   const containerY = useRef(0);
   const containerRef = useRef<View>(null);
@@ -126,7 +133,9 @@ export function ReorderableNoteList({
     startPageY.current = pageY;
     dragX.setValue(0);
     dragY.setValue(0);
-    lastHover.current = orderRef.current.indexOf(id);
+    armedRef.current = false;
+    lastSwapAt.current = 0;
+    lastTargetId.current = null;
     initialOrderRef.current = orderRef.current.slice();
     draggingIdRef.current = id;
     setDraggingId(id);
@@ -134,41 +143,46 @@ export function ReorderableNoteList({
     Animated.spring(dragScale, { toValue: 1.04, useNativeDriver: true, friction: 7, tension: 100 }).start();
   }
 
-  function indexFromPoint(pageX: number, pageY: number): number {
+  /** Only returns a target when the finger is clearly inside another card. */
+  function targetSlotFromPoint(pageX: number, pageY: number): Slot | null {
     const localX = pageX - containerX.current;
     const localY = pageY - containerY.current;
-    const ids = orderRef.current;
-    if (!ids.length) return 0;
+    const dragId = draggingIdRef.current;
 
-    const col = Math.max(0, Math.min(columns - 1, Math.floor(localX / (columnWidth + gap))));
-    const inCol = slotsRef.current.filter((s) => s.col === col);
-    if (inCol.length === 0) {
-      const last = slotsRef.current[slotsRef.current.length - 1];
-      return last ? last.index : 0;
+    for (const s of slotsRef.current) {
+      if (s.id === dragId) continue;
+      const insetY = Math.max(12, s.height * EDGE_INSET);
+      const insetX = columnWidth * 0.18;
+      const inside =
+        localX >= s.left + insetX &&
+        localX <= s.left + columnWidth - insetX &&
+        localY >= s.top + insetY &&
+        localY <= s.top + s.height - insetY;
+      if (inside) return s;
     }
-
-    let best = inCol[0];
-    let bestDist = Infinity;
-    for (const s of inCol) {
-      const mid = s.top + s.height / 2;
-      const d = Math.abs(localY - mid);
-      if (d < bestDist) {
-        bestDist = d;
-        best = s;
-      }
-    }
-    return best.index;
+    return null;
   }
 
-  function applyHover(to: number) {
+  function applyHover(target: Slot | null) {
     const id = draggingIdRef.current;
-    if (!id || to === lastHover.current) return;
-    const from = orderRef.current.indexOf(id);
-    if (from < 0 || from === to) {
-      lastHover.current = to;
+    if (!id || !armedRef.current || !target) {
+      if (!target) lastTargetId.current = null;
       return;
     }
-    lastHover.current = to;
+    // Must stay on the same target briefly — crossing a gap resets.
+    if (lastTargetId.current !== target.id) {
+      lastTargetId.current = target.id;
+      lastSwapAt.current = Date.now(); // start dwell timer
+      return;
+    }
+    if (Date.now() - lastSwapAt.current < SWAP_COOLDOWN_MS) return;
+
+    const from = orderRef.current.indexOf(id);
+    const to = target.index;
+    if (from < 0 || from === to) return;
+
+    lastSwapAt.current = Date.now();
+    lastTargetId.current = null; // require a fresh dwell after layout shifts
     animateReorder();
     const next = moveItem(orderRef.current, from, to);
     orderRef.current = next;
@@ -184,16 +198,16 @@ export function ReorderableNoteList({
       Animated.spring(dragScale, { toValue: 1, useNativeDriver: true, friction: 8 }),
     ]).start();
     const ids = orderRef.current.slice();
-    const changed = !sameOrder(ids, initialOrderRef.current);
+    const changed = armedRef.current && !sameOrder(ids, initialOrderRef.current);
     draggingIdRef.current = null;
     setDraggingId(null);
-    lastHover.current = -1;
+    armedRef.current = false;
+    lastTargetId.current = null;
     if (changed) onReorder(ids);
   }
 
   const pan = useRef(
     PanResponder.create({
-      // Capture moves once a drag is active so the same finger keeps controlling the ghost.
       onStartShouldSetPanResponder: () => !!draggingIdRef.current,
       onStartShouldSetPanResponderCapture: () => !!draggingIdRef.current,
       onMoveShouldSetPanResponder: () => !!draggingIdRef.current,
@@ -202,10 +216,19 @@ export function ReorderableNoteList({
       onPanResponderMove: (e: GestureResponderEvent) => {
         if (!draggingIdRef.current) return;
         const { pageX, pageY } = e.nativeEvent;
-        dragX.setValue(pageX - startPageX.current);
-        dragY.setValue(pageY - startPageY.current);
+        const dx = pageX - startPageX.current;
+        const dy = pageY - startPageY.current;
+        dragX.setValue(dx);
+        dragY.setValue(dy);
+
+        if (!armedRef.current) {
+          if (Math.hypot(dx, dy) < ACTIVATE_PX) return;
+          armedRef.current = true;
+          void Haptics.selectionAsync();
+        }
+
         refreshSlots();
-        applyHover(indexFromPoint(pageX, pageY));
+        applyHover(targetSlotFromPoint(pageX, pageY));
       },
       onPanResponderRelease: () => finishDrag(),
       onPanResponderTerminate: () => finishDrag(),

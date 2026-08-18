@@ -84,6 +84,7 @@ export interface QuickNote {
 }
 
 export type TaskRepeatRule = "daily" | "weekly" | "monthly" | "yearly";
+export type TaskFocus = "none" | "critical" | "steady" | "swift" | "quiet";
 
 export interface Task {
   id: string;
@@ -91,6 +92,8 @@ export interface Task {
   description: string;
   done: boolean;
   starred: boolean;
+  /** Important × urgent focus class */
+  focus?: TaskFocus;
   dueAt: string | null;
   repeatRule?: "daily" | "weekly" | "monthly" | "yearly" | null;
   /** Weekdays 0=Sun…6=Sat when weekly */

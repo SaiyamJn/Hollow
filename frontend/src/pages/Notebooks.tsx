@@ -17,6 +17,9 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
+import { EmptyState } from "../components/EmptyState";
+import { StatusChip } from "../components/StatusChip";
+import clsx from "clsx";
 
 export default function Notebooks() {
   const navigate = useNavigate();
@@ -85,15 +88,16 @@ export default function Notebooks() {
       {isLoading && <p className="text-sm text-secondary text-center">Loading…</p>}
 
       {!isLoading && (notebooks ?? []).length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border glass p-5 py-16 text-center shadow-card">
-          <div className="h-12 w-12 rounded-2xl bg-accent-soft flex items-center justify-center">
-            <Book size={20} className="text-accent" />
-          </div>
-          <p className="text-sm text-secondary">No notebooks yet — start one when inspiration hits.</p>
-          <Button variant="accent" onClick={() => setCreateOpen(true)}>
-            Create your first
-          </Button>
-        </div>
+        <EmptyState
+          icon={Book}
+          title="No notebooks yet"
+          subtitle="Start one when inspiration hits — shelves for sections and pages."
+          action={
+            <Button variant="accent" onClick={() => setCreateOpen(true)}>
+              Create your first
+            </Button>
+          }
+        />
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -103,24 +107,32 @@ export default function Notebooks() {
           return (
             <div
               key={nb.id}
-              className="group relative rounded-xl border border-border glass p-5
-                         hover:border-accent transition-colors shadow-card
-                         flex flex-col items-center text-center min-h-[160px]"
+              className={clsx(
+                "group relative rounded-2xl border glass-strong p-5",
+                "hover:border-accent transition-all shadow-card hover:-translate-y-0.5 hover:shadow-pop",
+                "flex flex-col items-center text-center min-h-[168px]",
+                sealed ? "border-accent/30 bg-accent-soft/30" : "border-border"
+              )}
             >
               {/* Main control first in tab order; actions follow. */}
               <button type="button" onClick={() => openNotebook(nb)} className="w-full flex flex-col items-center flex-1 justify-center">
-                <div className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center">
+                <div className={clsx("h-11 w-11 rounded-2xl flex items-center justify-center", sealed ? "bg-surface-2" : "icon-well")}>
                   {sealed ? (
                     <Lock size={16} className="text-secondary" />
                   ) : (
-                    <Book size={16} className="text-accent" />
+                    <Book size={16} />
                   )}
                 </div>
-                <h2 className="mt-4 text-sm font-medium text-primary truncate w-full px-1">{nb.title}</h2>
-                <p className="mt-1 text-xs text-secondary">
-                  {sealed
-                    ? "Sealed · encrypted"
-                    : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pages} ${pages === 1 ? "page" : "pages"}`}
+                <h2 className="mt-4 text-sm font-semibold text-primary truncate w-full px-1">{nb.title}</h2>
+                <p className="mt-2">
+                  {sealed ? (
+                    <StatusChip tone="accent">Sealed</StatusChip>
+                  ) : (
+                    <StatusChip tone="muted">
+                      {nb.sections.length} {nb.sections.length === 1 ? "section" : "sections"} · {pages}{" "}
+                      {pages === 1 ? "page" : "pages"}
+                    </StatusChip>
+                  )}
                 </p>
               </button>
               <div className="row-actions absolute top-3 right-3 flex items-center gap-0.5">

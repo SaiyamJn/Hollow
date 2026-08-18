@@ -138,6 +138,8 @@ model Task {
   description  String    @default("")
   done         Boolean   @default(false)
   starred      Boolean   @default(false)
+  /// none | critical | steady | swift | quiet — important×urgent focus class
+  focus        String    @default("none")
   dueAt        DateTime?
   /// daily | weekly | monthly | yearly — only meaningful when dueAt is set
   repeatRule   String?

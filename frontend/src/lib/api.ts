@@ -18,6 +18,7 @@ import type {
   Section,
   Tag,
   Task,
+  TaskFocus,
   TaskRepeatRule,
   User,
 } from "./types";
@@ -284,6 +285,7 @@ export async function createTask(input: {
   dueAt?: string;
   parentTaskId?: string;
   starred?: boolean;
+  focus?: TaskFocus;
   repeatRule?: TaskRepeatRule | null;
   repeatDays?: number[] | null;
   repeatInterval?: number | null;
@@ -302,6 +304,7 @@ export async function updateTask(
     description?: string;
     done?: boolean;
     starred?: boolean;
+    focus?: TaskFocus;
     dueAt?: string | null;
     repeatRule?: TaskRepeatRule | null;
     repeatDays?: number[] | null;
