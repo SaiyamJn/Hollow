@@ -130,7 +130,6 @@ const styles = StyleSheet.create({
     paddingLeft: 18,
     gap: 6,
   },
-  axisCorner: { width: 0 },
   axisLabel: { flex: 1, fontSize: 10, letterSpacing: 0.2 },
   matrixRow: { flexDirection: "row", alignItems: "center", gap: 2 },
   sideLabel: {

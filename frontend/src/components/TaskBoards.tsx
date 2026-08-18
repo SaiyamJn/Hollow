@@ -30,12 +30,12 @@ function BoardCard({
     <div
       draggable={!task.done}
       onDragStart={(e) => onDragStart(e, task)}
-      className={clsx(
-        "focus-pill group/card px-2.5 py-2 cursor-grab active:cursor-grabbing",
-        FOCUS_SOFT_BG[focus]
-      )}
+        className={clsx(
+          "focus-pill group/card px-2.5 py-2 cursor-grab active:cursor-grabbing",
+          FOCUS_SOFT_BG[focus]
+        )}
     >
-      <div className="flex items-start gap-2 pl-0.5">
+      <div className="flex items-start gap-2">
         <button
           type="button"
           onClick={onToggle}
@@ -48,17 +48,17 @@ function BoardCard({
         >
           {task.done && <Check size={9} strokeWidth={3} />}
         </button>
-        <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
+        <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left overflow-hidden">
           <span
             className={clsx(
-              "block text-sm text-primary leading-snug font-medium",
+              "block text-sm text-primary leading-snug font-medium break-words pr-0.5",
               task.done && "line-through text-secondary opacity-70"
             )}
           >
             {task.title}
           </span>
           {task.dueAt && (
-            <span className={clsx("block text-[10px] mt-0.5 tabular-nums", FOCUS_TEXT[focus] || "text-secondary")}>
+            <span className={clsx("block text-[10px] mt-0.5 tabular-nums", FOCUS_TEXT[focus])}>
               {formatDueLabel(task.dueAt)}
             </span>
           )}
@@ -77,6 +77,7 @@ function Column({
   onEdit,
   onDragStart,
   dropActive,
+  fillHeight,
 }: {
   title: string;
   hint: string;
@@ -86,28 +87,35 @@ function Column({
   onEdit: (t: Task) => void;
   onDragStart: (e: React.DragEvent, task: Task) => void;
   dropActive?: boolean;
+  fillHeight?: boolean;
 }) {
   return (
     <div
       className={clsx(
-        "flex flex-col min-h-[240px] rounded-2xl overflow-hidden transition-[box-shadow,transform] duration-150",
+        "flex flex-col rounded-2xl overflow-hidden transition-[box-shadow,transform] duration-150",
+        fillHeight ? "h-full min-h-0" : "min-h-[240px]",
         FOCUS_PANE[focus],
         dropActive && "ring-2 ring-[color:var(--pane-accent)]/40 scale-[1.01]"
       )}
     >
-      <div className="px-3 py-2.5 border-b border-border/60 flex items-start gap-2">
+      <div className="px-3 py-2.5 border-b border-border/60 flex items-start gap-2 shrink-0">
         <span className={clsx("mt-1.5 h-2 w-2 rounded-full shrink-0", FOCUS_DOT[focus])} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <h3 className={clsx("text-sm font-semibold tracking-tight", FOCUS_TEXT[focus])}>{title}</h3>
-            <span className="focus-count text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md">
+            <h3 className={clsx("text-sm font-semibold tracking-tight pr-1", FOCUS_TEXT[focus])}>{title}</h3>
+            <span className="focus-count text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md shrink-0">
               {tasks.length}
             </span>
           </div>
-          <p className="text-[10px] text-secondary mt-0.5 leading-snug">{hint}</p>
+          <p className="text-[10px] text-secondary mt-0.5 leading-snug pr-0.5">{hint}</p>
         </div>
       </div>
-      <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[min(60vh,520px)]">
+      <div
+        className={clsx(
+          "flex-1 p-2 space-y-2 overflow-y-auto min-h-0",
+          !fillHeight && "max-h-[min(60vh,520px)]"
+        )}
+      >
         {tasks.length === 0 ? (
           <div className="py-8 px-2 text-center">
             <span className={clsx("inline-block h-1.5 w-8 rounded-full mb-2 opacity-50", FOCUS_DOT[focus])} />
@@ -133,14 +141,17 @@ function DropZone({
   focus,
   children,
   onDropId,
+  className,
 }: {
   focus: TaskFocus;
   children: (active: boolean) => React.ReactNode;
   onDropId: (id: string) => void;
+  className?: string;
 }) {
   const [active, setActive] = useState(false);
   return (
     <div
+      className={className}
       onDragOver={(e) => {
         e.preventDefault();
         setActive(true);
@@ -247,7 +258,7 @@ export function EisenhowerBoard({
   );
 }
 
-/** Kanban columns by focus — horizontal board. */
+/** Kanban columns by focus — fills available width without page scroll. */
 export function KanbanBoard({
   tasks,
   onSetFocus,
@@ -268,26 +279,30 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="overflow-x-auto pb-2 -mx-1 px-1">
-      <div className="flex gap-3 min-w-max">
+    <div className="h-[calc(100dvh-13.5rem)] min-h-[22rem] max-h-[calc(100dvh-13.5rem)]">
+      <div className="flex gap-3 h-full min-h-0 justify-center">
         {columns.map((id) => {
           const list = open.filter((t) => normalizeFocus(t.focus) === id);
           const meta = FOCUS_META[id];
           return (
-            <DropZone key={id} focus={id} onDropId={(tid) => onSetFocus(tid, id)}>
+            <DropZone
+              key={id}
+              focus={id}
+              onDropId={(tid) => onSetFocus(tid, id)}
+              className="flex-1 min-w-[140px] max-w-[240px] h-full"
+            >
               {(active) => (
-                <div className="w-[252px] shrink-0">
-                  <Column
-                    title={meta.label}
-                    hint={meta.hint}
-                    focus={id}
-                    tasks={list}
-                    onToggle={onToggle}
-                    onEdit={onEdit}
-                    onDragStart={onDragStart}
-                    dropActive={active}
-                  />
-                </div>
+                <Column
+                  title={meta.label}
+                  hint={meta.hint}
+                  focus={id}
+                  tasks={list}
+                  onToggle={onToggle}
+                  onEdit={onEdit}
+                  onDragStart={onDragStart}
+                  dropActive={active}
+                  fillHeight
+                />
               )}
             </DropZone>
           );

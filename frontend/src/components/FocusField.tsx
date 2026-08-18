@@ -94,10 +94,11 @@ export function FocusChip({
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-        "focus-pill",
-        `focus-pill-${id}`,
-        FOCUS_TEXT[id],
+        "status-chip shrink-0",
+        id === "critical" && "status-chip-danger",
+        id === "steady" && "status-chip-accent",
+        id === "swift" && "status-chip-warn",
+        id === "quiet" && "status-chip-muted",
         className
       )}
     >

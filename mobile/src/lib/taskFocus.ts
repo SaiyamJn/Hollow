@@ -2,12 +2,10 @@
 
 export type TaskFocus = "none" | "critical" | "steady" | "swift" | "quiet";
 
-export type FocusMeta = {
+type FocusMeta = {
   id: TaskFocus;
   label: string;
   hint: string;
-  important: boolean;
-  urgent: boolean;
 };
 
 /** Matrix order for the 2×2 (excluding none): TL critical, TR steady, BL swift, BR quiet */
@@ -18,36 +16,26 @@ export const FOCUS_META: Record<TaskFocus, FocusMeta> = {
     id: "none",
     label: "Clear",
     hint: "No focus signal",
-    important: false,
-    urgent: false,
   },
   critical: {
     id: "critical",
     label: "Now",
     hint: "Important · Urgent",
-    important: true,
-    urgent: true,
   },
   steady: {
     id: "steady",
     label: "Anchor",
     hint: "Important · Not urgent",
-    important: true,
-    urgent: false,
   },
   swift: {
     id: "swift",
     label: "Nudge",
     hint: "Urgent · Not important",
-    important: false,
-    urgent: true,
   },
   quiet: {
     id: "quiet",
     label: "Later",
     hint: "Neither — whenever",
-    important: false,
-    urgent: false,
   },
 };
 
@@ -58,14 +46,7 @@ export function normalizeFocus(value: string | null | undefined): TaskFocus {
   return "none";
 }
 
-export function focusFromAxes(important: boolean, urgent: boolean): TaskFocus {
-  if (important && urgent) return "critical";
-  if (important && !urgent) return "steady";
-  if (!important && urgent) return "swift";
-  return "quiet";
-}
-
-export function focusRank(focus: TaskFocus | string | null | undefined): number {
+function focusRank(focus: TaskFocus | string | null | undefined): number {
   switch (normalizeFocus(focus)) {
     case "critical":
       return 4;
@@ -119,13 +100,13 @@ function withAlpha(hexOrRgb: string, alpha: number): string {
 export function focusWash(focus: TaskFocus, accent = "#62d9ae"): string {
   switch (focus) {
     case "critical":
-      return "rgba(220, 38, 38, 0.12)";
+      return "rgba(220, 38, 38, 0.16)";
     case "steady":
-      return withAlpha(accent, 0.14);
+      return withAlpha(accent, 0.18);
     case "swift":
-      return "rgba(180, 83, 9, 0.12)";
+      return "rgba(180, 83, 9, 0.16)";
     case "quiet":
-      return "rgba(100, 116, 139, 0.12)";
+      return "rgba(100, 116, 139, 0.14)";
     default:
       return "transparent";
   }
@@ -146,9 +127,23 @@ export function focusBorder(focus: TaskFocus, accent = "#62d9ae", fallback = "#e
   }
 }
 
-export function focusSoftBg(
-  focus: TaskFocus,
-  palette: { accent: string; danger: string; textSecondary: string; surface2: string }
-): string {
-  return focusWash(focus, palette.accent) || palette.surface2;
+/** Sort for calendar / boards: open first, then focus priority, starred, time. */
+export function sortByFocusPriority<
+  T extends {
+    done?: boolean;
+    focus?: string | null;
+    starred?: boolean;
+    dueAt?: string | null;
+    due?: Date;
+  },
+>(list: T[]): T[] {
+  return [...list].sort((a, b) => {
+    if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+    const byFocus = focusRank(b.focus) - focusRank(a.focus);
+    if (byFocus !== 0) return byFocus;
+    if (!!a.starred !== !!b.starred) return a.starred ? -1 : 1;
+    const ta = a.due ? a.due.getTime() : a.dueAt ? new Date(a.dueAt).getTime() : 0;
+    const tb = b.due ? b.due.getTime() : b.dueAt ? new Date(b.dueAt).getTime() : 0;
+    return ta - tb;
+  });
 }

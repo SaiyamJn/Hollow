@@ -199,12 +199,19 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   position: relative;
   border-radius: 0.4rem;
   border: 1px solid transparent;
-  box-shadow: inset 3px 0 0 0 var(--pill-accent, transparent);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  /* Accent rail via padding + border so text never sits under the stripe. */
+  border-left-width: 3px;
+  border-left-color: var(--pill-accent, transparent);
+  padding-left: 0.35rem;
+  padding-right: 0.4rem;
+  box-shadow: none;
+  transition: filter 0.12s ease;
+  overflow: visible;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .focus-pill:hover {
   filter: brightness(1.04);
-  transform: translateY(-0.5px);
 }
 .focus-pill-critical {
   --pill-accent: var(--focus-critical);
@@ -308,12 +315,13 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   align-items: center;
   gap: 0.25rem;
   border-radius: 999px;
-  padding: 0.1rem 0.5rem;
+  padding: 0.15rem 0.55rem;
   font-size: 0.625rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   border: 1px solid transparent;
   white-space: nowrap;
+  max-width: 100%;
 }
 .status-chip-accent {
   color: var(--accent);
@@ -471,7 +479,7 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-right: 1px;
+  padding-right: 2px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--border) 80%, transparent) transparent;
 }
@@ -486,6 +494,15 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   flex-shrink: 0;
 }
 .cal-day-tasks .focus-pill:hover {
-  transform: none;
   filter: brightness(1.06);
+}
+.cal-pill-time {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+  padding-left: 0.15rem;
 }

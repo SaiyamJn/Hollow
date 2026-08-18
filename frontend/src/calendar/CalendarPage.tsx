@@ -15,6 +15,7 @@ import {
   FOCUS_DOT,
   FOCUS_SOFT_BG,
   FOCUS_TEXT,
+  focusRank,
   formatTaskTime,
   normalizeFocus,
   type TaskFocus,
@@ -103,7 +104,6 @@ export default function CalendarPage() {
     [dated, rangeStart, rangeEnd]
   );
   const byDay = useMemo(() => groupByDay(expandedTasks), [expandedTasks]);
-  const dayTasks = tasksOnDay(byDay, selected);
   const cells = useMemo(() => monthGrid(cursor), [cursor]);
 
   const weekStrip = useMemo(() => weekDays(selected), [selected]);
@@ -230,6 +230,18 @@ export default function CalendarPage() {
         ? selected.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
         : formatMonthTitle(cursor);
 
+  function sortDayTasks(list: CalendarTask[]) {
+    return [...list].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      const byFocus = focusRank(b.focus) - focusRank(a.focus);
+      if (byFocus !== 0) return byFocus;
+      if (!!a.starred !== !!b.starred) return a.starred ? -1 : 1;
+      return a.due.getTime() - b.due.getTime();
+    });
+  }
+
+  const dayTasks = sortDayTasks(tasksOnDay(byDay, selected));
+
   function renderMonthCell(day: Date) {
     const key = dayKey(day);
     const inMonth = day.getMonth() === cursor.getMonth();
@@ -237,13 +249,25 @@ export default function CalendarPage() {
     const isSelected = sameDay(day, selected);
     const isPast = day < today;
     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-    const open = tasksOnDay(byDay, day).filter((t) => !t.done);
+    const dayList = sortDayTasks(tasksOnDay(byDay, day));
     const isDrop = dropKey === key;
 
     return (
       <div
         key={key}
-        onClick={() => selectDay(day)}
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          selectDay(day);
+          openCreate(day);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            selectDay(day);
+            openCreate(day);
+          }
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDropKey(key);
@@ -251,7 +275,7 @@ export default function CalendarPage() {
         onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
         onDrop={(e) => onDropDay(e, day)}
         className={clsx(
-          "cal-day-cell group",
+          "cal-day-cell group cursor-pointer",
           isWeekend && inMonth && "weekend",
           isPast && inMonth && "past",
           !inMonth && "out-month",
@@ -259,8 +283,9 @@ export default function CalendarPage() {
           isSelected && inMonth && !isToday && "selected",
           isDrop && "drop"
         )}
+        title="Click to add a task"
       >
-        <div className="flex items-center justify-between gap-1 px-0.5 shrink-0">
+        <div className="flex items-center justify-between gap-1 px-0.5 shrink-0 pointer-events-none">
           <span
             className={clsx(
               "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-medium transition-colors",
@@ -272,20 +297,9 @@ export default function CalendarPage() {
           >
             {day.getDate()}
           </span>
-          <button
-            type="button"
-            className="opacity-0 group-hover:opacity-100 p-0.5 rounded-md text-secondary hover:text-accent hover:bg-accent-soft transition-all"
-            onClick={(e) => {
-              e.stopPropagation();
-              openCreate(day);
-            }}
-            title="Add task"
-          >
-            <Plus size={13} />
-          </button>
         </div>
         <div className="cal-day-tasks" onWheel={(e) => e.stopPropagation()}>
-          {open.map((t) => {
+          {dayList.map((t) => {
             const focus = normalizeFocus(t.focus);
             const time = formatTaskTime(t.dueAt);
             return (
@@ -297,9 +311,10 @@ export default function CalendarPage() {
                   onDragStart(e, t);
                 }}
                 className={clsx(
-                  "focus-pill w-full flex items-center gap-1 px-1.5 py-[3px] text-left",
+                  "focus-pill w-full flex items-center gap-1 py-[3px] text-left",
                   FOCUS_SOFT_BG[focus],
-                  t.virtual && "opacity-55"
+                  t.virtual && "opacity-55",
+                  t.done && "opacity-55"
                 )}
               >
                 <button
@@ -316,19 +331,22 @@ export default function CalendarPage() {
                 />
                 <button
                   type="button"
-                  className="flex-1 min-w-0 text-left flex items-center gap-1 pl-0.5"
+                  className="flex-1 min-w-0 text-left flex items-center gap-1 overflow-hidden"
                   onClick={(e) => {
                     e.stopPropagation();
                     beginEdit(t);
                   }}
                 >
-                  <span className="flex-1 min-w-0 text-[11px] text-primary truncate leading-tight font-medium">
+                  <span
+                    className={clsx(
+                      "min-w-0 flex-1 text-[11px] text-primary truncate leading-tight font-medium pr-0.5",
+                      t.done && "line-through text-secondary"
+                    )}
+                  >
                     {t.title}
                   </span>
                   {time && (
-                    <span className={clsx("text-[10px] shrink-0 tabular-nums font-medium", FOCUS_TEXT[focus])}>
-                      {time}
-                    </span>
+                    <span className={clsx("cal-pill-time", FOCUS_TEXT[focus])}>{time}</span>
                   )}
                 </button>
               </div>
@@ -344,7 +362,7 @@ export default function CalendarPage() {
     const inMonth = day.getMonth() === cursor.getMonth();
     const isToday = sameDay(day, today);
     const isSelected = sameDay(day, selected);
-    const open = tasksOnDay(byDay, day).filter((t) => !t.done);
+    const open = sortDayTasks(tasksOnDay(byDay, day)).filter((t) => !t.done);
     const isDrop = dropKey === key;
     return (
       <button
@@ -398,7 +416,15 @@ export default function CalendarPage() {
     >
       <div className="flex items-center gap-1 mb-2 shrink-0">
         {view !== "agenda" && (
-          <button type="button" onClick={() => (view === "day" ? selectDay(addDays(selected, -1)) : shiftMonth(-1))} className="p-1.5 rounded-lg hover:bg-surface-2 text-primary">
+          <button
+            type="button"
+            onClick={() => {
+              if (view === "day") selectDay(addDays(selected, -1));
+              else if (view === "week") selectDay(addDays(selected, -7));
+              else shiftMonth(-1);
+            }}
+            className="p-1.5 rounded-lg hover:bg-surface-2 text-primary"
+          >
             <ChevronLeft size={20} />
           </button>
         )}
@@ -406,7 +432,15 @@ export default function CalendarPage() {
           {headerTitle}
         </button>
         {view !== "agenda" && (
-          <button type="button" onClick={() => (view === "day" ? selectDay(addDays(selected, 1)) : shiftMonth(1))} className="p-1.5 rounded-lg hover:bg-surface-2 text-primary">
+          <button
+            type="button"
+            onClick={() => {
+              if (view === "day") selectDay(addDays(selected, 1));
+              else if (view === "week") selectDay(addDays(selected, 7));
+              else shiftMonth(1);
+            }}
+            className="p-1.5 rounded-lg hover:bg-surface-2 text-primary"
+          >
             <ChevronRight size={20} />
           </button>
         )}
@@ -579,7 +613,7 @@ export default function CalendarPage() {
       ) : view === "week" ? (
         <div className="space-y-2">
           {weekDays(selected).map((day) => {
-            const list = tasksOnDay(byDay, day);
+            const list = sortDayTasks(tasksOnDay(byDay, day));
             const isSel = sameDay(day, selected);
             const isToday = sameDay(day, today);
             return (
@@ -619,7 +653,7 @@ export default function CalendarPage() {
                               key={t.id}
                               className={clsx(
                                 "h-1 w-2.5 rounded-full",
-                                t.starred ? "bg-accent" : "bg-secondary/70",
+                                FOCUS_DOT[normalizeFocus(t.focus)],
                                 t.virtual && "opacity-40"
                               )}
                             />
@@ -641,7 +675,7 @@ export default function CalendarPage() {
                 {list.map((t) => (
                   <div
                     key={t.id}
-                    draggable
+                    draggable={!t.virtual}
                     onDragStart={(e) => onDragStart(e, t)}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -688,7 +722,7 @@ export default function CalendarPage() {
             .filter((k) => parseDayKey(k) >= addDays(today, -7))
             .map((key) => {
               const day = parseDayKey(key);
-              const list = byDay.get(key) ?? [];
+              const list = sortDayTasks(byDay.get(key) ?? []);
               return (
                 <section key={key}>
                   <button

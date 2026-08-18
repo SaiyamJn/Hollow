@@ -89,13 +89,13 @@ export function formatRepeatLabel(
   return core;
 }
 
-export function addDays(d: Date, n: number): Date {
+function addDays(d: Date, n: number): Date {
   const next = new Date(d);
   next.setDate(next.getDate() + n);
   return next;
 }
 
-export function startOfDay(d: Date): Date {
+function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 

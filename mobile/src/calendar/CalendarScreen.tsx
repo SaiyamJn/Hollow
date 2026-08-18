@@ -35,6 +35,7 @@ import { datedTasks, expandForRange, groupByDay, tasksOnDay, type CalendarTask }
 import { CollapsibleMonth, ensureSelectedInMonth } from "./CollapsibleMonth";
 import EmptyState from "../components/EmptyState";
 import { animatePanel } from "../lib/motion";
+import { focusColor, focusWash, normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
 
 type EditDraft = TaskDraft & { id: string };
 type CalView = "schedule" | "week" | "day" | "agenda";
@@ -86,7 +87,10 @@ export default function CalendarScreen() {
     [dated, rangeStart, rangeEnd]
   );
   const byDay = useMemo(() => groupByDay(expandedTasks), [expandedTasks]);
-  const dayTasks = tasksOnDay(byDay, selected);
+  const dayTasks = useMemo(
+    () => sortByFocusPriority(tasksOnDay(byDay, selected)),
+    [byDay, selected]
+  );
 
   function setCalendarExpanded(next: boolean) {
     if (next === expanded) return;
@@ -264,7 +268,15 @@ export default function CalendarScreen() {
       <View style={[styles.header, { paddingHorizontal: screenPad, borderBottomColor: colors.border }]}>
         <View style={styles.headerRow}>
           {view !== "agenda" && (
-            <Pressable onPress={() => (view === "schedule" || view === "week" ? shiftMonth(-1) : selectDay(addDays(selected, -1)))} hitSlop={10} style={styles.navBtn}>
+            <Pressable
+              onPress={() => {
+                if (view === "schedule") shiftMonth(-1);
+                else if (view === "week") selectDay(addDays(selected, -7));
+                else selectDay(addDays(selected, -1));
+              }}
+              hitSlop={10}
+              style={styles.navBtn}
+            >
               <Feather name="chevron-left" size={22} color={colors.textPrimary} />
             </Pressable>
           )}
@@ -274,7 +286,15 @@ export default function CalendarScreen() {
             </Text>
           </Pressable>
           {view !== "agenda" && (
-            <Pressable onPress={() => (view === "schedule" || view === "week" ? shiftMonth(1) : selectDay(addDays(selected, 1)))} hitSlop={10} style={styles.navBtn}>
+            <Pressable
+              onPress={() => {
+                if (view === "schedule") shiftMonth(1);
+                else if (view === "week") selectDay(addDays(selected, 7));
+                else selectDay(addDays(selected, 1));
+              }}
+              hitSlop={10}
+              style={styles.navBtn}
+            >
               <Feather name="chevron-right" size={22} color={colors.textPrimary} />
             </Pressable>
           )}
@@ -304,21 +324,23 @@ export default function CalendarScreen() {
                   expanded={expanded}
                   onExpandedChange={setCalendarExpanded}
                   onSelectDay={selectDay}
+                  onCreateDay={openCreate}
                   onSwipeMonth={shiftMonth}
                 />
               </Animated.View>
 
-              <View style={[styles.dayBanner, { borderBottomColor: colors.border, paddingHorizontal: screenPad }]}>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600", flex: 1 }}>
+              <Pressable
+                onPress={() => openCreate(selected)}
+                style={[styles.dayBanner, { borderBottomColor: colors.border, paddingHorizontal: screenPad }]}
+              >
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600", flex: 1, paddingRight: 8 }}>
                   {sameDay(selected, today) ? "Today" : formatDayHeading(selected)}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginRight: 4 }}>
                   {dayTasks.filter((t) => !t.done).length} open
                 </Text>
-                <Pressable onPress={() => openCreate(selected)} hitSlop={8} style={{ marginLeft: 12 }}>
-                  <Feather name="plus" size={20} color={colors.accent} />
-                </Pressable>
-              </View>
+                <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "600" }}>Add</Text>
+              </Pressable>
 
               <FlatList
                 data={dayTasks}
@@ -400,17 +422,21 @@ export default function CalendarScreen() {
               keyExtractor={(d) => dayKey(d)}
               contentContainerStyle={{ paddingHorizontal: screenPad, paddingBottom: listBottomClearance(false) + 24 }}
               renderItem={({ item: day }) => {
-                const list = tasksOnDay(byDay, day);
+                const list = sortByFocusPriority(tasksOnDay(byDay, day));
                 const isSel = sameDay(day, selected);
                 const isToday = sameDay(day, today);
+                const isPast = day < today;
                 return (
                   <Pressable
                     onPress={() => selectDay(day)}
+                    onLongPress={() => openCreate(day)}
+                    delayLongPress={320}
                     style={[
                       styles.weekBlock,
                       {
                         borderColor: isSel ? colors.accent : colors.glassBorder,
                         backgroundColor: isSel ? colors.accentSoft : colors.glass,
+                        opacity: isPast && !isSel ? 0.55 : 1,
                       },
                     ]}
                   >
@@ -434,30 +460,47 @@ export default function CalendarScreen() {
                           {day.getDate()}
                         </Text>
                       </View>
-                      <Pressable onPress={() => openCreate(day)} hitSlop={6}>
-                        <Feather name="plus" size={16} color={colors.accent} />
-                      </Pressable>
                     </View>
                     {list.length === 0 ? (
-                      <Text style={{ color: colors.textSecondary, fontSize: 12, paddingVertical: 6 }}>—</Text>
+                      <Pressable onPress={() => openCreate(day)}>
+                        <Text style={{ color: colors.accent, fontSize: 12, paddingVertical: 6, fontWeight: "600" }}>
+                          Add task
+                        </Text>
+                      </Pressable>
                     ) : (
-                      list.map((t) => (
-                        <Pressable key={t.id} onPress={() => openEdit(t)} style={styles.weekChip}>
-                          <View style={[styles.chipDot, { backgroundColor: t.done ? colors.border : colors.accent }]} />
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: colors.textPrimary,
-                              fontSize: 13,
-                              flex: 1,
-                              textDecorationLine: t.done ? "line-through" : "none",
-                              opacity: t.done ? 0.5 : 1,
-                            }}
-                          >
-                            {t.title}
-                          </Text>
-                        </Pressable>
-                      ))
+                      list.map((t) => {
+                        const focus = normalizeFocus(t.focus);
+                        const tint =
+                          focusColor(focus, {
+                            accent: colors.accent,
+                            danger: colors.danger,
+                            textSecondary: colors.textSecondary,
+                            warn: colors.warn,
+                          }) || colors.accent;
+                        return (
+                          <Pressable key={t.id} onPress={() => openEdit(t)} style={styles.weekChip}>
+                            <View
+                              style={[
+                                styles.chipDot,
+                                { backgroundColor: t.done ? colors.border : tint },
+                              ]}
+                            />
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                color: colors.textPrimary,
+                                fontSize: 13,
+                                flex: 1,
+                                paddingRight: 4,
+                                textDecorationLine: t.done ? "line-through" : "none",
+                                opacity: t.done ? 0.5 : 1,
+                              }}
+                            >
+                              {t.title}
+                            </Text>
+                          </Pressable>
+                        );
+                      })
                     )}
                   </Pressable>
                 );
@@ -476,17 +519,22 @@ export default function CalendarScreen() {
                 flexGrow: 1,
               }}
               ListHeaderComponent={
-                <View style={{ marginBottom: 12, flexDirection: "row", alignItems: "center" }}>
-                  <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600", flex: 1 }}>
+                <Pressable
+                  onPress={() => openCreate(selected)}
+                  style={{ marginBottom: 12, flexDirection: "row", alignItems: "center" }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600", flex: 1, paddingRight: 8 }}>
                     {formatDayHeading(selected)}
                   </Text>
-                  <Pressable onPress={() => openCreate(selected)} hitSlop={8}>
-                    <Feather name="plus-circle" size={22} color={colors.accent} />
-                  </Pressable>
-                </View>
+                  <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "600" }}>Add</Text>
+                </Pressable>
               }
               ListEmptyComponent={
-                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Nothing scheduled.</Text>
+                <Pressable onPress={() => openCreate(selected)}>
+                  <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>
+                    Nothing scheduled — tap to add
+                  </Text>
+                </Pressable>
               }
               renderItem={({ item }) => (
                 <TaskRow
@@ -516,7 +564,7 @@ export default function CalendarScreen() {
               renderItem={({ item: key }) => {
                 const [y, m, d] = key.split("-").map(Number);
                 const day = new Date(y, m - 1, d);
-                const list = byDay.get(key) ?? [];
+                const list = sortByFocusPriority(byDay.get(key) ?? []);
                 const isToday = sameDay(day, today);
                 return (
                   <View style={{ marginBottom: 16 }}>
@@ -643,6 +691,15 @@ function TaskRow({
   onReschedule?: (dir: -1 | 1) => void;
 }) {
   const time = formatTime(task.due);
+  const focus = normalizeFocus(task.focus);
+  const tint =
+    focusColor(focus, {
+      accent: colors.accent,
+      danger: colors.danger,
+      textSecondary: colors.textSecondary,
+      warn: colors.warn,
+    }) || colors.border;
+  const wash = focusWash(focus, colors.accent);
   return (
     <Pressable
       onPress={onPress}
@@ -650,8 +707,10 @@ function TaskRow({
       style={[
         styles.taskRow,
         {
-          backgroundColor: colors.glass,
+          backgroundColor: wash !== "transparent" ? wash : colors.glass,
           borderColor: colors.glassBorder,
+          borderLeftWidth: 3,
+          borderLeftColor: tint,
         },
       ]}
     >
@@ -668,20 +727,23 @@ function TaskRow({
       >
         {task.done && <Feather name="check" size={12} color={colors.surface0} />}
       </Pressable>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
         <Text
           numberOfLines={2}
           style={{
             color: colors.textPrimary,
             fontSize: 15,
+            fontWeight: "500",
             textDecorationLine: task.done ? "line-through" : "none",
             opacity: task.done ? 0.55 : 1,
           }}
         >
           {task.title}
         </Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
-          {!!time && <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{time}</Text>}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+          {!!time && (
+            <Text style={{ color: tint, fontSize: 12, fontWeight: "600" }}>{time}</Text>
+          )}
           {!!task.repeatRule && (
             <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
               {formatRepeatLabel({

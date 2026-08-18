@@ -19,6 +19,7 @@ import {
 } from "./dateUtils";
 import type { CalendarTask } from "./taskIndex";
 import { tasksOnDay } from "./taskIndex";
+import { focusColor, normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
 
 const ROW_H = 52;
 const WEEKDAY_H = 28;
@@ -34,6 +35,8 @@ type Props = {
   expanded: boolean;
   onExpandedChange: (next: boolean) => void;
   onSelectDay: (d: Date) => void;
+  /** Long-press a day to create (mirrors desktop click-to-add). */
+  onCreateDay?: (d: Date) => void;
   onSwipeMonth?: (dir: -1 | 1) => void;
 };
 
@@ -47,10 +50,10 @@ export function CollapsibleMonth({
   expanded,
   onExpandedChange,
   onSelectDay,
+  onCreateDay,
   onSwipeMonth,
 }: Props) {
   const heightAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
-  const dragY = useRef(0);
 
   const cells = useMemo(() => monthGrid(anchor), [anchor]);
   const weekStrip = useMemo(() => {
@@ -83,20 +86,20 @@ export function CollapsibleMonth({
     outputRange: ["0deg", "180deg"],
   });
 
+  // Keep latest callbacks for a stable PanResponder (avoids stale closures).
+  const onExpandedChangeRef = useRef(onExpandedChange);
+  const onSwipeMonthRef = useRef(onSwipeMonth);
+  onExpandedChangeRef.current = onExpandedChange;
+  onSwipeMonthRef.current = onSwipeMonth;
+
   const pan = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2,
-      onPanResponderGrant: () => {
-        dragY.current = 0;
-      },
-      onPanResponderMove: (_, g) => {
-        dragY.current = g.dy;
-      },
       onPanResponderRelease: (_, g) => {
-        if (g.dy < -28 || g.vy < -0.4) onExpandedChange(false);
-        else if (g.dy > 28 || g.vy > 0.4) onExpandedChange(true);
+        if (g.dy < -28 || g.vy < -0.4) onExpandedChangeRef.current(false);
+        else if (g.dy > 28 || g.vy > 0.4) onExpandedChangeRef.current(true);
         if (Math.abs(g.dx) > 48 && Math.abs(g.dx) > Math.abs(g.dy)) {
-          onSwipeMonth?.(g.dx < 0 ? 1 : -1);
+          onSwipeMonthRef.current?.(g.dx < 0 ? 1 : -1);
         }
       },
     })
@@ -107,10 +110,10 @@ export function CollapsibleMonth({
     const isToday = sameDay(day, today);
     const isSelected = sameDay(day, selected);
     const isPast = day < today;
-    const open = tasksOnDay(byDay, day).filter((t) => !t.done);
-    const bars = open.slice(0, 3);
+    const dayList = sortByFocusPriority(tasksOnDay(byDay, day));
+    // Indicator bars: open tasks first (completed still appear in the day list)
+    const bars = dayList.filter((t) => !t.done).slice(0, 3);
 
-    // High-contrast fill + ink so the selected day never "vanishes" into the page bg.
     const bubbleBg = isSelected ? colors.accent : "transparent";
     const bubbleBorderW = !isSelected && isToday ? 1.5 : 0;
     const bubbleBorderC = colors.accent;
@@ -124,6 +127,8 @@ export function CollapsibleMonth({
       <Pressable
         key={dayKey(day)}
         onPress={() => onSelectDay(day)}
+        onLongPress={() => onCreateDay?.(day)}
+        delayLongPress={320}
         style={[styles.cell, isPast && inMonth && !isSelected && { opacity: 0.4 }]}
         hitSlop={4}
       >
@@ -149,18 +154,28 @@ export function CollapsibleMonth({
           </Text>
         </View>
         <View style={styles.bars}>
-          {bars.map((t) => (
-            <View
-              key={t.id}
-              style={[
-                styles.bar,
-                {
-                  backgroundColor: t.starred ? colors.accent : colors.textSecondary,
-                  opacity: t.virtual ? 0.35 : t.starred ? 0.95 : 0.55,
-                },
-              ]}
-            />
-          ))}
+          {bars.map((t) => {
+            const focus = normalizeFocus(t.focus);
+            const c =
+              focusColor(focus, {
+                accent: colors.accent,
+                danger: colors.danger,
+                textSecondary: colors.textSecondary,
+                warn: colors.warn,
+              }) || colors.textSecondary;
+            return (
+              <View
+                key={t.id}
+                style={[
+                  styles.bar,
+                  {
+                    backgroundColor: t.starred ? colors.accent : c,
+                    opacity: t.virtual ? 0.4 : 0.9,
+                  },
+                ]}
+              />
+            );
+          })}
         </View>
       </Pressable>
     );
@@ -170,16 +185,18 @@ export function CollapsibleMonth({
     <View style={styles.wrap}>
       <View style={styles.weekHead}>
         {weekLabels.map((label, i) => (
-          <Text key={i} style={[styles.weekHeadText, { color: colors.textSecondary }]}>
+          <Text
+            key={i}
+            style={[
+              styles.weekHeadText,
+              { color: i === 0 || i === 6 ? colors.accent : colors.textSecondary },
+            ]}
+          >
             {label}
           </Text>
         ))}
       </View>
 
-      {/*
-        Collapsed: render only the selected week (no translate clipping).
-        Expanded: full month grid. Height still springs between 1 and 6 rows.
-      */}
       <Animated.View style={[styles.clip, { height }]} {...pan.panHandlers}>
         {expanded ? (
           Array.from({ length: ROWS }, (_, row) => (
@@ -197,9 +214,9 @@ export function CollapsibleMonth({
         hitSlop={10}
         style={styles.handle}
         accessibilityRole="button"
-        accessibilityLabel={expanded ? "Collapse calendar" : "Expand calendar"}
+        accessibilityLabel={expanded ? "Collapse month" : "Expand month"}
       >
-        <View style={[styles.handlePill, { backgroundColor: colors.border }]} />
+        <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
         <Animated.View style={{ transform: [{ rotate: handleRot }] }}>
           <Feather name="chevron-down" size={16} color={colors.textSecondary} />
         </Animated.View>
@@ -219,7 +236,7 @@ export function ensureSelectedInMonth(selected: Date, monthAnchor: Date): Date {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: 2 },
+  wrap: { width: "100%" },
   weekHead: {
     height: WEEKDAY_H,
     flexDirection: "row",
@@ -230,39 +247,30 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 11,
     fontWeight: "600",
-    letterSpacing: 0.3,
   },
-  clip: {
-    overflow: "hidden",
-  },
-  row: {
-    height: ROW_H,
-    flexDirection: "row",
-  },
+  clip: { overflow: "hidden" },
+  row: { height: ROW_H, flexDirection: "row" },
   cell: {
     flex: 1,
     alignItems: "center",
     paddingTop: 2,
   },
   dayBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   bars: {
     marginTop: 2,
     width: "70%",
-    maxHeight: 12,
     gap: 2,
-    alignItems: "center",
-    overflow: "hidden",
+    alignItems: "stretch",
   },
   bar: {
-    width: "100%",
     height: 3,
-    borderRadius: 999,
+    borderRadius: 2,
   },
   handle: {
     height: HANDLE_H,
@@ -270,10 +278,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 2,
   },
-  handlePill: {
+  handleBar: {
     width: 36,
-    height: 4,
-    borderRadius: 999,
-    opacity: 0.7,
+    height: 3,
+    borderRadius: 2,
   },
 });

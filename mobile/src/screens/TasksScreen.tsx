@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
+  Modal,
   Pressable,
   SectionList,
   StyleSheet,
@@ -97,6 +97,7 @@ export default function TasksScreen() {
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
   const [showCompleted, setShowCompleted] = useState(false);
   const [layout, setLayout] = useState<TasksLayout>("list");
+  const [reclassTask, setReclassTask] = useState<Task | null>(null);
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
@@ -222,18 +223,13 @@ export default function TasksScreen() {
   }
 
   function openReclass(task: Task) {
-    const options = [
-      ...FOCUS_MATRIX.map((id) => ({
-        text: `${FOCUS_META[id].label} — ${FOCUS_META[id].hint}`,
-        onPress: () => update.mutate({ id: task.id, patch: { focus: id } }),
-      })),
-      {
-        text: "Clear focus",
-        onPress: () => update.mutate({ id: task.id, patch: { focus: "none" } }),
-      },
-      { text: "Cancel", style: "cancel" as const },
-    ];
-    Alert.alert("Move focus", task.title, options);
+    setReclassTask(task);
+  }
+
+  function applyReclass(focus: TaskFocus) {
+    if (!reclassTask) return;
+    update.mutate({ id: reclassTask.id, patch: { focus } });
+    setReclassTask(null);
   }
 
   const groupColor = (name: string) =>
@@ -250,6 +246,7 @@ export default function TasksScreen() {
     s.setDate(s.getDate() + 1);
     return s;
   })();
+  const boardTasks = (tasks ?? []).filter((t) => !isDeferredRepeat(t, endOfTodayForCount));
   const openCount = (tasks ?? []).filter((t) => !t.done && !isDeferredRepeat(t, endOfTodayForCount)).length;
   const completedCount = (tasks ?? []).filter((t) => t.done).length;
   const allDone = (tasks?.length ?? 0) > 0 && openCount === 0;
@@ -298,10 +295,13 @@ export default function TasksScreen() {
                 );
               })}
             </View>
-            <GlassCard style={{ alignSelf: "stretch" }} contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}>
+            <GlassCard
+              style={{ alignSelf: layout === "list" ? "stretch" : "center", width: layout === "list" ? "100%" : "92%" }}
+              contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}
+            >
               <TextInput
                 ref={quickAddRef}
-                style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "left" }]}
+                style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "center" }]}
                 placeholder={isNarrow ? "What's next?" : "What's next? Hit return"}
                 placeholderTextColor={colors.textSecondary}
                 value={quickAdd}
@@ -315,7 +315,7 @@ export default function TasksScreen() {
               <View style={{ marginTop: 14 }}>
                 {layout === "matrix" ? (
                   <EisenhowerBoardMobile
-                    tasks={tasks}
+                    tasks={boardTasks}
                     colors={colors}
                     onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
                     onEdit={openEdit}
@@ -323,7 +323,7 @@ export default function TasksScreen() {
                   />
                 ) : (
                   <KanbanBoardMobile
-                    tasks={tasks}
+                    tasks={boardTasks}
                     colors={colors}
                     onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
                     onEdit={openEdit}
@@ -411,7 +411,7 @@ export default function TasksScreen() {
                     <Text
                       style={[
                         styles.taskTitle,
-                        { color: task.done ? colors.textSecondary : colors.textPrimary, flex: 1 },
+                        { color: task.done ? colors.textSecondary : colors.textPrimary, flex: 1, paddingRight: 4 },
                         task.done && styles.strike,
                       ]}
                       numberOfLines={1}
@@ -573,6 +573,57 @@ export default function TasksScreen() {
           });
         }}
       />
+
+      <Modal
+        visible={reclassTask !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReclassTask(null)}
+      >
+        <Pressable style={styles.reclassBackdrop} onPress={() => setReclassTask(null)}>
+          <Pressable
+            style={[styles.reclassSheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }}>
+              Move focus
+            </Text>
+            {!!reclassTask && (
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}
+                numberOfLines={2}
+              >
+                {reclassTask.title}
+              </Text>
+            )}
+            {FOCUS_MATRIX.map((id) => (
+              <Pressable
+                key={id}
+                onPress={() => applyReclass(id)}
+                style={[styles.reclassRow, { borderColor: colors.border }]}
+              >
+                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600" }}>
+                  {FOCUS_META[id].label}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  {FOCUS_META[id].hint}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable
+              onPress={() => applyReclass("none")}
+              style={[styles.reclassRow, { borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 15, fontWeight: "600" }}>Clear focus</Text>
+            </Pressable>
+            <Pressable onPress={() => setReclassTask(null)} style={{ paddingVertical: 14 }}>
+              <Text style={{ color: colors.accent, fontSize: 15, fontWeight: "700", textAlign: "center" }}>
+                Cancel
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardSafe>
   );
 }
@@ -616,4 +667,24 @@ const styles = StyleSheet.create({
   taskTitle: { fontSize: 14, minWidth: 0 },
   strike: { textDecorationLine: "line-through" },
   subtasks: { marginLeft: 16, paddingBottom: 6 },
+  reclassBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  reclassSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 28,
+  },
+  reclassRow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
 });

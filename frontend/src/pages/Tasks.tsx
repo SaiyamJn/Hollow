@@ -1,4 +1,4 @@
-import { KeyboardEvent, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
@@ -103,6 +103,18 @@ export default function Tasks() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [layout, setLayout] = useState<TasksLayout>("list");
+
+  /** Board fills the viewport — lock shell scroll so only columns scroll. */
+  useEffect(() => {
+    if (layout !== "kanban") return;
+    const main = document.querySelector("main");
+    if (!(main instanceof HTMLElement)) return;
+    const prev = main.style.overflowY;
+    main.style.overflowY = "hidden";
+    return () => {
+      main.style.overflowY = prev;
+    };
+  }, [layout]);
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -214,9 +226,22 @@ export default function Tasks() {
 
   const openGroups = groupOpenTasks(tasks ?? []);
   const completed = (tasks ?? []).filter((t) => t.done);
+  const boardTasks = useMemo(() => {
+    const endOfToday = new Date();
+    endOfToday.setHours(0, 0, 0, 0);
+    endOfToday.setDate(endOfToday.getDate() + 1);
+    return (tasks ?? []).filter((t) => !isDeferredRepeat(t, endOfToday));
+  }, [tasks]);
 
   return (
-    <div className={clsx("mx-auto px-7 py-10", layout === "list" ? "max-w-2xl" : "max-w-5xl")}>
+    <div
+      className={clsx(
+        "mx-auto",
+        layout === "kanban" ? "px-5 py-5 max-w-[1280px]" : "px-7 py-10",
+        layout === "list" && "max-w-2xl",
+        layout === "matrix" && "max-w-5xl"
+      )}
+    >
       <div className="text-center mb-4">
         <h1 className="text-xl font-medium">Tasks</h1>
         <p className="text-sm text-secondary mt-1">
@@ -242,13 +267,20 @@ export default function Tasks() {
         ))}
       </div>
 
-      <Input
-        placeholder="What's next? Press Enter"
-        value={quickAdd}
-        onChange={(e) => setQuickAdd(e.target.value)}
-        onKeyDown={onQuickAdd}
-        className="mb-6 text-center max-w-2xl mx-auto"
-      />
+      <div
+        className={clsx(
+          "mb-6 mx-auto w-full",
+          layout === "list" ? "max-w-2xl" : "max-w-xl"
+        )}
+      >
+        <Input
+          placeholder="What's next? Press Enter"
+          value={quickAdd}
+          onChange={(e) => setQuickAdd(e.target.value)}
+          onKeyDown={onQuickAdd}
+          className="text-center"
+        />
+      </div>
 
       {tasks && tasks.length === 0 && (
         <EmptyState
@@ -261,7 +293,7 @@ export default function Tasks() {
 
       {layout === "matrix" && tasks && (
         <EisenhowerBoard
-          tasks={tasks}
+          tasks={boardTasks}
           onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
           onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
           onEdit={(task) => {
@@ -285,7 +317,7 @@ export default function Tasks() {
 
       {layout === "kanban" && tasks && (
         <KanbanBoard
-          tasks={tasks}
+          tasks={boardTasks}
           onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
           onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
           onEdit={(task) => {
@@ -596,7 +628,7 @@ function TaskRow({
             <FocusDot focus={task.focus} />
             <span
               className={clsx(
-                "block text-sm truncate transition-all duration-300 font-medium",
+                "block text-sm truncate transition-all duration-300 font-medium pr-1",
                 task.done && "line-through text-secondary opacity-70"
               )}
             >

@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useWindowDimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { Task } from "../lib/types";
 import type { ThemeColors } from "../theme";
@@ -9,6 +9,7 @@ import {
   focusColor,
   focusWash,
   normalizeFocus,
+  sortByFocusPriority,
   type TaskFocus,
 } from "../lib/taskFocus";
 import { formatDueLabel } from "./GlassDateTimePicker";
@@ -56,7 +57,7 @@ function BoardCard({
           color={task.done ? colors.accent : colors.textSecondary}
         />
       </Pressable>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flex: 1, minWidth: 0, paddingRight: 2 }}>
         <Text
           style={{
             color: task.done ? colors.textSecondary : colors.textPrimary,
@@ -64,7 +65,7 @@ function BoardCard({
             fontWeight: "600",
             textDecorationLine: task.done ? "line-through" : "none",
           }}
-          numberOfLines={2}
+          numberOfLines={3}
         >
           {task.title}
         </Text>
@@ -74,7 +75,7 @@ function BoardCard({
               color: accent || colors.textSecondary,
               fontSize: 11,
               marginTop: 3,
-              fontWeight: "500",
+              fontWeight: "600",
             }}
             numberOfLines={1}
           >
@@ -112,21 +113,21 @@ function ColumnHeader({
         },
       ]}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flex: 1 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flex: 1, minWidth: 0 }}>
         <View style={[styles.dot, { backgroundColor: c || colors.textSecondary }]} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: c || colors.textPrimary, fontSize: 14, fontWeight: "700" }}>
+          <Text
+            style={{ color: c || colors.textPrimary, fontSize: 14, fontWeight: "700", paddingRight: 4 }}
+            numberOfLines={1}
+          >
             {meta.label}
           </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 10, marginTop: 2 }}>{meta.hint}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 10, marginTop: 2 }} numberOfLines={2}>
+            {meta.hint}
+          </Text>
         </View>
       </View>
-      <View
-        style={[
-          styles.badge,
-          { backgroundColor: c ? `${c}22` : colors.surface2 },
-        ]}
-      >
+      <View style={[styles.badge, { backgroundColor: c ? `${c}22` : colors.surface2 }]}>
         <Text style={{ color: c || colors.textSecondary, fontSize: 11, fontWeight: "700" }}>{count}</Text>
       </View>
     </View>
@@ -185,7 +186,7 @@ export function EisenhowerBoardMobile({
   onEdit: (t: Task) => void;
   onReclass: (t: Task) => void;
 }) {
-  const open = tasks.filter((t) => !t.done);
+  const open = sortByFocusPriority(tasks.filter((t) => !t.done));
   const by = (f: TaskFocus) => open.filter((t) => normalizeFocus(t.focus) === f);
 
   return (
@@ -199,7 +200,7 @@ export function EisenhowerBoardMobile({
           return (
             <PaneShell key={id} focus={id} colors={colors} style={styles.quad}>
               <ColumnHeader focus={id} count={list.length} colors={colors} />
-              <ScrollView style={{ maxHeight: 190 }} nestedScrollEnabled>
+              <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
                 <View style={{ padding: 8, gap: 7 }}>
                   {list.length === 0 ? (
                     <Text
@@ -253,7 +254,7 @@ export function EisenhowerBoardMobile({
   );
 }
 
-/** Mobile Kanban — swipeable columns. */
+/** Mobile Kanban — wider columns that use the screen. */
 export function KanbanBoardMobile({
   tasks,
   colors,
@@ -267,8 +268,11 @@ export function KanbanBoardMobile({
   onEdit: (t: Task) => void;
   onReclass: (t: Task) => void;
 }) {
-  const open = tasks.filter((t) => !t.done);
+  const { width } = useWindowDimensions();
+  const open = sortByFocusPriority(tasks.filter((t) => !t.done));
   const columns: TaskFocus[] = ["critical", "steady", "swift", "quiet", "none"];
+  // Fill most of the screen; peek next column slightly
+  const colW = Math.min(300, Math.max(220, Math.round(width * 0.78)));
 
   return (
     <View>
@@ -286,14 +290,16 @@ export function KanbanBoardMobile({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={colW + 12}
         contentContainerStyle={{ gap: 12, paddingBottom: 8, paddingHorizontal: 2 }}
       >
         {columns.map((id) => {
           const list = open.filter((t) => normalizeFocus(t.focus) === id);
           return (
-            <PaneShell key={id} focus={id} colors={colors} style={styles.kanbanCol}>
+            <PaneShell key={id} focus={id} colors={colors} style={{ width: colW }}>
               <ColumnHeader focus={id} count={list.length} colors={colors} />
-              <ScrollView style={{ maxHeight: 440 }} nestedScrollEnabled>
+              <ScrollView style={{ maxHeight: Math.round(width > 400 ? 520 : 460) }} nestedScrollEnabled>
                 <View style={{ padding: 8, gap: 7 }}>
                   {list.length === 0 ? (
                     <Text
@@ -343,9 +349,6 @@ const styles = StyleSheet.create({
     width: "48%",
     flexGrow: 1,
     minWidth: "46%",
-  },
-  kanbanCol: {
-    width: 268,
   },
   colHead: {
     paddingHorizontal: 12,

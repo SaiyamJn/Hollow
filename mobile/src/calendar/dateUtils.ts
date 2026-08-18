@@ -61,7 +61,11 @@ export function formatTime(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   if (h === 0 && m === 0) return "";
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  // Compact so list rows don't clip (e.g. 9:30a / 2p)
+  const hour12 = h % 12 || 12;
+  const suffix = h < 12 ? "a" : "p";
+  if (m === 0) return `${hour12}${suffix}`;
+  return `${hour12}:${String(m).padStart(2, "0")}${suffix}`;
 }
 
 /** 6×7 month grid (Sunday-start), including leading/trailing days. */
