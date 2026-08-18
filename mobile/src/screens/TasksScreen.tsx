@@ -296,7 +296,7 @@ export default function TasksScreen() {
               })}
             </View>
             <GlassCard
-              style={{ alignSelf: layout === "list" ? "stretch" : "center", width: layout === "list" ? "100%" : "92%" }}
+              style={{ alignSelf: "stretch", width: "100%" }}
               contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}
             >
               <TextInput
