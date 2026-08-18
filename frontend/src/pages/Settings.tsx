@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, Moon, Sun } from "lucide-react";
+import { Bell, BellOff, KeyRound, Moon, Pencil, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "../theme/ThemeProvider";
 import { useFont } from "../theme/FontProvider";
@@ -30,6 +30,7 @@ import {
   useKeybindsStore,
   type KeybindId,
 } from "../lib/keybinds";
+import { AccountAvatar, ChangePasswordDialog, EditProfileDialog } from "../components/AccountDialogs";
 import { BrandMark } from "../components/BrandMark";
 import { Button } from "../components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -43,6 +44,9 @@ export default function Settings() {
   const navigate = useNavigate();
   const [reminders, setReminders] = useState(remindersPref());
   const [reminderError, setReminderError] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [accountNotice, setAccountNotice] = useState<string | null>(null);
 
   const binds = useKeybindsStore((s) => s.binds);
   const setBind = useKeybindsStore((s) => s.setBind);
@@ -116,6 +120,15 @@ export default function Settings() {
     staleTime: 15_000,
   });
 
+  function onAccountSaved(revoked: number) {
+    void refetchSessions();
+    setAccountNotice(
+      revoked === 0
+        ? "Saved. This browser stays signed in."
+        : `Saved. Signed out ${revoked} other device${revoked === 1 ? "" : "s"}.`
+    );
+  }
+
   async function signOutLocal() {
     try {
       await logoutAuthSession();
@@ -184,14 +197,40 @@ export default function Settings() {
         <p className="text-sm text-secondary mt-1">Make it feel like yours.</p>
       </div>
 
-      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-1 panel-accent">
-        <h2 className="section-label justify-center mb-2">Account</h2>
-        <p className="text-sm font-medium text-primary">{user?.name}</p>
-        <p className="text-sm text-secondary">
-          {user?.username ? `@${user.username}` : null}
-          {user?.username && user?.email ? " · " : null}
-          {user?.email}
-        </p>
+      <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-3 panel-accent">
+        <h2 className="section-label justify-center mb-1">Account</h2>
+        <div className="flex flex-col items-center gap-3 pt-1">
+          <AccountAvatar name={user?.name} size="lg" />
+          <div className="min-w-0 max-w-full">
+            <p className="text-base font-medium text-primary tracking-tight truncate">{user?.name}</p>
+            <p className="text-sm text-secondary mt-1 break-all">
+              {user?.username ? `@${user.username}` : null}
+              {user?.username && user?.email ? " · " : null}
+              {user?.email}
+            </p>
+          </div>
+        </div>
+        {accountNotice && <p className="text-sm text-accent">{accountNotice}</p>}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+          <Button onClick={() => setProfileOpen(true)}>
+            <Pencil size={16} />
+            Profile
+          </Button>
+          <Button onClick={() => setPasswordOpen(true)}>
+            <KeyRound size={16} />
+            Change password
+          </Button>
+        </div>
+        <EditProfileDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          onSaved={({ revoked }) => onAccountSaved(revoked)}
+        />
+        <ChangePasswordDialog
+          open={passwordOpen}
+          onOpenChange={setPasswordOpen}
+          onSaved={({ revoked }) => onAccountSaved(revoked)}
+        />
       </section>
 
       <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-3">

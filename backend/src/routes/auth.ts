@@ -104,6 +104,39 @@ function publicSession(
   };
 }
 
+const accountSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required").optional(),
+    name: z.string().min(1, "Display name is required").max(80).optional(),
+    username: z
+      .string()
+      .min(3, "Username must be at least 3 characters")
+      .max(32, "Username must be at most 32 characters")
+      .regex(USERNAME_RE, "Username may only contain letters, numbers, and underscores")
+      .optional(),
+    email: z.string().email().optional(),
+    newPassword: z.string().min(8, "Password must be at least 8 characters").optional(),
+  })
+  .refine((d) => d.name !== undefined || d.username !== undefined || d.email !== undefined || d.newPassword !== undefined, {
+    message: "Nothing to update",
+  })
+  .refine((d) => !d.newPassword || Boolean(d.currentPassword), {
+    message: "Current password is required",
+    path: ["currentPassword"],
+  });
+
+async function revokeOtherSessions(userId: string, currentSessionId: string) {
+  const result = await prisma.authSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+      NOT: { id: currentSessionId },
+    },
+    data: { revokedAt: new Date() },
+  });
+  return result.count;
+}
+
 router.post("/register", async (req, res) => {
   try {
     const parsed = registerSchema.safeParse(req.body);
@@ -210,15 +243,89 @@ router.delete("/sessions/:id", requireAuth, async (req: AuthedRequest, res) => {
 
 /** Sign out every other device; keep this one. */
 router.post("/sessions/revoke-others", requireAuth, async (req: AuthedRequest, res) => {
-  const result = await prisma.authSession.updateMany({
-    where: {
-      userId: req.userId!,
-      revokedAt: null,
-      NOT: { id: req.sessionId! },
-    },
-    data: { revokedAt: new Date() },
-  });
-  res.json({ ok: true, revoked: result.count });
+  const revoked = await revokeOtherSessions(req.userId!, req.sessionId!);
+  res.json({ ok: true, revoked });
+});
+
+/**
+ * Update name / username / email / password while signed in.
+ * Changing the password requires the current one. Any successful change
+ * signs out other devices.
+ */
+router.patch("/account", requireAuth, async (req: AuthedRequest, res) => {
+  try {
+    const parsed = accountSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+
+    const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+    if (!user) return res.status(401).json({ error: "Invalid or expired token" });
+
+    if (parsed.data.newPassword !== undefined) {
+      const ok = await bcrypt.compare(parsed.data.currentPassword!, user.passwordHash);
+      if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const data: { name?: string; username?: string; email?: string; passwordHash?: string } = {};
+
+    if (parsed.data.name !== undefined) {
+      const name = parsed.data.name.trim();
+      if (!name) return res.status(400).json({ error: "Display name is required" });
+      if (name !== user.name) data.name = name;
+    }
+
+    if (parsed.data.username !== undefined) {
+      const username = normalizeUsername(parsed.data.username);
+      if (username !== user.username) {
+        const taken = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+        if (taken && taken.id !== user.id) return res.status(409).json({ error: "Username already taken" });
+        data.username = username;
+      }
+    }
+
+    if (parsed.data.email !== undefined) {
+      const email = parsed.data.email.trim().toLowerCase();
+      if (email !== user.email) {
+        const taken = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+        if (taken && taken.id !== user.id) return res.status(409).json({ error: "Email already registered" });
+        data.email = email;
+      }
+    }
+
+    if (parsed.data.newPassword !== undefined) {
+      const same = await bcrypt.compare(parsed.data.newPassword, user.passwordHash);
+      if (same) return res.status(400).json({ error: "New password must be different" });
+      data.passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: "Nothing to update" });
+    }
+
+    const [updated, revokeResult] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data,
+      }),
+      prisma.authSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          NOT: { id: req.sessionId! },
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    res.json({ user: publicUser(updated), revoked: revokeResult.count });
+  } catch (err: any) {
+    console.error("Account update failed:", err);
+    if (err?.code === "P2002") {
+      const target = Array.isArray(err?.meta?.target) ? err.meta.target.join(",") : String(err?.meta?.target ?? "");
+      if (target.includes("email")) return res.status(409).json({ error: "Email already registered" });
+      if (target.includes("username")) return res.status(409).json({ error: "Username already taken" });
+      return res.status(409).json({ error: "Already in use" });
+    }
+    res.status(500).json({ error: "Couldn't update account" });
+  }
 });
 
 /** End the current session (server-side logout). */

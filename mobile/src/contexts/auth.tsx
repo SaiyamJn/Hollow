@@ -1,8 +1,9 @@
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {
   api,
   setApiToken,
+  setOnUnauthorized,
   login as apiLogin,
   register as apiRegister,
   logoutAuthSession,
@@ -17,6 +18,7 @@ interface AuthContextValue {
   user: User | null;
   login: (login: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, username: string) => Promise<void>;
+  updateUser: (user: User) => Promise<void>;
   /** `localOnly` skips the server revoke (e.g. session already ended remotely). */
   logout: (opts?: { localOnly?: boolean }) => Promise<void>;
 }
@@ -137,6 +139,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("signedIn");
   }
 
+  async function updateUser(nextUser: User) {
+    setUser(nextUser);
+    await setSecureItem(USER_KEY, JSON.stringify(nextUser));
+  }
+
   async function login(identifier: string, password: string) {
     const { token, user: nextUser } = await apiLogin(identifier, password);
     await persistSession(token, nextUser);
@@ -161,8 +168,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("signedOut");
   }
 
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      void logoutRef.current({ localOnly: true });
+    });
+    return () => setOnUnauthorized(null);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ status, user, login, register, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ status, user, login, register, updateUser, logout }}>{children}</AuthContext.Provider>
   );
 }
 

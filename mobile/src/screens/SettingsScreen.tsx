@@ -39,6 +39,7 @@ import type { Task } from "../lib/types";
 import { BrandMark } from "../components/BrandMark";
 import { GlassCard } from "../components/GlassCard";
 import { useLayout } from "../lib/layout";
+import { AccountAvatar } from "../components/AccountAvatar";
 
 function DetailRow({
   label,
@@ -79,6 +80,7 @@ export default function SettingsScreen({ navigation }: any) {
   const { screenPad, stackBottomClearance } = useLayout();
   const [notifOn, setNotifOn] = useState(false);
   const [fontOpen, setFontOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [editingFocus, setEditingFocus] = useState<FocusCategory | null>(null);
   const [hexDraft, setHexDraft] = useState("");
 
@@ -148,24 +150,28 @@ export default function SettingsScreen({ navigation }: any) {
       contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(false) }}
     >
       <Text style={[styles.groupHeader, { color: colors.accent }]}>ACCOUNT</Text>
-      <GlassCard contentStyle={[styles.card, styles.centered]}>
-        <Text
-          style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500", textAlign: "center" }}
-          numberOfLines={1}
-        >
-          {user?.name ?? "—"}
-        </Text>
-        {!!user?.username && (
-          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }} numberOfLines={1}>
-            @{user.username}
+      <Pressable onPress={() => navigation.navigate("Account")}>
+        <GlassCard contentStyle={[styles.card, styles.centered]}>
+          <AccountAvatar name={user?.name} size={52} colors={colors} />
+          <Text
+            style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500", marginTop: 12, textAlign: "center" }}
+            numberOfLines={1}
+          >
+            {user?.name ?? "—"}
           </Text>
-        )}
-        {!!user?.email && (
-          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }} numberOfLines={2}>
-            {user.email}
-          </Text>
-        )}
-      </GlassCard>
+          {!!user?.username && (
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 3, textAlign: "center" }} numberOfLines={1}>
+              @{user.username}
+            </Text>
+          )}
+          {!!user?.email && (
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: "center" }} numberOfLines={2}>
+              {user.email}
+            </Text>
+          )}
+          <Text style={{ color: colors.accent, fontSize: 13, fontWeight: "500", marginTop: 12 }}>Edit</Text>
+        </GlassCard>
+      </Pressable>
 
       <Pressable onPress={() => navigation.navigate("Devices")} style={{ marginTop: 10 }}>
         <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
@@ -195,53 +201,58 @@ export default function SettingsScreen({ navigation }: any) {
       </GlassCard>
 
       <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>FOCUS COLORS</Text>
-      <GlassCard contentStyle={{ paddingVertical: 4, paddingHorizontal: 0 }}>
-        {(FOCUS_MATRIX as FocusCategory[]).map((id, i) => {
-          const tint = colorFor(id) ?? defaultFocusColor(id, theme);
-          return (
-            <Pressable
-              key={id}
-              onPress={() => openFocusEditor(id)}
-              style={[
-                styles.focusRow,
-                i < FOCUS_MATRIX.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: colors.border,
-                },
-              ]}
-            >
-              <View style={[styles.focusSwatch, { backgroundColor: tint, borderColor: colors.border }]} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
-                  {FOCUS_META[id].label}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-                  {isCustom(id) ? tint : `${FOCUS_META[id].hint} · default`}
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.textSecondary} />
-            </Pressable>
-          );
-        })}
-      </GlassCard>
-      <Pressable onPress={resetAll} style={{ marginTop: 8 }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
-          Reset focus colors to defaults
-        </Text>
+      <Pressable
+        onPress={() => {
+          setEditingFocus(null);
+          setFocusOpen(true);
+        }}
+      >
+        <GlassCard contentStyle={[styles.card, styles.rowBetween]}>
+          <View style={{ flex: 1, paddingRight: 12, minWidth: 0 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }}>Focus colors</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+              Now, Anchor, Nudge, Later
+            </Text>
+          </View>
+          <View style={styles.swatchPreview}>
+            {(FOCUS_MATRIX as FocusCategory[]).map((id) => (
+              <View
+                key={id}
+                style={[
+                  styles.miniSwatch,
+                  {
+                    backgroundColor: colorFor(id) ?? defaultFocusColor(id, theme),
+                    borderColor: colors.border,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          <Feather name="chevron-down" size={18} color={colors.textSecondary} />
+        </GlassCard>
       </Pressable>
 
       <Modal
-        visible={editingFocus !== null}
+        visible={focusOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => setEditingFocus(null)}
+        onRequestClose={() => {
+          setFocusOpen(false);
+          setEditingFocus(null);
+        }}
       >
-        <Pressable style={styles.fontOverlay} onPress={() => setEditingFocus(null)}>
+        <Pressable
+          style={styles.fontOverlay}
+          onPress={() => {
+            setFocusOpen(false);
+            setEditingFocus(null);
+          }}
+        >
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={[styles.fontSheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}
           >
-            {editingFocus && (
+            {editingFocus ? (
               <>
                 <Text
                   style={{
@@ -332,6 +343,52 @@ export default function SettingsScreen({ navigation }: any) {
                     </Text>
                   </Pressable>
                 </View>
+              </>
+            ) : (
+              <>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: "600",
+                    marginBottom: 8,
+                    textAlign: "center",
+                  }}
+                >
+                  Focus colors
+                </Text>
+                {(FOCUS_MATRIX as FocusCategory[]).map((id, i) => {
+                  const tint = colorFor(id) ?? defaultFocusColor(id, theme);
+                  return (
+                    <Pressable
+                      key={id}
+                      onPress={() => openFocusEditor(id)}
+                      style={[
+                        styles.focusRow,
+                        i < FOCUS_MATRIX.length - 1 && {
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={[styles.focusSwatch, { backgroundColor: tint, borderColor: colors.border }]} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
+                          {FOCUS_META[id].label}
+                        </Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                          {isCustom(id) ? tint : `${FOCUS_META[id].hint} · default`}
+                        </Text>
+                      </View>
+                      <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+                    </Pressable>
+                  );
+                })}
+                <Pressable onPress={resetAll} style={{ paddingVertical: 14 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
+                    Reset to defaults
+                  </Text>
+                </Pressable>
               </>
             )}
           </Pressable>
@@ -473,6 +530,13 @@ const styles = StyleSheet.create({
   card: { padding: 14 },
   centered: { alignItems: "center", justifyContent: "center" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  swatchPreview: { flexDirection: "row", alignItems: "center", gap: 5, marginRight: 8 },
+  miniSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   fontRow: {
     flexDirection: "row",
     alignItems: "center",

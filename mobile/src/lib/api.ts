@@ -96,6 +96,17 @@ export function setApiToken(token: string | null) {
   authToken = token;
 }
 
+let onUnauthorized: (() => void) | null = null;
+export function setOnUnauthorized(cb: (() => void) | null) {
+  onUnauthorized = cb;
+}
+
+const SESSION_ENDED = new Set([
+  "Missing token",
+  "Invalid or expired token",
+  "Session ended. Please sign in again.",
+]);
+
 api.interceptors.request.use((config) => {
   if (authToken) config.headers.Authorization = `Bearer ${authToken}`;
   return config;
@@ -138,10 +149,18 @@ async function replayQueue() {
 }
 
 api.interceptors.response.use(undefined, async (error: AxiosError) => {
+  const status = error.response?.status;
+  const message = (error.response?.data as { error?: string } | undefined)?.error;
+  if (status === 401 && typeof message === "string" && SESSION_ENDED.has(message)) {
+    onUnauthorized?.();
+  }
+
   const config = error.config;
   const isNetworkError = !error.response;
   const isWrite = config?.method && config.method.toLowerCase() !== "get";
-  if (isNetworkError && isWrite && config && !(config as any).__queued) {
+  const url = String(config?.url ?? "");
+  const isAuthWrite = url.includes("/auth/");
+  if (isNetworkError && isWrite && !isAuthWrite && config && !(config as any).__queued) {
     await enqueue({
       method: config.method!,
       url: config.url!,
@@ -218,6 +237,17 @@ export async function revokeOtherAuthSessions() {
 
 export async function logoutAuthSession() {
   await api.post("/auth/logout");
+}
+
+export async function updateAccount(input: {
+  currentPassword?: string;
+  name?: string;
+  username?: string;
+  email?: string;
+  newPassword?: string;
+}) {
+  const { data } = await api.patch<{ user: User; revoked: number }>("/auth/account", input);
+  return data;
 }
 
 // ---- notebooks / sections / pages ----

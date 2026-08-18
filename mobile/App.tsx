@@ -40,6 +40,7 @@ import RecycleBinScreen from "./src/screens/RecycleBinScreen";
 import TasksScreen from "./src/screens/TasksScreen";
 import LinksScreen from "./src/screens/LinksScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
+import AccountScreen from "./src/screens/AccountScreen";
 import DevicesScreen from "./src/screens/DevicesScreen";
 import { CalendarScreen } from "./src/calendar";
 
@@ -50,6 +51,7 @@ export type RootStackParamList = {
   QuickNote: { noteId: string; title?: string; content?: string; color?: string; kind?: "note" | "list" };
   RecycleBin: undefined;
   Settings: undefined;
+  Account: undefined;
   Devices: undefined;
   Login: undefined;
   Register: undefined;
@@ -257,6 +259,7 @@ function Root() {
             <Stack.Screen name="QuickNote" component={QuickNoteDetailScreen} options={{ title: "Note" }} />
             <Stack.Screen name="RecycleBin" component={RecycleBinScreen} options={{ title: "Recycle bin" }} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Account" component={AccountScreen} options={{ title: "Account" }} />
             <Stack.Screen name="Devices" component={DevicesScreen} options={{ title: "Devices" }} />
           </>
         ) : (

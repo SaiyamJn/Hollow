@@ -3,6 +3,7 @@ import { useAuthStore } from "../stores/auth";
 import { useAdminStore } from "../stores/admin";
 import { useUnlockStore } from "../stores/unlock";
 import { deviceAuthMeta } from "./deviceInfo";
+import { disconnectSocket } from "./socket";
 import type {
   AdminStats,
   AuthSession,
@@ -54,14 +55,21 @@ adminApi.interceptors.response.use(undefined, (error) => {
   return Promise.reject(error);
 });
 
+const SESSION_ENDED = new Set([
+  "Missing token",
+  "Invalid or expired token",
+  "Session ended. Please sign in again.",
+]);
+
 // Expired/invalid JWT -> drop the session and land on /login. A 401 with a
 // section-password message is NOT a session problem, so leave those alone.
 api.interceptors.response.use(undefined, (error) => {
   const status = error.response?.status;
   const message = error.response?.data?.error;
-  if (status === 401 && (message === "Missing token" || message === "Invalid or expired token")) {
+  if (status === 401 && typeof message === "string" && SESSION_ENDED.has(message)) {
     useAuthStore.getState().logout();
     useUnlockStore.getState().clearAll();
+    disconnectSocket();
   }
   return Promise.reject(error);
 });
@@ -109,6 +117,17 @@ export async function revokeOtherAuthSessions() {
 
 export async function logoutAuthSession() {
   await api.post("/auth/logout");
+}
+
+export async function updateAccount(input: {
+  currentPassword?: string;
+  name?: string;
+  username?: string;
+  email?: string;
+  newPassword?: string;
+}) {
+  const { data } = await api.patch<{ user: User; revoked: number }>("/auth/account", input);
+  return data;
 }
 
 // ---- notebooks / sections ----
