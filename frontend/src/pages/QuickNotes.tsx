@@ -1,4 +1,4 @@
-import { KeyboardEvent, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,6 +27,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { SortableNotesSection } from "../components/SortableNotesSection";
 import { EmptyState } from "../components/EmptyState";
+import { shouldHandleItemDelete } from "../lib/keys";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -101,6 +102,25 @@ export default function QuickNotes() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmTrash, setConfirmTrash] = useState(false);
+  const [hoverNoteId, setHoverNoteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (!shouldHandleItemDelete(e)) return;
+      if (selected.size > 0) {
+        e.preventDefault();
+        setConfirmTrash(true);
+        return;
+      }
+      if (hoverNoteId) {
+        e.preventDefault();
+        setSelected(new Set([hoverNoteId]));
+        setConfirmTrash(true);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, hoverNoteId]);
 
   const { data: library } = useQuery({
     queryKey: ["quicknotes", "library"],
@@ -405,7 +425,10 @@ export default function QuickNotes() {
             className="mb-6"
             onReorder={(ids) => void persistOrder(pinned, ids)}
             renderCard={(note, { dragging }) => (
-              <div className={clsx(dragging && "opacity-70")}>
+              <div
+                className={clsx(dragging && "opacity-70")}
+                onMouseEnter={() => setHoverNoteId(note.id)}
+              >
                 <NoteCard
                   note={note}
                   selected={selected.has(note.id)}
@@ -429,7 +452,10 @@ export default function QuickNotes() {
           enabled={!showArchived}
           onReorder={(ids) => void persistOrder(rest, ids)}
           renderCard={(note, { dragging }) => (
-            <div className={clsx(dragging && "opacity-70")}>
+            <div
+              className={clsx(dragging && "opacity-70")}
+              onMouseEnter={() => setHoverNoteId(note.id)}
+            >
               <NoteCard
                 note={note}
                 selected={selected.has(note.id)}

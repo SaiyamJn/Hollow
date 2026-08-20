@@ -5,7 +5,7 @@ import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { PartialBlock } from "@blocknote/core";
 import { withCollaboration } from "@blocknote/core/yjs";
-import { Lock, LockOpen, Maximize2, Minimize2, ShieldCheck, Trash2, X } from "lucide-react";
+import { Lock, LockOpen, Maximize2, Minimize2, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -17,6 +17,7 @@ import {
   fetchOutlinks,
   fetchPage,
   lockSection,
+  removeSectionLock,
   removeTagFromPage,
   renamePage,
   savePageContent,
@@ -212,12 +213,14 @@ function Editor({
   const focusMode = useUiStore((s) => s.focusMode);
   const setFocusMode = useUiStore((s) => s.setFocusMode);
   const setSectionPassword = useUnlockStore((s) => s.setSectionPassword);
+  const relockSection = useUnlockStore((s) => s.relockSection);
   const focusBind = useKeybindsStore((s) => s.binds.focus);
   const escapeBind = useKeybindsStore((s) => s.binds.escape);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [title, setTitle] = useState(page.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
+  const [removeLockOpen, setRemoveLockOpen] = useState(false);
   // Offer templates only on brand-new pages (first client, nothing saved yet).
   const [showTemplates, setShowTemplates] = useState(session.seed && !page.content);
   const saveTimer = useRef<number | null>(null);
@@ -484,6 +487,15 @@ function Editor({
               <LockOpen size={14} />
             </button>
           )}
+          {!focusMode && password && (
+            <button
+              title="Remove password from this section"
+              className="text-secondary hover:text-primary transition-colors"
+              onClick={() => setRemoveLockOpen(true)}
+            >
+              <ShieldOff size={14} />
+            </button>
+          )}
           {!focusMode && (
             <button
               title="Delete page"
@@ -637,6 +649,23 @@ function Editor({
             return null;
           } catch (err: any) {
             return err.response?.data?.error ?? "Couldn't lock section";
+          }
+        }}
+      />
+
+      <PasswordDialog
+        open={removeLockOpen}
+        onOpenChange={setRemoveLockOpen}
+        title="Remove password from this section"
+        submitLabel="Remove"
+        onSubmit={async (pw) => {
+          try {
+            await removeSectionLock(sectionId, pw);
+            relockSection(sectionId);
+            queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't remove password";
           }
         }}
       />

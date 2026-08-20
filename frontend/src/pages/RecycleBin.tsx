@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { deleteQuickNotePermanent, fetchQuickNotes, restoreQuickNote } from "../lib/api";
 import type { QuickNote } from "../lib/types";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
+import { shouldHandleItemDelete } from "../lib/keys";
 
 function daysLeft(deletedAt?: string | null) {
   if (!deletedAt) return 7;
@@ -45,6 +46,17 @@ export default function RecycleBin() {
     | { kind: "purge"; id: string }
     | null
   >(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (!shouldHandleItemDelete(e) || !hoverId) return;
+      e.preventDefault();
+      setConfirm({ kind: "purge", id: hoverId });
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hoverId]);
 
   return (
     <div className="max-w-2xl mx-auto px-7 py-10 space-y-4">
@@ -81,6 +93,7 @@ export default function RecycleBin() {
               busy={restore.isPending || purge.isPending}
               onRestore={() => restore.mutate(note.id)}
               onPurge={() => setConfirm({ kind: "purge", id: note.id })}
+              onHover={() => setHoverId(note.id)}
             />
           ))}
         </ul>
@@ -112,11 +125,13 @@ function TrashRow({
   busy,
   onRestore,
   onPurge,
+  onHover,
 }: {
   note: QuickNote;
   busy: boolean;
   onRestore: () => void;
   onPurge: () => void;
+  onHover: () => void;
 }) {
   const title = note.title?.trim() || (note.kind === "list" ? "List" : "Note");
   const preview =
@@ -126,7 +141,7 @@ function TrashRow({
   const left = daysLeft(note.deletedAt);
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li className="flex items-center gap-3 px-4 py-3" onMouseEnter={onHover}>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-primary truncate">{title}</p>
         <p className="text-xs text-secondary truncate mt-0.5">

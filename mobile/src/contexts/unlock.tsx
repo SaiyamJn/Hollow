@@ -6,6 +6,8 @@ interface UnlockContextValue {
   unlockedNotebooks: Record<string, boolean>;
   setSectionPassword: (sectionId: string, password: string) => void;
   unlockNotebook: (notebookId: string, sectionIds: string[], password: string) => void;
+  relockSection: (sectionId: string) => void;
+  relockNotebook: (notebookId: string, sectionIds: string[]) => void;
   clearAll: () => void;
 }
 
@@ -31,6 +33,29 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
         ...prev,
         ...Object.fromEntries(sectionIds.map((id) => [id, password])),
       }));
+    },
+    relockSection: (sectionId) =>
+      setSectionPasswords((prev) => {
+        const next = { ...prev };
+        delete next[sectionId];
+        return next;
+      }),
+    relockNotebook: (notebookId, sectionIds) => {
+      setUnlockedNotebooks((prev) => {
+        const next = { ...prev };
+        delete next[notebookId];
+        return next;
+      });
+      setNotebookPasswords((prev) => {
+        const next = { ...prev };
+        delete next[notebookId];
+        return next;
+      });
+      setSectionPasswords((prev) => {
+        const next = { ...prev };
+        for (const id of sectionIds) delete next[id];
+        return next;
+      });
     },
     clearAll: () => {
       setSectionPasswords({});

@@ -283,12 +283,33 @@ export async function deleteSection(sectionId: string) {
   await api.delete(`/sections/${sectionId}`);
 }
 
+export async function lockNotebook(notebookId: string, password: string) {
+  await api.post(`/notebooks/${notebookId}/lock`, { password });
+}
+
+export async function lockSection(sectionId: string, password: string) {
+  await api.post(`/sections/${sectionId}/lock`, { password });
+}
+
 export async function unlockNotebook(notebookId: string, password: string) {
   await api.post(`/notebooks/${notebookId}/unlock`, { password });
 }
 
 export async function unlockSection(sectionId: string, password: string) {
   await api.post(`/sections/${sectionId}/unlock`, { password });
+}
+
+export async function removeNotebookLock(notebookId: string, password: string) {
+  await api.post(`/notebooks/${notebookId}/remove-lock`, { password });
+}
+
+export async function removeSectionLock(sectionId: string, password: string) {
+  await api.post(`/sections/${sectionId}/remove-lock`, { password });
+}
+
+export async function renameSection(sectionId: string, title: string) {
+  const { data } = await api.patch<Section>(`/sections/${sectionId}`, { title });
+  return data;
 }
 
 export async function createPage(sectionId: string, title: string, sectionPassword?: string) {
@@ -312,6 +333,11 @@ export async function savePageContent(pageId: string, content: string, sectionPa
 
 export async function deletePage(pageId: string) {
   await api.delete(`/pages/${pageId}`);
+}
+
+export async function renamePage(pageId: string, title: string) {
+  const { data } = await api.patch<PageMeta>(`/pages/${pageId}`, { title });
+  return data;
 }
 
 export async function fetchBacklinks(pageId: string) {

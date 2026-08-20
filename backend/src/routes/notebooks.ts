@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
 import { generateSalt } from "../lib/encryption";
 import { publicNotebook } from "../lib/sanitize";
-import { lockSectionWithPassword } from "./sections";
+import { lockSectionWithPassword, removeSectionLockWithPassword } from "./sections";
 
 const router = Router();
 router.use(requireAuth);
@@ -149,6 +149,32 @@ router.post("/:id/unlock", async (req: AuthedRequest, res) => {
   const ok = await bcrypt.compare(parsed.data.password, notebook.passwordHash);
   if (!ok) return res.status(401).json({ error: "Incorrect notebook password" });
   res.json({ unlocked: true });
+});
+
+router.post("/:id/remove-lock", async (req: AuthedRequest, res) => {
+  const parsed = unlockSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  const notebook = await getOwnedNotebook(req.params.id, req.userId!);
+  if (!notebook) return res.status(404).json({ error: "Not found" });
+  if (!notebook.isLocked || !notebook.passwordHash) return res.status(409).json({ error: "Notebook is not locked" });
+  const ok = await bcrypt.compare(parsed.data.password, notebook.passwordHash);
+  if (!ok) return res.status(401).json({ error: "Incorrect notebook password" });
+
+  const sections = await prisma.section.findMany({ where: { notebookId: notebook.id, isLocked: true } });
+  for (const section of sections) {
+    try {
+      await removeSectionLockWithPassword(section.id, parsed.data.password);
+    } catch (err: any) {
+      if (err?.status === 401) continue;
+      throw err;
+    }
+  }
+
+  await prisma.notebook.update({
+    where: { id: notebook.id },
+    data: { isLocked: false, passwordHash: null, salt: null },
+  });
+  res.json({ locked: false });
 });
 
 export default router;

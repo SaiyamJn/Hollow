@@ -17,6 +17,7 @@ import { DueChip } from "../components/StatusChip";
 import { EmptyState } from "../components/EmptyState";
 import type { RepeatEnd } from "../lib/taskRepeat";
 import { normalizeFocus, type TaskFocus } from "../lib/taskFocus";
+import { shouldHandleItemDelete } from "../lib/keys";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
 type TasksLayout = "list" | "matrix" | "kanban";
@@ -103,6 +104,7 @@ export default function Tasks() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [layout, setLayout] = useState<TasksLayout>("list");
+  const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
 
   /** Board fills the viewport — lock shell scroll so only columns scroll. */
   useEffect(() => {
@@ -173,6 +175,16 @@ export default function Tasks() {
     },
   });
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
+
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (!shouldHandleItemDelete(e) || !hoverTaskId) return;
+      e.preventDefault();
+      remove.mutate(hoverTaskId);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hoverTaskId, remove]);
 
   function openCreate(title: string) {
     setDraft({
@@ -296,6 +308,7 @@ export default function Tasks() {
           tasks={boardTasks}
           onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
           onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+          onHover={(t) => setHoverTaskId(t.id)}
           onEdit={(task) => {
             saveEdit.reset();
             setEditing({
@@ -320,6 +333,7 @@ export default function Tasks() {
           tasks={boardTasks}
           onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
           onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
+          onHover={(t) => setHoverTaskId(t.id)}
           onEdit={(task) => {
             saveEdit.reset();
             setEditing({
@@ -359,6 +373,7 @@ export default function Tasks() {
                   task={task}
                   onPatch={(id, patch) => update.mutate({ id, patch })}
                   onDelete={(id) => remove.mutate(id)}
+                  onHover={() => setHoverTaskId(task.id)}
                   onEdit={() => {
                     saveEdit.reset();
                     setEditing({
@@ -401,6 +416,7 @@ export default function Tasks() {
                     task={task}
                     onPatch={(id, patch) => update.mutate({ id, patch })}
                     onDelete={(id) => remove.mutate(id)}
+                    onHover={() => setHoverTaskId(task.id)}
                     onEdit={() => {
                       saveEdit.reset();
                       setEditing({
@@ -589,6 +605,7 @@ function TaskRow({
   onDelete,
   onEdit,
   onAddSubtask,
+  onHover,
 }: {
   task: Task;
   onPatch: (
@@ -604,6 +621,7 @@ function TaskRow({
   onDelete: (id: string) => void;
   onEdit: () => void;
   onAddSubtask: (title: string) => void;
+  onHover?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [subtaskDraft, setSubtaskDraft] = useState("");
@@ -617,7 +635,10 @@ function TaskRow({
   }
 
   return (
-    <div className={clsx("px-3.5 py-2.5 transition-colors", task.starred && !task.done && "row-starred")}>
+    <div
+      className={clsx("px-3.5 py-2.5 transition-colors", task.starred && !task.done && "row-starred")}
+      onMouseEnter={() => onHover?.()}
+    >
       <div className="group flex items-center gap-2.5">
         <button className="text-secondary hover:text-primary" onClick={() => setExpanded((v) => !v)}>
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

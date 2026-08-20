@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, renameNotebook, unlockNotebook } from "../lib/api";
+import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, lockNotebook, renameNotebook, removeNotebookLock, unlockNotebook } from "../lib/api";
 import type { Notebook } from "../lib/types";
 import { getNavMemory } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
@@ -21,6 +21,8 @@ type Prompt =
   | { kind: "new-page"; sectionId: string; notebookId: string }
   | { kind: "unlock-notebook"; notebook: Notebook }
   | { kind: "rename-notebook"; notebook: Notebook }
+  | { kind: "lock-notebook"; notebook: Notebook }
+  | { kind: "remove-lock-notebook"; notebook: Notebook }
   | null;
 
 export default function NotebooksScreen({ navigation }: any) {
@@ -71,6 +73,22 @@ export default function NotebooksScreen({ navigation }: any) {
         });
       } else if (prompt.kind === "rename-notebook") {
         await renameNotebook(prompt.notebook.id, value);
+        invalidate();
+      } else if (prompt.kind === "lock-notebook") {
+        if (value.length < 8) return "Password must be at least 8 characters";
+        await lockNotebook(prompt.notebook.id, value);
+        unlock.unlockNotebook(
+          prompt.notebook.id,
+          prompt.notebook.sections.map((s) => s.id),
+          value
+        );
+        invalidate();
+      } else if (prompt.kind === "remove-lock-notebook") {
+        await removeNotebookLock(prompt.notebook.id, value);
+        unlock.relockNotebook(
+          prompt.notebook.id,
+          prompt.notebook.sections.map((s) => s.id)
+        );
         invalidate();
       } else {
         await unlockNotebook(prompt.notebook.id, value);
@@ -150,9 +168,38 @@ export default function NotebooksScreen({ navigation }: any) {
                   </Text>
                 </View>
                 {nb.isLocked && !sealed && (
-                  <View style={{ flexShrink: 0 }}>
-                    <Feather name="unlock" size={13} color={colors.accent} />
-                  </View>
+                  <Pressable
+                    hitSlop={8}
+                    style={{ flexShrink: 0 }}
+                    onPress={() =>
+                      unlock.relockNotebook(
+                        nb.id,
+                        nb.sections.map((s) => s.id)
+                      )
+                    }
+                    accessibilityLabel="Re-lock for this session"
+                  >
+                    <Feather name="lock" size={15} color={colors.accent} />
+                  </Pressable>
+                )}
+                {!nb.isLocked && (
+                  <Pressable
+                    hitSlop={8}
+                    style={{ flexShrink: 0 }}
+                    onPress={() => setPrompt({ kind: "lock-notebook", notebook: nb })}
+                    accessibilityLabel="Lock notebook"
+                  >
+                    <Feather name="unlock" size={15} color={colors.textSecondary} />
+                  </Pressable>
+                )}
+                {nb.isLocked && (
+                  <Pressable
+                    hitSlop={8}
+                    style={{ flexShrink: 0 }}
+                    onPress={() => setPrompt({ kind: "remove-lock-notebook", notebook: nb })}
+                  >
+                    <Feather name="shield-off" size={15} color={colors.textSecondary} />
+                  </Pressable>
                 )}
                 <Pressable
                   hitSlop={8}
@@ -195,14 +242,36 @@ export default function NotebooksScreen({ navigation }: any) {
                 ? "New page"
                 : prompt?.kind === "rename-notebook"
                   ? "Rename notebook"
-                  : prompt?.kind === "unlock-notebook"
-                    ? `Unlock "${prompt.notebook.title}"`
-                    : ""
+                  : prompt?.kind === "lock-notebook"
+                    ? `Lock "${prompt.notebook.title}"`
+                    : prompt?.kind === "remove-lock-notebook"
+                      ? `Remove password from "${prompt.notebook.title}"`
+                      : prompt?.kind === "unlock-notebook"
+                        ? `Unlock "${prompt.notebook.title}"`
+                        : ""
         }
-        placeholder={prompt?.kind === "unlock-notebook" ? "Password" : "Title"}
-        secure={prompt?.kind === "unlock-notebook"}
+        placeholder={
+          prompt?.kind === "unlock-notebook" ||
+          prompt?.kind === "lock-notebook" ||
+          prompt?.kind === "remove-lock-notebook"
+            ? "Password"
+            : "Title"
+        }
+        secure={
+          prompt?.kind === "unlock-notebook" ||
+          prompt?.kind === "lock-notebook" ||
+          prompt?.kind === "remove-lock-notebook"
+        }
         submitLabel={
-          prompt?.kind === "unlock-notebook" ? "Unlock" : prompt?.kind === "rename-notebook" ? "Save" : "Create"
+          prompt?.kind === "unlock-notebook"
+            ? "Unlock"
+            : prompt?.kind === "lock-notebook"
+              ? "Lock"
+              : prompt?.kind === "remove-lock-notebook"
+                ? "Remove"
+                : prompt?.kind === "rename-notebook"
+                  ? "Save"
+                  : "Create"
         }
         initialValue={prompt?.kind === "rename-notebook" ? prompt.notebook.title : ""}
         onClose={() => setPrompt(null)}

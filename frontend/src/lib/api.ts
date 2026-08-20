@@ -184,6 +184,14 @@ export async function unlockSection(sectionId: string, password: string) {
   await api.post(`/sections/${sectionId}/unlock`, { password });
 }
 
+export async function removeNotebookLock(notebookId: string, password: string) {
+  await api.post(`/notebooks/${notebookId}/remove-lock`, { password });
+}
+
+export async function removeSectionLock(sectionId: string, password: string) {
+  await api.post(`/sections/${sectionId}/remove-lock`, { password });
+}
+
 // ---- pages ----
 export async function createPage(sectionId: string, title: string, sectionPassword?: string) {
   const { data } = await api.post<PageMeta & { sectionId: string }>(

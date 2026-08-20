@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
-import { generateSalt, deriveKey, encrypt, unsealAtRest, sealAtRest } from "../lib/encryption";
+import { generateSalt, deriveKey, encrypt, decrypt, unsealAtRest, sealAtRest, isSealedAtRest } from "../lib/encryption";
 import { publicSection } from "../lib/sanitize";
 
 const router = Router();
@@ -46,6 +46,50 @@ export async function lockSectionWithPassword(sectionId: string, password: strin
       data: { isLocked: true, passwordHash, salt },
     }),
   ]);
+}
+
+function vaultCipherToAtRest(cipher: string, key: Buffer): string {
+  if (!cipher) return sealAtRest("");
+  if (isSealedAtRest(cipher)) return cipher;
+  try {
+    return sealAtRest(decrypt(cipher, key));
+  } catch {
+    return sealAtRest(cipher);
+  }
+}
+
+/** Reverse of lockSectionWithPassword: decrypt vault pages and drop the lock. */
+export async function removeSectionLockWithPassword(sectionId: string, password: string): Promise<boolean> {
+  const section = await prisma.section.findUnique({ where: { id: sectionId } });
+  if (!section?.isLocked || !section.passwordHash || !section.salt) return false;
+  const ok = await bcrypt.compare(password, section.passwordHash);
+  if (!ok) {
+    const err = new Error("Incorrect password") as Error & { status: number };
+    err.status = 401;
+    throw err;
+  }
+  const key = deriveKey(password, section.salt);
+  const pages = await prisma.page.findMany({ where: { sectionId } });
+  const docStates = await prisma.pageDocState.findMany({ where: { page: { sectionId } } });
+  await prisma.$transaction([
+    ...pages.map((p) =>
+      prisma.page.update({
+        where: { id: p.id },
+        data: { content: vaultCipherToAtRest(p.content, key) },
+      })
+    ),
+    ...docStates.map((ds) =>
+      prisma.pageDocState.update({
+        where: { pageId: ds.pageId },
+        data: { state: vaultCipherToAtRest(ds.state, key) },
+      })
+    ),
+    prisma.section.update({
+      where: { id: sectionId },
+      data: { isLocked: false, passwordHash: null, salt: null },
+    }),
+  ]);
+  return true;
 }
 
 async function getOwnedSection(sectionId: string, userId: string) {
@@ -135,6 +179,21 @@ router.post("/sections/:id/unlock", async (req: AuthedRequest, res) => {
   const ok = await bcrypt.compare(parsed.data.password, section.passwordHash);
   if (!ok) return res.status(401).json({ error: "Incorrect section password" });
   res.json({ unlocked: true });
+});
+
+router.post("/sections/:id/remove-lock", async (req: AuthedRequest, res) => {
+  const parsed = unlockSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  const section = await getOwnedSection(req.params.id, req.userId!);
+  if (!section) return res.status(404).json({ error: "Not found" });
+  if (!section.isLocked) return res.status(409).json({ error: "Section is not locked" });
+  try {
+    await removeSectionLockWithPassword(section.id, parsed.data.password);
+  } catch (err: any) {
+    if (err?.status === 401) return res.status(401).json({ error: "Incorrect section password" });
+    throw err;
+  }
+  res.json({ locked: false });
 });
 
 router.post("/sections/:id/pages", async (req: AuthedRequest, res) => {

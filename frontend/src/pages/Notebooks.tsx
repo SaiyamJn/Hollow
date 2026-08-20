@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Book, Lock, LockOpen, Pencil, Plus, Trash2 } from "lucide-react";
+import { Book, Lock, LockOpen, Pencil, Plus, ShieldOff, Trash2 } from "lucide-react";
 import {
   createNotebook,
   deleteNotebook,
   fetchNotebooks,
   lockNotebook,
   renameNotebook,
+  removeNotebookLock,
   unlockNotebook,
 } from "../lib/api";
 import type { Notebook } from "../lib/types";
@@ -20,6 +21,7 @@ import { Input } from "../components/ui/input";
 import { EmptyState } from "../components/EmptyState";
 import { StatusChip } from "../components/StatusChip";
 import clsx from "clsx";
+import { shouldHandleItemDelete } from "../lib/keys";
 
 export default function Notebooks() {
   const navigate = useNavigate();
@@ -35,6 +37,18 @@ export default function Notebooks() {
   const [lockNb, setLockNb] = useState<Notebook | null>(null);
   const [deleteNb, setDeleteNb] = useState<Notebook | null>(null);
   const [editNb, setEditNb] = useState<{ id: string; title: string } | null>(null);
+  const [removeLockNb, setRemoveLockNb] = useState<Notebook | null>(null);
+  const [hoverNb, setHoverNb] = useState<Notebook | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!shouldHandleItemDelete(e) || !hoverNb) return;
+      e.preventDefault();
+      setDeleteNb(hoverNb);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hoverNb]);
 
   const create = useMutation({
     mutationFn: () => createNotebook(title.trim()),
@@ -113,6 +127,7 @@ export default function Notebooks() {
                 "flex flex-col items-center text-center min-h-[168px]",
                 sealed ? "border-accent/30 bg-accent-soft/30" : "border-border"
               )}
+              onMouseEnter={() => setHoverNb(nb)}
             >
               {/* Main control first in tab order; actions follow. */}
               <button type="button" onClick={() => openNotebook(nb)} className="w-full flex flex-col items-center flex-1 justify-center">
@@ -167,6 +182,16 @@ export default function Notebooks() {
                     }
                   >
                     <Lock size={14} />
+                  </button>
+                )}
+                {nb.isLocked && (
+                  <button
+                    type="button"
+                    title="Remove password"
+                    className="p-1.5 rounded-md text-secondary hover:text-primary hover:bg-surface-2"
+                    onClick={() => setRemoveLockNb(nb)}
+                  >
+                    <ShieldOff size={14} />
                   </button>
                 )}
                 <button
@@ -301,6 +326,27 @@ export default function Notebooks() {
             return null;
           } catch (err: any) {
             return err.response?.data?.error ?? "Couldn't lock notebook";
+          }
+        }}
+      />
+
+      <PasswordDialog
+        open={removeLockNb !== null}
+        onOpenChange={(o) => !o && setRemoveLockNb(null)}
+        title={removeLockNb ? `Remove password from "${removeLockNb.title}"` : "Remove password"}
+        submitLabel="Remove"
+        onSubmit={async (password) => {
+          if (!removeLockNb) return null;
+          try {
+            await removeNotebookLock(removeLockNb.id, password);
+            unlockStore.relockNotebook(
+              removeLockNb.id,
+              removeLockNb.sections.map((s) => s.id)
+            );
+            queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't remove password";
           }
         }}
       />

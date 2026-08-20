@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { deletePage, fetchNotebooks, fetchPage, savePageContent, unlockSection } from "../lib/api";
+import { deletePage, fetchNotebooks, fetchPage, lockSection, renamePage, removeSectionLock, savePageContent, unlockSection } from "../lib/api";
 import { contentToText, isRichContent } from "../lib/content";
 import { rememberSection } from "../lib/navMemory";
 import { PAGE_TEMPLATES } from "../lib/templates";
@@ -76,6 +76,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const [wasRich, setWasRich] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error" | "queued">("saved");
   const [unlockVisible, setUnlockVisible] = useState(false);
+  const [prompt, setPrompt] = useState<"rename" | "lock" | "remove-lock" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const skipSave = useRef(false);
   const [focus, setFocus] = useState(false);
@@ -94,6 +95,8 @@ export default function PageEditorScreen({ route, navigation }: any) {
   });
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebookId = routeNotebookId ?? page?.section.notebookId;
+  const sectionMeta = notebooks?.flatMap((nb) => nb.sections).find((s) => s.id === sectionId);
+  const sectionLocked = Boolean(sectionMeta?.isLocked);
 
   useEffect(() => {
     if (page && text === null) {
@@ -206,6 +209,19 @@ export default function PageEditorScreen({ route, navigation }: any) {
                   ? "Couldn't save"
                   : "Saved"}
           </Text>
+          <Pressable onPress={() => setPrompt("rename")} hitSlop={8} accessibilityLabel="Rename page">
+            <Feather name="edit-2" size={15} color={colors.textSecondary} />
+          </Pressable>
+          {!sectionLocked && (
+            <Pressable onPress={() => setPrompt("lock")} hitSlop={8} accessibilityLabel="Lock section">
+              <Feather name="unlock" size={15} color={colors.textSecondary} />
+            </Pressable>
+          )}
+          {sectionLocked && password && (
+            <Pressable onPress={() => setPrompt("remove-lock")} hitSlop={8} accessibilityLabel="Remove password">
+              <Feather name="shield-off" size={15} color={colors.textSecondary} />
+            </Pressable>
+          )}
           <Pressable onPress={() => setConfirmDelete(true)} hitSlop={8} accessibilityLabel="Delete page">
             <Feather name="trash-2" size={15} color={colors.textSecondary} />
           </Pressable>
@@ -215,7 +231,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, saveState, colors, focus]);
+  }, [navigation, saveState, colors, focus, sectionLocked, password]);
 
   const status = (error as any)?.response?.status;
   if (status === 423 || status === 401) {
@@ -233,6 +249,12 @@ export default function PageEditorScreen({ route, navigation }: any) {
           onPress={() => setUnlockVisible(true)}
         >
           <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "500" }}>Unlock</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.unlockBtn, { backgroundColor: "transparent" }]}
+          onPress={() => setPrompt("remove-lock")}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Remove password</Text>
         </Pressable>
         <View style={[styles.badge, { borderColor: colors.border }]}>
           <Feather name="shield" size={11} color={colors.accent} />
@@ -252,6 +274,25 @@ export default function PageEditorScreen({ route, navigation }: any) {
               return null;
             } catch (err: any) {
               return err.response?.data?.error ?? "Incorrect password";
+            }
+          }}
+        />
+        <PromptModal
+          visible={prompt === "remove-lock"}
+          title="Remove password from this section"
+          placeholder="Password"
+          secure
+          submitLabel="Remove"
+          onClose={() => setPrompt(null)}
+          onSubmit={async (pw) => {
+            try {
+              await removeSectionLock(sectionId, pw);
+              unlock.relockSection(sectionId);
+              void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+              void queryClient.invalidateQueries({ queryKey: ["page", pageId] });
+              return null;
+            } catch (err: any) {
+              return err.response?.data?.error ?? "Couldn't remove password";
             }
           }}
         />
@@ -366,6 +407,62 @@ export default function PageEditorScreen({ route, navigation }: any) {
           await deletePage(pageId);
           void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
           navigation.goBack();
+        }}
+      />
+      <PromptModal
+        visible={prompt === "rename"}
+        title="Rename page"
+        placeholder="Title"
+        submitLabel="Save"
+        initialValue={page?.title ?? ""}
+        onClose={() => setPrompt(null)}
+        onSubmit={async (value) => {
+          try {
+            await renamePage(pageId, value);
+            navigation.setParams({ title: value });
+            void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            void queryClient.invalidateQueries({ queryKey: ["page", pageId] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't rename page";
+          }
+        }}
+      />
+      <PromptModal
+        visible={prompt === "lock"}
+        title="Lock this section"
+        placeholder="Password"
+        secure
+        submitLabel="Lock"
+        onClose={() => setPrompt(null)}
+        onSubmit={async (pw) => {
+          if (pw.length < 8) return "Password must be at least 8 characters";
+          try {
+            await lockSection(sectionId, pw);
+            unlock.setSectionPassword(sectionId, pw);
+            void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't lock section";
+          }
+        }}
+      />
+      <PromptModal
+        visible={prompt === "remove-lock"}
+        title="Remove password from this section"
+        placeholder="Password"
+        secure
+        submitLabel="Remove"
+        onClose={() => setPrompt(null)}
+        onSubmit={async (pw) => {
+          try {
+            await removeSectionLock(sectionId, pw);
+            unlock.relockSection(sectionId);
+            void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            return null;
+          } catch (err: any) {
+            return err.response?.data?.error ?? "Couldn't remove password";
+          }
         }}
       />
     </KeyboardSafe>

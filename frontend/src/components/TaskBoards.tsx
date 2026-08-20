@@ -19,17 +19,20 @@ function BoardCard({
   onToggle,
   onEdit,
   onDragStart,
+  onHover,
 }: {
   task: Task;
   onToggle: () => void;
   onEdit: () => void;
   onDragStart: (e: React.DragEvent, task: Task) => void;
+  onHover?: () => void;
 }) {
   const focus = normalizeFocus(task.focus);
   return (
     <div
       draggable={!task.done}
       onDragStart={(e) => onDragStart(e, task)}
+      onMouseEnter={() => onHover?.()}
         className={clsx(
           "focus-pill group/card px-2.5 py-2 cursor-grab active:cursor-grabbing",
           FOCUS_SOFT_BG[focus]
@@ -76,6 +79,7 @@ function Column({
   onToggle,
   onEdit,
   onDragStart,
+  onHover,
   dropActive,
   fillHeight,
 }: {
@@ -86,6 +90,7 @@ function Column({
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
   onDragStart: (e: React.DragEvent, task: Task) => void;
+  onHover?: (t: Task) => void;
   dropActive?: boolean;
   fillHeight?: boolean;
 }) {
@@ -129,6 +134,7 @@ function Column({
               onToggle={() => onToggle(t)}
               onEdit={() => onEdit(t)}
               onDragStart={onDragStart}
+              onHover={() => onHover?.(t)}
             />
           ))
         )}
@@ -176,11 +182,13 @@ export function EisenhowerBoard({
   onSetFocus,
   onToggle,
   onEdit,
+  onHover,
 }: {
   tasks: Task[];
   onSetFocus: (id: string, focus: TaskFocus) => void;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
+  onHover?: (t: Task) => void;
 }) {
   const open = tasks.filter((t) => !t.done);
   const byFocus = (f: TaskFocus) => open.filter((t) => normalizeFocus(t.focus) === f);
@@ -217,6 +225,7 @@ export function EisenhowerBoard({
                 onToggle={onToggle}
                 onEdit={onEdit}
                 onDragStart={onDragStart}
+                onHover={onHover}
                 dropActive={active}
               />
             )}
@@ -246,6 +255,7 @@ export function EisenhowerBoard({
                       onToggle={() => onToggle(t)}
                       onEdit={() => onEdit(t)}
                       onDragStart={onDragStart}
+                      onHover={() => onHover?.(t)}
                     />
                   </div>
                 ))
@@ -264,11 +274,13 @@ export function KanbanBoard({
   onSetFocus,
   onToggle,
   onEdit,
+  onHover,
 }: {
   tasks: Task[];
   onSetFocus: (id: string, focus: TaskFocus) => void;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
+  onHover?: (t: Task) => void;
 }) {
   const open = tasks.filter((t) => !t.done);
   const columns: TaskFocus[] = ["critical", "steady", "swift", "quiet", "none"];
@@ -300,6 +312,7 @@ export function KanbanBoard({
                   onToggle={onToggle}
                   onEdit={onEdit}
                   onDragStart={onDragStart}
+                  onHover={onHover}
                   dropActive={active}
                   fillHeight
                 />
