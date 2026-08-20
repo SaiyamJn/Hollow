@@ -10,6 +10,7 @@ import { useUiStore } from "../stores/ui";
 import { disconnectSocket } from "../lib/socket";
 import { fetchNotebooks, fetchTasks, logoutAuthSession, openDailyNote } from "../lib/api";
 import { notifyDueTasks } from "../lib/notify";
+import { TaskReminderDialog } from "../components/TaskReminderDialog";
 import { formatCombo, matchesCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { Sidebar } from "../components/Sidebar";
 import { CommandPalette } from "../components/CommandPalette";
@@ -260,6 +261,7 @@ export default function AppShell() {
         </button>
       )}
       <CommandPalette />
+      <TaskReminderDialog />
     </div>
   );
 }

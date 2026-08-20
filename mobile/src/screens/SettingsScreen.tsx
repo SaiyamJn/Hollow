@@ -474,7 +474,7 @@ export default function SettingsScreen({ navigation }: any) {
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={{ color: colors.textPrimary, fontSize: 14 }}>Task reminders</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
-            A gentle nudge when something's due — undated ones ping once when you add them.
+            A gentle nudge when something's due. Complete it from the notification, or snooze for an hour.
           </Text>
         </View>
         <Switch

@@ -23,6 +23,7 @@ import { AuthProvider, useAuth } from "./src/contexts/auth";
 import { UnlockProvider } from "./src/contexts/unlock";
 import { initOfflineSync } from "./src/lib/api";
 import { initNotifications } from "./src/lib/notifications";
+import { ReminderHost } from "./src/components/ReminderHost";
 import { configureMotion } from "./src/lib/motion";
 import { useLayout } from "./src/lib/layout";
 import { SearchModal } from "./src/components/SearchModal";
@@ -291,6 +292,7 @@ export default function App() {
             <FocusColorsProvider>
               <AuthProvider>
                 <UnlockProvider>
+                  <ReminderHost />
                   <Root />
                 </UnlockProvider>
               </AuthProvider>

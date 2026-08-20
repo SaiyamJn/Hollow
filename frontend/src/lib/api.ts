@@ -334,11 +334,15 @@ export async function updateTask(
   }
 ) {
   const { data } = await api.patch<Task>(`/tasks/${id}`, patch);
+  if (patch.done) {
+    void import("./notify").then((m) => m.dismissTaskNotification(id)).catch(() => undefined);
+  }
   return data;
 }
 
 export async function deleteTask(id: string) {
   await api.delete(`/tasks/${id}`);
+  void import("./notify").then((m) => m.dismissTaskNotification(id)).catch(() => undefined);
 }
 
 interface HealthInfo {

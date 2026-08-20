@@ -12,6 +12,7 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL).trim().repla
 const config = {
   name: "Hollow",
   slug: "hollow",
+  owner: "snoey",
   version,
   orientation: "portrait",
   // Launcher icons use Wally-sized safe-zone padding (~43% mark).
@@ -87,7 +88,7 @@ const config = {
   extra: {
     apiUrl,
     eas: {
-      projectId: "6e1ac3c1-8713-453d-8d2a-888553fa49f4",
+      projectId: "5f85a8c7-5c18-43e6-acd9-301b4dfb376f",
     },
   },
 };

@@ -267,7 +267,7 @@ export default function Settings() {
         <div>
           <h2 className="section-label justify-center mb-1">Task reminders</h2>
           <p className="text-sm text-secondary mt-0.5">
-            A little tap on the shoulder when something's due (while you're here)
+            A little tap on the shoulder when something's due. Complete it from the popup, or snooze for an hour.
           </p>
           {reminderError && <p className="text-sm text-danger mt-2">{reminderError}</p>}
         </div>
