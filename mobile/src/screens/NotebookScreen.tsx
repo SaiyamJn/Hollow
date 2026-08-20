@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createPage, createSection, fetchNotebooks, unlockSection } from "../lib/api";
+import { createPage, createSection, deletePage, deleteSection, fetchNotebooks, unlockSection } from "../lib/api";
 import type { Section } from "../lib/types";
 import { getNavMemory, rememberNotebook, rememberSection } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { PromptModal } from "../components/PromptModal";
 import EmptyState from "../components/EmptyState";
 import { Fab, FabAction } from "../components/Fab";
@@ -18,6 +19,11 @@ type Prompt =
   | { kind: "new-section" }
   | { kind: "new-page"; section: Section }
   | { kind: "unlock-section"; section: Section; thenOpenPage?: { pageId: string; title: string } }
+  | null;
+
+type Confirm =
+  | { kind: "section"; section: Section }
+  | { kind: "page"; pageId: string; title: string }
   | null;
 
 // Inside one notebook: sections as cards that drop down into their pages.
@@ -32,6 +38,7 @@ export default function NotebookScreen({ route, navigation }: any) {
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [prompt, setPrompt] = useState<Prompt>(null);
+  const [confirm, setConfirm] = useState<Confirm>(null);
 
   useEffect(() => rememberNotebook(notebookId, title), [notebookId, title]);
 
@@ -142,43 +149,66 @@ export default function NotebookScreen({ route, navigation }: any) {
           const isOpen = expanded.has(sec.id) && !sealed;
           return (
             <GlassCard key={sec.id} style={{ marginBottom: 10 }} contentStyle={styles.cardInner}>
-              <Pressable style={styles.sectionRow} onPress={() => toggleSection(sec)}>
-                <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={16} color={colors.textSecondary} />
-                <Text
-                  style={{
-                    color: sealed ? colors.textSecondary : colors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: "500",
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                  numberOfLines={1}
+              <View style={styles.sectionRow}>
+                <Pressable style={styles.sectionOpen} onPress={() => toggleSection(sec)}>
+                  <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={16} color={colors.textSecondary} />
+                  <Text
+                    style={{
+                      color: sealed ? colors.textSecondary : colors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: "500",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {sec.title}
+                  </Text>
+                  {sec.isLocked && (
+                    <Feather
+                      name={sealed ? "lock" : "unlock"}
+                      size={13}
+                      color={sealed ? colors.textSecondary : colors.accent}
+                      style={{ flexShrink: 0 }}
+                    />
+                  )}
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{sec.pages.length}</Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setConfirm({ kind: "section", section: sec })}
+                  style={{ flexShrink: 0, padding: 4 }}
+                  accessibilityLabel="Delete section"
                 >
-                  {sec.title}
-                </Text>
-                {sec.isLocked && (
-                  <Feather
-                    name={sealed ? "lock" : "unlock"}
-                    size={13}
-                    color={sealed ? colors.textSecondary : colors.accent}
-                    style={{ flexShrink: 0 }}
-                  />
-                )}
-                <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{sec.pages.length}</Text>
-              </Pressable>
+                  <Feather name="trash-2" size={14} color={colors.textSecondary} />
+                </Pressable>
+              </View>
 
               {isOpen && (
                 <View style={[styles.pages, { borderLeftColor: colors.border }]}>
                   {sec.pages.map((page) => (
-                    <Pressable key={page.id} style={styles.pageRow} onPress={() => openPage(sec, page.id, page.title)}>
-                      <Feather name="file-text" size={13} color={colors.textSecondary} />
-                      <Text
-                        style={{ color: colors.textSecondary, fontSize: 14, flex: 1, minWidth: 0 }}
-                        numberOfLines={1}
+                    <View key={page.id} style={styles.pageRow}>
+                      <Pressable
+                        style={styles.pageOpen}
+                        onPress={() => openPage(sec, page.id, page.title)}
                       >
-                        {page.title}
-                      </Text>
-                    </Pressable>
+                        <Feather name="file-text" size={13} color={colors.textSecondary} />
+                        <Text
+                          style={{ color: colors.textSecondary, fontSize: 14, flex: 1, minWidth: 0 }}
+                          numberOfLines={1}
+                        >
+                          {page.title}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() => setConfirm({ kind: "page", pageId: page.id, title: page.title })}
+                        style={{ padding: 4 }}
+                        accessibilityLabel="Delete page"
+                      >
+                        <Feather name="trash-2" size={13} color={colors.textSecondary} />
+                      </Pressable>
+                    </View>
                   ))}
                   <Pressable style={styles.pageRow} onPress={() => setPrompt({ kind: "new-page", section: sec })}>
                     <Feather name="plus" size={13} color={colors.textSecondary} />
@@ -218,6 +248,36 @@ export default function NotebookScreen({ route, navigation }: any) {
         onClose={() => setPrompt(null)}
         onSubmit={onPromptSubmit}
       />
+
+      <ConfirmModal
+        visible={confirm !== null}
+        title={confirm?.kind === "section" ? "Delete section" : "Delete page"}
+        message={
+          confirm?.kind === "section"
+            ? `Delete “${confirm.section.title}”? All pages inside will be permanently removed.`
+            : confirm?.kind === "page"
+              ? `Delete “${confirm.title}”? This cannot be undone.`
+              : ""
+        }
+        confirmLabel="Delete"
+        onClose={() => setConfirm(null)}
+        onConfirm={async () => {
+          if (!confirm) return;
+          if (confirm.kind === "section") {
+            await deleteSection(confirm.section.id);
+            animateListChange();
+            setExpanded((prev) => {
+              const next = new Set(prev);
+              next.delete(confirm.section.id);
+              return next;
+            });
+          } else {
+            await deletePage(confirm.pageId);
+            animateListChange();
+          }
+          invalidate();
+        }}
+      />
     </View>
   );
 }
@@ -227,7 +287,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
-  sectionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 },
+  sectionRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  sectionOpen: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, minWidth: 0 },
   pages: { marginLeft: 7, paddingLeft: 14, borderLeftWidth: StyleSheet.hairlineWidth, paddingBottom: 8 },
-  pageRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 },
+  pageRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 },
+  pageOpen: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, minWidth: 0 },
 });

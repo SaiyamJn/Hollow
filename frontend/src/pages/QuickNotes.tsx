@@ -23,6 +23,7 @@ import {
 } from "../lib/api";
 import type { ChecklistItem, QuickNote } from "../lib/types";
 import { Button } from "../components/ui/button";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { SortableNotesSection } from "../components/SortableNotesSection";
 import { EmptyState } from "../components/EmptyState";
@@ -99,6 +100,7 @@ export default function QuickNotes() {
   const [draftColor, setDraftColor] = useState("yellow");
   const [editing, setEditing] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmTrash, setConfirmTrash] = useState(false);
 
   const { data: library } = useQuery({
     queryKey: ["quicknotes", "library"],
@@ -257,9 +259,14 @@ export default function QuickNotes() {
   }
 
   async function bulkDelete() {
-    if (!window.confirm(`Move ${selected.size} to recycle bin?`)) return;
+    if (!selected.size) return;
+    setConfirmTrash(true);
+  }
+
+  async function confirmBulkDelete() {
     await Promise.all([...selected].map((id) => deleteQuickNote(id)));
     setSelected(new Set());
+    setConfirmTrash(false);
     invalidate();
   }
 
@@ -333,7 +340,7 @@ export default function QuickNotes() {
             style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
           >
             <textarea
-              className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary text-left"
+              className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary text-left max-h-40 overflow-y-auto"
               rows={2}
               placeholder="A quick thought…"
               value={draft}
@@ -385,7 +392,7 @@ export default function QuickNotes() {
 
       {notes.length > 1 && !showArchived && !selecting && (
         <p className="text-xs text-secondary text-center mb-4">
-          Hover a note and drag the grip to rearrange
+          Hold a note to select — drag the grip to rearrange
         </p>
       )}
 
@@ -394,7 +401,7 @@ export default function QuickNotes() {
           <p className="section-label mb-2">Pinned</p>
           <SortableNotesSection
             notes={pinned}
-            enabled={!showArchived && !selecting}
+            enabled={!showArchived}
             className="mb-6"
             onReorder={(ids) => void persistOrder(pinned, ids)}
             renderCard={(note, { dragging }) => (
@@ -419,7 +426,7 @@ export default function QuickNotes() {
       {rest.length > 0 && (
         <SortableNotesSection
           notes={rest}
-          enabled={!showArchived && !selecting}
+          enabled={!showArchived}
           onReorder={(ids) => void persistOrder(rest, ids)}
           renderCard={(note, { dragging }) => (
             <div className={clsx(dragging && "opacity-70")}>
@@ -468,6 +475,15 @@ export default function QuickNotes() {
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmTrash}
+        onOpenChange={setConfirmTrash}
+        title={selected.size === 1 ? "Move to recycle bin?" : `Move ${selected.size} notes to recycle bin?`}
+        message="You can restore them within 7 days."
+        confirmLabel="Move"
+        onConfirm={() => void confirmBulkDelete()}
+      />
 
       <Dialog
         open={editing !== null}
@@ -542,7 +558,7 @@ export default function QuickNotes() {
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
                   className="w-full rounded-xl border border-border glass-input px-4 py-3 text-sm text-primary leading-relaxed
-                             placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[220px]"
+                             placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[220px] max-h-[50vh] overflow-y-auto"
                   placeholder="Write your note…"
                   value={editing.content}
                   onChange={(e) => persistEdit({ ...editing, content: e.target.value })}
@@ -601,6 +617,15 @@ function NoteCard({
 }) {
   const isList = note.kind === "list";
   const items = (note.items ?? []).filter((i) => i.text.trim() || !i.done).slice(0, 5);
+  const holdTimer = useRef<number | null>(null);
+  const held = useRef(false);
+
+  function clearHold() {
+    if (holdTimer.current != null) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  }
 
   return (
     <div
@@ -608,6 +633,17 @@ function NoteCard({
         e.preventDefault();
         onSelectStart();
       }}
+      onPointerDown={() => {
+        held.current = false;
+        clearHold();
+        holdTimer.current = window.setTimeout(() => {
+          held.current = true;
+          onSelectStart();
+        }, 400);
+      }}
+      onPointerUp={clearHold}
+      onPointerCancel={clearHold}
+      onPointerLeave={clearHold}
       className={clsx(
         "relative rounded-xl border glass p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
         selected ? "border-accent border-2" : "border-border hover:shadow-pop hover:-translate-y-0.5"
@@ -616,7 +652,13 @@ function NoteCard({
     >
       <button
         type="button"
-        onClick={() => (selecting ? onToggleSelect() : onOpen())}
+        onClick={() => {
+          if (held.current) {
+            held.current = false;
+            return;
+          }
+          selecting ? onToggleSelect() : onOpen();
+        }}
         className="w-full flex-1 text-left"
       >
         {isList ? (

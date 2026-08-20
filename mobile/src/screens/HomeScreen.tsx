@@ -226,6 +226,7 @@ export default function HomeScreen({ navigation }: any) {
           value={draft}
           onChangeText={setDraft}
           multiline
+          scrollEnabled
         />
         <Pressable
           style={{ padding: 6 }}

@@ -22,6 +22,7 @@ export function DialogContent({
         className={clsx(
           "fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2",
           "rounded-2xl border border-border glass-strong p-6 text-primary shadow-pop",
+          "max-h-[min(90dvh,44rem)] overflow-y-auto overscroll-contain",
           "focus:outline-none animate-pop-in",
           className
         )}

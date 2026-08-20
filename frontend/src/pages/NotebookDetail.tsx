@@ -18,6 +18,7 @@ import {
   createPage,
   createSection,
   deleteNotebook,
+  deletePage,
   deleteSection,
   fetchNotebooks,
   lockNotebook,
@@ -66,6 +67,7 @@ export default function NotebookDetail() {
   const [draft, setDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteSectionTarget, setDeleteSectionTarget] = useState<Section | null>(null);
+  const [deletePageTarget, setDeletePageTarget] = useState<{ id: string; title: string } | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
 
   useEffect(() => {
@@ -127,6 +129,14 @@ export default function NotebookDetail() {
     onSuccess: () => {
       invalidate();
       setDeleteSectionTarget(null);
+    },
+  });
+
+  const removePage = useMutation({
+    mutationFn: (id: string) => deletePage(id),
+    onSuccess: () => {
+      invalidate();
+      setDeletePageTarget(null);
     },
   });
 
@@ -340,16 +350,28 @@ export default function NotebookDetail() {
                 {open && (
                   <div className="border-t border-border px-3.5 py-2 space-y-0.5">
                     {sec.pages.map((page) => (
-                      <button
+                      <div
                         key={page.id}
-                        type="button"
-                        className="w-full flex items-center gap-2 rounded-md px-2 py-2 text-sm text-secondary
-                                   hover:text-primary hover:bg-surface-2 transition-colors text-left"
-                        onClick={() => openPage(sec, page.id, page.title)}
+                        className="group/page flex items-center gap-1 rounded-md hover:bg-surface-2 transition-colors"
                       >
-                        <FileText size={13} className="shrink-0" />
-                        <span className="truncate flex-1">{page.title}</span>
-                      </button>
+                        <button
+                          type="button"
+                          className="flex-1 flex items-center gap-2 px-2 py-2 text-sm text-secondary
+                                     hover:text-primary text-left min-w-0"
+                          onClick={() => openPage(sec, page.id, page.title)}
+                        >
+                          <FileText size={13} className="shrink-0" />
+                          <span className="truncate flex-1">{page.title}</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete page"
+                          className="p-1.5 rounded-md text-secondary hover:text-danger shrink-0"
+                          onClick={() => setDeletePageTarget({ id: page.id, title: page.title })}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     ))}
                     <button
                       type="button"
@@ -544,6 +566,28 @@ export default function NotebookDetail() {
                 onClick={() => deleteSectionTarget && removeSection.mutate(deleteSectionTarget.id)}
               >
                 <span className="text-danger">{removeSection.isPending ? "Deleting…" : "Delete"}</span>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deletePageTarget !== null} onOpenChange={(o) => !o && setDeletePageTarget(null)}>
+        <DialogContent title="Delete page">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary">
+              Delete “{deletePageTarget?.title}”? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setDeletePageTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={removePage.isPending}
+                onClick={() => deletePageTarget && removePage.mutate(deletePageTarget.id)}
+              >
+                <span className="text-danger">{removePage.isPending ? "Deleting…" : "Delete"}</span>
               </Button>
             </div>
           </div>

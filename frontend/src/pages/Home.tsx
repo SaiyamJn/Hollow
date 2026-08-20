@@ -204,7 +204,7 @@ function QuickCapture() {
     <div className="mt-8 rounded-xl border border-border glass-strong px-3.5 py-3 transition-colors focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
       <div className="flex items-center gap-2">
         <textarea
-          className="flex-1 bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary leading-6"
+          className="flex-1 bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary leading-6 max-h-32 overflow-y-auto"
           rows={1}
           placeholder="What's on your mind?"
           value={draft}

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { fetchNotebooks, fetchPage, savePageContent, unlockSection } from "../lib/api";
+import { deletePage, fetchNotebooks, fetchPage, savePageContent, unlockSection } from "../lib/api";
 import { contentToText, isRichContent } from "../lib/content";
 import { rememberSection } from "../lib/navMemory";
 import { PAGE_TEMPLATES } from "../lib/templates";
@@ -19,6 +19,7 @@ import { loadPagePosition, savePagePosition } from "../lib/pagePosition";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
 import { PromptModal } from "../components/PromptModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 
@@ -75,6 +76,8 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const [wasRich, setWasRich] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error" | "queued">("saved");
   const [unlockVisible, setUnlockVisible] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const skipSave = useRef(false);
   const [focus, setFocus] = useState(false);
   const [templatesDismissed, setTemplatesDismissed] = useState(false);
   const [selection, setSelection] = useState<{ start: number; end: number } | undefined>();
@@ -175,6 +178,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   // Flush pending edits + caret when leaving the screen.
   useEffect(() => {
     return () => {
+      if (skipSave.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       if (posTimer.current) clearTimeout(posTimer.current);
       void saveNow();
@@ -202,6 +206,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
                   ? "Couldn't save"
                   : "Saved"}
           </Text>
+          <Pressable onPress={() => setConfirmDelete(true)} hitSlop={8} accessibilityLabel="Delete page">
+            <Feather name="trash-2" size={15} color={colors.textSecondary} />
+          </Pressable>
           <Pressable onPress={() => setFocus(true)} hitSlop={8}>
             <Feather name="maximize-2" size={15} color={colors.textSecondary} />
           </Pressable>
@@ -323,9 +330,11 @@ export default function PageEditorScreen({ route, navigation }: any) {
         }}
         placeholder="Write freely…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
+        scrollEnabled
       />
       {wikiSuggestions.length > 0 && (
-        <GlassCard style={styles.wikiMenu} contentStyle={{ paddingVertical: 6 }}>
+        <GlassCard style={styles.wikiMenu} contentStyle={{ paddingVertical: 6, maxHeight: 220 }}>
+          <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           {wikiSuggestions.map((p) => (
             <Pressable key={p.id} style={styles.wikiItem} onPress={() => insertWikiLink(p.title)}>
               <Feather name="link" size={13} color={colors.accent} />
@@ -334,6 +343,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
               </Text>
             </Pressable>
           ))}
+          </ScrollView>
         </GlassCard>
       )}
       {focus && (
@@ -343,6 +353,21 @@ export default function PageEditorScreen({ route, navigation }: any) {
           </GlassCard>
         </Pressable>
       )}
+      <ConfirmModal
+        visible={confirmDelete}
+        title="Delete page"
+        message={`Delete “${page?.title ?? "this page"}”? This cannot be undone.`}
+        confirmLabel="Delete"
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          skipSave.current = true;
+          if (saveTimer.current) clearTimeout(saveTimer.current);
+          pendingText.current = null;
+          await deletePage(pageId);
+          void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+          navigation.goBack();
+        }}
+      />
     </KeyboardSafe>
   );
 }

@@ -201,6 +201,7 @@ export function TaskFormModal({
                 placeholder="A little context, if you like"
                 placeholderTextColor={colors.textSecondary}
                 multiline
+                scrollEnabled
                 style={[
                   styles.input,
                   styles.desc,
@@ -354,9 +355,10 @@ export function TaskFormModal({
         <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
           <GlassCard
             strong
-            style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}
-            contentStyle={styles.card}
+            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 400, alignSelf: "center", overflow: "hidden" }}
+            contentStyle={[styles.card, { maxHeight: maxCardH }]}
           >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <RepeatPanel
               due={current.due}
               value={current}
@@ -369,6 +371,7 @@ export function TaskFormModal({
             >
               <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
             </Pressable>
+            </ScrollView>
           </GlassCard>
         </View>
       </Modal>
@@ -436,7 +439,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: "left",
   },
-  desc: { minHeight: 72, textAlignVertical: "top" },
+  desc: { minHeight: 72, maxHeight: 160, textAlignVertical: "top" },
   rowBtn: {
     flexDirection: "row",
     alignItems: "center",

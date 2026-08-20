@@ -451,7 +451,7 @@ export default function Tasks() {
               />
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
-                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] text-center"
+                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto text-center"
                 placeholder="A little context, if you like"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
@@ -524,7 +524,7 @@ export default function Tasks() {
               />
               <textarea
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
-                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] text-center"
+                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto text-center"
                 placeholder="A little context, if you like"
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}

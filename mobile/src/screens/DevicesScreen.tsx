@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import {
   revokeOtherAuthSessions,
 } from "../lib/api";
 import type { AuthSession } from "../lib/types";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { useLayout } from "../lib/layout";
 
@@ -110,6 +111,13 @@ export default function DevicesScreen() {
     void queryClient.invalidateQueries({ queryKey: ["auth-sessions"] });
   }, [queryClient]);
 
+  const [confirm, setConfirm] = useState<
+    | { kind: "one"; session: AuthSession }
+    | { kind: "others" }
+    | null
+  >(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
   const revokeOne = useMutation({
     mutationFn: revokeAuthSession,
     onSuccess: async (res) => {
@@ -129,8 +137,7 @@ export default function DevicesScreen() {
     mutationFn: revokeOtherAuthSessions,
     onSuccess: (res) => {
       invalidate();
-      Alert.alert(
-        "Done",
+      setNotice(
         res.revoked === 0
           ? "No other devices were signed in."
           : `Signed out ${res.revoked} other device${res.revoked === 1 ? "" : "s"}.`
@@ -145,37 +152,8 @@ export default function DevicesScreen() {
   const others = sessions.filter((s) => !s.current).length;
   const busy = revokeOne.isPending || revokeOthers.isPending;
 
-  function confirmRevoke(session: AuthSession) {
-    const title = session.current ? "Log out of this device?" : "Sign out this device?";
-    const message = session.current
-      ? "You'll need to sign in again on this phone."
-      : `${session.deviceName} will be signed out immediately.`;
-    Alert.alert(title, message, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: session.current ? "Log out" : "Sign out",
-        style: "destructive",
-        onPress: () => revokeOne.mutate(session.id),
-      },
-    ]);
-  }
-
-  function confirmRevokeOthers() {
-    Alert.alert(
-      "Sign out other devices?",
-      "Every other phone, tablet, or browser signed into this account will be signed out. This device stays signed in.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign out others",
-          style: "destructive",
-          onPress: () => revokeOthers.mutate(),
-        },
-      ]
-    );
-  }
-
   return (
+    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface0 }}
       contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(false) }}
@@ -211,7 +189,7 @@ export default function DevicesScreen() {
               session={session}
               busy={busy}
               last={index === sessions.length - 1}
-              onSignOut={() => confirmRevoke(session)}
+              onSignOut={() => setConfirm({ kind: "one", session })}
             />
           ))
         )}
@@ -223,8 +201,14 @@ export default function DevicesScreen() {
           : `${sessions.length} device${sessions.length === 1 ? "" : "s"} signed in`}
       </Text>
 
+      {notice ? (
+        <Text style={{ color: colors.accent, fontSize: 13, textAlign: "center", marginBottom: 12 }}>
+          {notice}
+        </Text>
+      ) : null}
+
       {others > 0 && (
-        <Pressable onPress={confirmRevokeOthers} disabled={busy} style={{ opacity: busy ? 0.55 : 1 }}>
+        <Pressable onPress={() => setConfirm({ kind: "others" })} disabled={busy} style={{ opacity: busy ? 0.55 : 1 }}>
           <GlassCard contentStyle={[styles.actionCard]}>
             <Text style={{ color: colors.danger, fontSize: 14, fontWeight: "500", textAlign: "center" }}>
               Sign out of {others} other device{others === 1 ? "" : "s"}
@@ -233,6 +217,36 @@ export default function DevicesScreen() {
         </Pressable>
       )}
     </ScrollView>
+      <ConfirmModal
+        visible={confirm !== null}
+        title={
+          confirm?.kind === "others"
+            ? "Sign out other devices?"
+            : confirm?.session.current
+              ? "Log out of this device?"
+              : "Sign out this device?"
+        }
+        message={
+          confirm?.kind === "others"
+            ? "Every other phone, tablet, or browser signed into this account will be signed out. This device stays signed in."
+            : confirm?.session.current
+              ? "You'll need to sign in again on this phone."
+              : `${confirm?.session.deviceName ?? "This device"} will be signed out immediately.`
+        }
+        confirmLabel={
+          confirm?.kind === "others"
+            ? "Sign out others"
+            : confirm?.session.current
+              ? "Log out"
+              : "Sign out"
+        }
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          if (confirm?.kind === "others") revokeOthers.mutate();
+          else if (confirm?.kind === "one") revokeOne.mutate(confirm.session.id);
+        }}
+      />
+    </View>
   );
 }
 

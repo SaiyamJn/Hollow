@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
@@ -9,6 +10,7 @@ import {
 import type { QuickNote } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import EmptyState from "../components/EmptyState";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { useLayout } from "../lib/layout";
 import { animateListChange } from "../lib/motion";
@@ -37,6 +39,11 @@ export default function RecycleBinScreen() {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const { screenPad, stackBottomClearance } = useLayout();
+  const [confirm, setConfirm] = useState<
+    | { kind: "empty" }
+    | { kind: "purge"; id: string }
+    | null
+  >(null);
 
   const { data: trashed } = useQuery({
     queryKey: ["quicknotes", "trash"],
@@ -88,16 +95,7 @@ export default function RecycleBinScreen() {
             </Text>
             {(trashed?.length ?? 0) > 0 && (
               <Pressable
-                onPress={() =>
-                  Alert.alert("Empty recycle bin?", "This permanently deletes everything here.", [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Empty",
-                      style: "destructive",
-                      onPress: () => emptyAll.mutate(),
-                    },
-                  ])
-                }
+                onPress={() => setConfirm({ kind: "empty" })}
                 style={{ alignSelf: "flex-start", marginTop: 10 }}
               >
                 <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "500" }}>
@@ -136,16 +134,7 @@ export default function RecycleBinScreen() {
                 <Feather name="rotate-ccw" size={16} color={colors.accent} />
               </Pressable>
               <Pressable
-                onPress={() =>
-                  Alert.alert("Delete forever?", "This can't be undone.", [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Delete",
-                      style: "destructive",
-                      onPress: () => purgeOne.mutate(item.id),
-                    },
-                  ])
-                }
+                onPress={() => setConfirm({ kind: "purge", id: item.id })}
                 hitSlop={8}
                 style={{ padding: 6 }}
               >
@@ -161,6 +150,21 @@ export default function RecycleBinScreen() {
             subtitle="Deleted notes hang out here for a week, just in case."
           />
         }
+      />
+      <ConfirmModal
+        visible={confirm !== null}
+        title={confirm?.kind === "empty" ? "Empty recycle bin?" : "Delete forever?"}
+        message={
+          confirm?.kind === "empty"
+            ? "This permanently deletes everything here."
+            : "This can't be undone."
+        }
+        confirmLabel={confirm?.kind === "empty" ? "Empty" : "Delete"}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          if (confirm?.kind === "empty") emptyAll.mutate();
+          else if (confirm?.kind === "purge") purgeOne.mutate(confirm.id);
+        }}
       />
     </View>
   );

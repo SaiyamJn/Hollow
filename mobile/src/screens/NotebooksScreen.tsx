@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, Alert } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, renameNotebook, unlockNotebook } from "../lib/api";
@@ -7,6 +7,7 @@ import type { Notebook } from "../lib/types";
 import { getNavMemory } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
 import { useUnlock } from "../contexts/unlock";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { PromptModal } from "../components/PromptModal";
 import EmptyState from "../components/EmptyState";
 import { Fab, FabAction } from "../components/Fab";
@@ -29,6 +30,7 @@ export default function NotebooksScreen({ navigation }: any) {
   const { screenPad, listBottomClearance, isNarrow } = useLayout();
   const { data: notebooks, isLoading, refetch } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const [prompt, setPrompt] = useState<Prompt>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Notebook | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notebooks"] });
 
@@ -162,21 +164,7 @@ export default function NotebooksScreen({ navigation }: any) {
                 <Pressable
                   hitSlop={8}
                   style={{ flexShrink: 0 }}
-                  onPress={() =>
-                    Alert.alert("Delete notebook", `Delete “${nb.title}”? All sections and pages will be removed.`, [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Delete",
-                        style: "destructive",
-                        onPress: () => {
-                          animateListChange();
-                          void deleteNotebook(nb.id).then(() =>
-                            queryClient.invalidateQueries({ queryKey: ["notebooks"] })
-                          );
-                        },
-                      },
-                    ])
-                  }
+                  onPress={() => setDeleteTarget(nb)}
                 >
                   <Feather name="trash-2" size={15} color={colors.textSecondary} />
                 </Pressable>
@@ -219,6 +207,20 @@ export default function NotebooksScreen({ navigation }: any) {
         initialValue={prompt?.kind === "rename-notebook" ? prompt.notebook.title : ""}
         onClose={() => setPrompt(null)}
         onSubmit={onPromptSubmit}
+      />
+
+      <ConfirmModal
+        visible={deleteTarget !== null}
+        title="Delete notebook"
+        message={`Delete “${deleteTarget?.title ?? ""}”? All sections and pages will be removed.`}
+        confirmLabel="Delete"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          animateListChange();
+          await deleteNotebook(deleteTarget.id);
+          void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+        }}
       />
     </View>
   );

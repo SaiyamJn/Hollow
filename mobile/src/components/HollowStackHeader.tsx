@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   side: {
-    width: 72,
+    flex: 1,
     minWidth: 72,
     flexDirection: "row",
     alignItems: "center",

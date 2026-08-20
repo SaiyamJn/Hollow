@@ -32,6 +32,7 @@ import {
 } from "../lib/keybinds";
 import { AccountAvatar, ChangePasswordDialog, EditProfileDialog } from "../components/AccountDialogs";
 import { BrandMark } from "../components/BrandMark";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Button } from "../components/ui/button";
 import { useNavigate } from "react-router-dom";
 
@@ -47,6 +48,12 @@ export default function Settings() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  const [sessionConfirm, setSessionConfirm] = useState<
+    | { kind: "one"; id: string; current: boolean }
+    | { kind: "others" }
+    | null
+  >(null);
 
   const binds = useKeybindsStore((s) => s.binds);
   const setBind = useKeybindsStore((s) => s.setBind);
@@ -142,35 +149,39 @@ export default function Settings() {
   }
 
   async function onRevokeSession(id: string, current: boolean) {
-    const label = current ? "Log out of this browser?" : "Sign out this device?";
-    if (!window.confirm(label)) return;
-    try {
-      const res = await revokeAuthSession(id);
-      if (res.current) {
-        clearUnlocks();
-        disconnectSocket();
-        logout();
-        navigate("/login", { replace: true });
-        return;
-      }
-      void refetchSessions();
-    } catch (err: any) {
-      window.alert(err?.response?.data?.error ?? "Couldn't sign out that device.");
-    }
+    setSessionConfirm({ kind: "one", id, current });
   }
 
   async function onRevokeOthers() {
-    if (!window.confirm("Sign out every other device? This browser stays signed in.")) return;
+    setSessionConfirm({ kind: "others" });
+  }
+
+  async function runSessionConfirm() {
+    if (!sessionConfirm) return;
+    const pending = sessionConfirm;
+    setSessionConfirm(null);
     try {
-      const res = await revokeOtherAuthSessions();
-      void refetchSessions();
-      window.alert(
-        res.revoked === 0
-          ? "No other devices were signed in."
-          : `Signed out ${res.revoked} other device${res.revoked === 1 ? "" : "s"}.`
-      );
+      if (pending.kind === "one") {
+        const res = await revokeAuthSession(pending.id);
+        if (res.current) {
+          clearUnlocks();
+          disconnectSocket();
+          logout();
+          navigate("/login", { replace: true });
+          return;
+        }
+        void refetchSessions();
+      } else {
+        const res = await revokeOtherAuthSessions();
+        void refetchSessions();
+        setSessionNotice(
+          res.revoked === 0
+            ? "No other devices were signed in."
+            : `Signed out ${res.revoked} other device${res.revoked === 1 ? "" : "s"}.`
+        );
+      }
     } catch (err: any) {
-      window.alert(err?.response?.data?.error ?? "Couldn't sign out other devices.");
+      setSessionNotice(err?.response?.data?.error ?? "Couldn't sign out.");
     }
   }
 
@@ -328,6 +339,7 @@ export default function Settings() {
           <p className="text-sm text-secondary mt-0.5">
             Where this account is signed in. Sign out remotely anytime.
           </p>
+          {sessionNotice && <p className="text-sm text-accent mt-2">{sessionNotice}</p>}
         </div>
         {sessionsError ? (
           <p className="text-sm text-danger text-center">
@@ -377,6 +389,33 @@ export default function Settings() {
           <Button onClick={() => void signOutLocal()}>Log out of this browser</Button>
         </div>
       </section>
+
+      <ConfirmDialog
+        open={sessionConfirm !== null}
+        onOpenChange={(o) => !o && setSessionConfirm(null)}
+        title={
+          sessionConfirm?.kind === "others"
+            ? "Sign out other devices?"
+            : sessionConfirm?.current
+              ? "Log out of this browser?"
+              : "Sign out this device?"
+        }
+        message={
+          sessionConfirm?.kind === "others"
+            ? "Every other device signed into this account will be signed out. This browser stays signed in."
+            : sessionConfirm?.current
+              ? "You'll need to sign in again in this browser."
+              : "That device will be signed out immediately."
+        }
+        confirmLabel={
+          sessionConfirm?.kind === "others"
+            ? "Sign out others"
+            : sessionConfirm?.current
+              ? "Log out"
+              : "Sign out"
+        }
+        onConfirm={() => void runSessionConfirm()}
+      />
 
       <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-4">
         <div className="flex flex-col items-center gap-3">

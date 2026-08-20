@@ -279,6 +279,10 @@ export async function createSection(notebookId: string, title: string, notebookP
   return data;
 }
 
+export async function deleteSection(sectionId: string) {
+  await api.delete(`/sections/${sectionId}`);
+}
+
 export async function unlockNotebook(notebookId: string, password: string) {
   await api.post(`/notebooks/${notebookId}/unlock`, { password });
 }
@@ -304,6 +308,10 @@ export async function fetchPage(pageId: string, sectionPassword?: string) {
 export async function savePageContent(pageId: string, content: string, sectionPassword?: string) {
   const { data } = await api.put<Page>(`/pages/${pageId}`, { content }, { headers: sectionHeaders(sectionPassword) });
   return data;
+}
+
+export async function deletePage(pageId: string) {
+  await api.delete(`/pages/${pageId}`);
 }
 
 export async function fetchBacklinks(pageId: string) {

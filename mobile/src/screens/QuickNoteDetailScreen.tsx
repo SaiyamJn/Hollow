@@ -19,6 +19,7 @@ import {
 import type { ChecklistItem } from "../lib/types";
 import { packNoteBody, resolveNoteFields } from "../lib/noteFields";
 import { useTheme } from "../contexts/theme";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useLayout } from "../lib/layout";
@@ -111,6 +112,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   } | null>(null);
   const hydrated = useRef(false);
   const discarded = useRef(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const latest = useRef({ title, content, color, items, kind, supportsTitleField });
   latest.current = { title, content, color, items, kind, supportsTitleField };
 
@@ -304,7 +306,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
 
   const pinned = note?.pinned ?? false;
   const archived = note?.archived ?? false;
-  const { isNarrow, isShort, screenPad, insets } = useLayout();
+  const { isNarrow, screenPad, insets } = useLayout();
   const dotSize = isNarrow ? 20 : 24;
   const openItems = items.filter((i) => !i.done);
   const doneItems = items.filter((i) => i.done);
@@ -328,7 +330,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
           ]}
         >
           {isList ? (
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={{ flex: 1 }}>
               <TextInput
                 style={[styles.title, { color: colors.textPrimary }]}
                 placeholder="List title"
@@ -372,7 +374,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
               )}
             </ScrollView>
           ) : (
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={{ flex: 1 }}>
               <TextInput
                 style={[styles.title, { color: colors.textPrimary }]}
                 placeholder="Title"
@@ -386,9 +388,10 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
               <TextInput
                 style={[
                   styles.editor,
-                  { color: colors.textPrimary, minHeight: isShort ? 160 : 240 },
+                  { color: colors.textPrimary, flex: 1 },
                 ]}
                 multiline
+                scrollEnabled
                 textAlignVertical="top"
                 autoFocus={shouldAutoFocus}
                 value={content}
@@ -399,7 +402,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                 placeholder="Write your note…"
                 placeholderTextColor={colors.textSecondary}
               />
-            </ScrollView>
+            </View>
           )}
         </GlassCard>
 
@@ -439,12 +442,20 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                 color={colors.textSecondary}
               />
             </Pressable>
-            <Pressable onPress={() => remove.mutate()} hitSlop={8}>
+            <Pressable onPress={() => setConfirmDelete(true)} hitSlop={8}>
               <Feather name="trash-2" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
         </View>
       </View>
+      <ConfirmModal
+        visible={confirmDelete}
+        title="Move to recycle bin?"
+        message="You can restore it within 7 days."
+        confirmLabel="Move"
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => remove.mutate()}
+      />
     </KeyboardSafe>
   );
 }
@@ -496,7 +507,7 @@ function ChecklistRow({
 
 const styles = StyleSheet.create({
   body: { flex: 1, gap: 12 },
-  editorCard: { flex: 1, padding: 16 },
+  editorCard: { flex: 1, minHeight: 0, padding: 16 },
   editor: { flex: 1, fontSize: 16, lineHeight: 24 },
   title: { fontSize: 18, fontWeight: "600", marginBottom: 8, paddingVertical: 4 },
   checkRow: {

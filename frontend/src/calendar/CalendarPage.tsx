@@ -765,7 +765,7 @@ export default function CalendarPage() {
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               />
               <textarea
-                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px]"
+                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto"
                 placeholder="A little context, if you like"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
@@ -831,7 +831,7 @@ export default function CalendarPage() {
             <div className="space-y-3">
               <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
               <textarea
-                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent resize-none min-h-[72px]"
+                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto"
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               />

@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { deleteQuickNotePermanent, fetchQuickNotes, restoreQuickNote } from "../lib/api";
 import type { QuickNote } from "../lib/types";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
 
@@ -38,6 +40,11 @@ export default function RecycleBin() {
   });
 
   const list = notes ?? [];
+  const [confirm, setConfirm] = useState<
+    | { kind: "empty" }
+    | { kind: "purge"; id: string }
+    | null
+  >(null);
 
   return (
     <div className="max-w-2xl mx-auto px-7 py-10 space-y-4">
@@ -54,11 +61,7 @@ export default function RecycleBin() {
           <Button
             variant="ghost"
             disabled={emptyAll.isPending}
-            onClick={() => {
-              if (window.confirm(`Permanently delete ${list.length} note${list.length === 1 ? "" : "s"}?`)) {
-                emptyAll.mutate(list.map((n) => n.id));
-              }
-            }}
+            onClick={() => setConfirm({ kind: "empty" })}
           >
             Empty bin
           </Button>
@@ -77,13 +80,29 @@ export default function RecycleBin() {
               note={note}
               busy={restore.isPending || purge.isPending}
               onRestore={() => restore.mutate(note.id)}
-              onPurge={() => {
-                if (window.confirm("Delete forever?")) purge.mutate(note.id);
-              }}
+              onPurge={() => setConfirm({ kind: "purge", id: note.id })}
             />
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        title={confirm?.kind === "empty" ? "Empty recycle bin?" : "Delete forever?"}
+        message={
+          confirm?.kind === "empty"
+            ? `Permanently delete ${list.length} note${list.length === 1 ? "" : "s"}? This can't be undone.`
+            : "This can't be undone."
+        }
+        confirmLabel={confirm?.kind === "empty" ? "Empty" : "Delete"}
+        confirmBusy={emptyAll.isPending || purge.isPending}
+        onConfirm={() => {
+          if (confirm?.kind === "empty") emptyAll.mutate(list.map((n) => n.id));
+          else if (confirm?.kind === "purge") purge.mutate(confirm.id);
+          setConfirm(null);
+        }}
+      />
     </div>
   );
 }
