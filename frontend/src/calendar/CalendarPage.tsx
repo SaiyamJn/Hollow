@@ -79,6 +79,8 @@ export default function CalendarPage() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const pullStartY = useRef<number | null>(null);
+  const swipeStartX = useRef<number | null>(null);
+  const didSwipe = useRef(false);
 
   /** Month board is viewport-sized — lock the app shell scroll so only day cells scroll. */
   useEffect(() => {
@@ -149,6 +151,29 @@ export default function CalendarPage() {
     setSelected(new Date(next.getFullYear(), next.getMonth(), day));
   }
 
+  function monthSwipeHandlers() {
+    return {
+      onPointerDown: (e: React.PointerEvent) => {
+        swipeStartX.current = e.clientX;
+        didSwipe.current = false;
+      },
+      onPointerUp: (e: React.PointerEvent) => {
+        if (swipeStartX.current == null) return;
+        const dx = e.clientX - swipeStartX.current;
+        swipeStartX.current = null;
+        if (Math.abs(dx) < 64) return;
+        didSwipe.current = true;
+        shiftMonth(dx < 0 ? 1 : -1);
+        window.setTimeout(() => {
+          didSwipe.current = false;
+        }, 80);
+      },
+      onPointerCancel: () => {
+        swipeStartX.current = null;
+      },
+    };
+  }
+
   function jumpToday() {
     const t = startOfDay(new Date());
     setCursor(startOfMonth(t));
@@ -157,6 +182,7 @@ export default function CalendarPage() {
   }
 
   function selectDay(d: Date) {
+    if (didSwipe.current) return;
     setSelected(startOfDay(d));
     if (d.getMonth() !== cursor.getMonth() || d.getFullYear() !== cursor.getFullYear()) {
       setCursor(startOfMonth(d));
@@ -482,7 +508,7 @@ export default function CalendarPage() {
       {isLoading && !tasks ? (
         <p className="text-sm text-secondary text-center py-16">Loading…</p>
       ) : view === "month" ? (
-        <div className="cal-month-board flex-1 min-h-0">
+        <div className="cal-month-board flex-1 min-h-0" {...monthSwipeHandlers()}>
           <div className="cal-month-weekdays">
             {weekLabels.map((l, i) => (
               <div
@@ -501,7 +527,7 @@ export default function CalendarPage() {
       ) : view === "schedule" ? (
         <>
           {/* Collapsible month — rolls between week and full month */}
-          <div className="mb-1">
+          <div className="mb-1" {...monthSwipeHandlers()}>
             <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-secondary mb-1">
               {weekLabels.map((l, i) => (
                 <div key={i}>{l}</div>

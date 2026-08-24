@@ -99,14 +99,24 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 /* Let the app surfaces show through the BlockNote editor. */
 .bn-editor {
   background: transparent !important;
-  padding-inline: 0 !important;
+  padding-inline: 0.35rem !important;
   font-family: var(--font-sans) !important;
+}
+
+/* Keep selected-block outline off the glyphs — padding inside the highlight. */
+.bn-editor .bn-block-content {
+  padding-inline: 0.55rem;
+  padding-block: 0.22rem;
+  border-radius: 0.4rem;
+}
+.bn-editor .bn-inline-content {
+  padding-inline: 0.12rem;
 }
 
 /* Soft-enter paragraphs should read as continuous prose, not stacked cards. */
 .bn-editor .bn-block-content[data-content-type="paragraph"] {
-  padding-top: 0.1rem;
-  padding-bottom: 0.1rem;
+  padding-top: 0.22rem;
+  padding-bottom: 0.22rem;
 }
 .bn-editor .bn-block-content[data-content-type="paragraph"] br {
   display: block;
@@ -379,6 +389,7 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   flex-direction: column;
   border-radius: 1rem;
   overflow: hidden;
+  touch-action: pan-y pan-x;
   border: 1px solid var(--border);
   background:
     linear-gradient(

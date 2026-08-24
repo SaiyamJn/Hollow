@@ -49,6 +49,8 @@ export function notificationIdForTask(taskId: string) {
   return `hollowtask_${taskId}`;
 }
 
+let boundNotificationResponse = false;
+
 export function initNotifications() {
   Notifications.setNotificationHandler({
     handleNotification: async () => {
@@ -72,6 +74,14 @@ export function initNotifications() {
       enableVibrate: true,
       showBadge: false,
       lightColor: ACCENT,
+    });
+  }
+  if (!boundNotificationResponse) {
+    boundNotificationResponse = true;
+    Notifications.addNotificationResponseReceivedListener((response) => {
+      const prompt = promptFromNotification(response.notification.request.content);
+      if (!prompt) return;
+      void dismissTaskNotifications(prompt.taskId, response.notification.request.identifier);
     });
   }
 }
@@ -198,17 +208,20 @@ async function scheduleIn(seconds: number, kind: ReminderPrompt["kind"], title: 
   });
 }
 
-export async function dismissTaskNotifications(taskId: string) {
+export async function dismissTaskNotifications(taskId: string, extraIdentifier?: string) {
   const id = notificationIdForTask(taskId);
+  const ids = new Set([id, extraIdentifier].filter(Boolean) as string[]);
   try {
     await Notifications.cancelScheduledNotificationAsync(id);
   } catch {
     // none scheduled
   }
-  try {
-    await Notifications.dismissNotificationAsync(id);
-  } catch {
-    // not in tray
+  for (const ident of ids) {
+    try {
+      await Notifications.dismissNotificationAsync(ident);
+    } catch {
+      // not in tray
+    }
   }
   try {
     const presented = await Notifications.getPresentedNotificationsAsync();
@@ -216,7 +229,15 @@ export async function dismissTaskNotifications(taskId: string) {
       presented
         .filter((n) => {
           const data = n.request.content.data as { taskId?: string } | undefined;
-          return data?.taskId === taskId || n.request.identifier === id;
+          const ident = n.request.identifier;
+          const blob = JSON.stringify(n.request.content ?? {});
+          return (
+            data?.taskId === taskId ||
+            ident === id ||
+            (extraIdentifier && ident === extraIdentifier) ||
+            ident.includes(taskId) ||
+            blob.includes(taskId)
+          );
         })
         .map((n) => Notifications.dismissNotificationAsync(n.request.identifier))
     );

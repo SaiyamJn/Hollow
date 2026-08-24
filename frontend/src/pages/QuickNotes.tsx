@@ -99,6 +99,7 @@ export default function QuickNotes() {
   const [showArchived, setShowArchived] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftColor, setDraftColor] = useState("yellow");
+  const [draftFocus, setDraftFocus] = useState(false);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmTrash, setConfirmTrash] = useState(false);
@@ -356,16 +357,21 @@ export default function QuickNotes() {
           </div>
 
           <div
-            className="rounded-xl border border-border glass p-5 mb-6 max-w-xl mx-auto shadow-card text-center"
+            className="rounded-xl border border-border glass p-5 mb-6 max-w-2xl mx-auto shadow-card text-center"
             style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
           >
             <textarea
-              className="w-full bg-transparent text-sm resize-none focus:outline-none placeholder:text-secondary text-left max-h-40 overflow-y-auto"
-              rows={2}
+              className={clsx(
+                "w-full bg-transparent resize-none focus:outline-none placeholder:text-secondary text-left overflow-y-auto",
+                draftFocus || draft.length > 80 ? "min-h-[220px] max-h-[55vh] text-base leading-relaxed" : "max-h-40 text-sm"
+              )}
+              rows={draftFocus || draft.length > 80 ? 10 : 3}
               placeholder="A quick thought…"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onDraftKeyDown}
+              onFocus={() => setDraftFocus(true)}
+              onBlur={() => setDraftFocus(false)}
             />
             <div className="flex flex-col items-center gap-3 mt-3">
               <ColorDots value={draftColor} onPick={setDraftColor} />
@@ -517,7 +523,7 @@ export default function QuickNotes() {
           if (!o) void closeEditor();
         }}
       >
-        <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-2xl">
+        <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-3xl">
           {editing && (
             <div className="space-y-3">
               <input
@@ -583,8 +589,8 @@ export default function QuickNotes() {
               ) : (
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full rounded-xl border border-border glass-input px-4 py-3 text-sm text-primary leading-relaxed
-                             placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[220px] max-h-[50vh] overflow-y-auto"
+                  className="w-full rounded-xl border border-border glass-input px-5 py-4 text-base text-primary leading-relaxed
+                             placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[min(55vh,28rem)] max-h-[70vh] overflow-y-auto"
                   placeholder="Write your note…"
                   value={editing.content}
                   onChange={(e) => persistEdit({ ...editing, content: e.target.value })}

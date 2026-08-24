@@ -96,13 +96,22 @@ export function CollapsibleMonth({
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2,
+      onMoveShouldSetPanResponder: (_, g) => {
+        const ax = Math.abs(g.dx);
+        const ay = Math.abs(g.dy);
+        if (ax < 10 && ay < 10) return false;
+        if (ax > 12 && ax > ay * 1.1) return true;
+        return ay > 8 && ay > ax * 1.2;
+      },
       onPanResponderRelease: (_, g) => {
+        const ax = Math.abs(g.dx);
+        const ay = Math.abs(g.dy);
+        if (ax > 40 && ax > ay) {
+          onSwipeMonthRef.current?.(g.dx < 0 ? 1 : -1);
+          return;
+        }
         if (g.dy < -28 || g.vy < -0.4) onExpandedChangeRef.current(false);
         else if (g.dy > 28 || g.vy > 0.4) onExpandedChangeRef.current(true);
-        if (Math.abs(g.dx) > 48 && Math.abs(g.dx) > Math.abs(g.dy)) {
-          onSwipeMonthRef.current?.(g.dx < 0 ? 1 : -1);
-        }
       },
     })
   ).current;

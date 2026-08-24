@@ -16,13 +16,13 @@ export function DialogContent({
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-40 animate-fade-in" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/80 sm:bg-black/65 sm:backdrop-blur-[3px] animate-fade-in" />
       <DialogPrimitive.Content
         data-hollow-dialog=""
         className={clsx(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2",
-          "rounded-2xl border border-border glass-strong p-6 text-primary shadow-pop",
-          "max-h-[min(90dvh,44rem)] overflow-y-auto overscroll-contain",
+          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2",
+          "rounded-2xl border border-border bg-[var(--surface-1)] p-6 text-primary shadow-pop",
+          "max-h-[min(90dvh,44rem)] overflow-y-auto overscroll-contain overflow-x-hidden",
           "focus:outline-none animate-pop-in",
           className
         )}

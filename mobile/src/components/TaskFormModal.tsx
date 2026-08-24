@@ -24,11 +24,61 @@ import {
   normalizeRepeatEnd,
   type RepeatEnd,
 } from "../lib/taskRepeat";
-import { GlassCard } from "./GlassCard";
 import { GlassDateTimePicker, formatDueLabel } from "./GlassDateTimePicker";
 import { FocusCompass, FocusDot } from "./FocusField";
 import { RepeatPanel } from "./RepeatPanel";
 import { FOCUS_META, normalizeFocus, type TaskFocus } from "../lib/taskFocus";
+import type { ThemeColors } from "../theme";
+
+function ModalShade({
+  children,
+  padTop,
+  padBottom,
+  avoidKeyboard,
+}: {
+  children: React.ReactNode;
+  padTop: number;
+  padBottom: number;
+  avoidKeyboard?: boolean;
+}) {
+  const inner = (
+    <View style={[styles.overlayInner, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
+      {children}
+    </View>
+  );
+  return (
+    <View style={styles.scrim}>
+      {avoidKeyboard ? (
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          {inner}
+        </KeyboardAvoidingView>
+      ) : (
+        inner
+      )}
+    </View>
+  );
+}
+
+function ModalPanel({
+  children,
+  colors,
+  maxHeight,
+}: {
+  children: React.ReactNode;
+  colors: ThemeColors;
+  maxHeight?: number;
+}) {
+  return (
+    <View
+      style={[
+        styles.panel,
+        { backgroundColor: colors.surface1, borderColor: colors.glassBorder, maxHeight },
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 export type TaskDraft = {
   title: string;
@@ -175,16 +225,9 @@ export function TaskFormModal({
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}
-        >
-          <GlassCard
-            strong
-            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 440, alignSelf: "center", overflow: "hidden" }}
-            contentStyle={[styles.card, { maxHeight: maxCardH }]}
-          >
+      <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+        <ModalShade padTop={padTop} padBottom={padBottom} avoidKeyboard>
+          <ModalPanel colors={colors} maxHeight={maxCardH}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={[styles.heading, { color: colors.textPrimary }]}>{title}</Text>
               <TextInput
@@ -273,22 +316,19 @@ export function TaskFormModal({
                 </Pressable>
               </View>
             </ScrollView>
-          </GlassCard>
-        </KeyboardAvoidingView>
+          </ModalPanel>
+        </ModalShade>
       </Modal>
 
       <Modal
         visible={visible && dueOpen}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setDueOpen(false)}
       >
-        <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
-          <GlassCard
-            strong
-            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 400, alignSelf: "center", overflow: "hidden" }}
-            contentStyle={[styles.card, { maxHeight: maxCardH }]}
-          >
+        <ModalShade padTop={padTop} padBottom={padBottom}>
+          <ModalPanel colors={colors} maxHeight={maxCardH}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -311,22 +351,19 @@ export function TaskFormModal({
                 </View>
               </View>
             </ScrollView>
-          </GlassCard>
-        </View>
+          </ModalPanel>
+        </ModalShade>
       </Modal>
 
       <Modal
         visible={visible && focusOpen}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setFocusOpen(false)}
       >
-        <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
-          <GlassCard
-            strong
-            style={{ width: "100%", maxWidth: 400, alignSelf: "center" }}
-            contentStyle={styles.card}
-          >
+        <ModalShade padTop={padTop} padBottom={padBottom}>
+          <ModalPanel colors={colors}>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>Focus</Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 12, textAlign: "center" }}>
               Important × urgent — tap a corner
@@ -342,22 +379,19 @@ export function TaskFormModal({
             >
               <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
             </Pressable>
-          </GlassCard>
-        </View>
+          </ModalPanel>
+        </ModalShade>
       </Modal>
 
       <Modal
         visible={visible && repeatOpen}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setRepeatOpen(false)}
       >
-        <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
-          <GlassCard
-            strong
-            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 400, alignSelf: "center", overflow: "hidden" }}
-            contentStyle={[styles.card, { maxHeight: maxCardH }]}
-          >
+        <ModalShade padTop={padTop} padBottom={padBottom}>
+          <ModalPanel colors={colors} maxHeight={maxCardH}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <RepeatPanel
               due={current.due}
@@ -372,22 +406,19 @@ export function TaskFormModal({
               <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
             </Pressable>
             </ScrollView>
-          </GlassCard>
-        </View>
+          </ModalPanel>
+        </ModalShade>
       </Modal>
 
       <Modal
         visible={visible && untilOpen}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setUntilOpen(false)}
       >
-        <View style={[styles.overlay, { paddingTop: padTop, paddingBottom: padBottom, paddingHorizontal: 16 }]}>
-          <GlassCard
-            strong
-            style={{ maxHeight: maxCardH, width: "100%", maxWidth: 400, alignSelf: "center", overflow: "hidden" }}
-            contentStyle={[styles.card, { maxHeight: maxCardH }]}
-          >
+        <ModalShade padTop={padTop} padBottom={padBottom}>
+          <ModalPanel colors={colors} maxHeight={maxCardH}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={[styles.heading, { color: colors.textPrimary }]}>Last day</Text>
               <GlassDateTimePicker value={untilDraft} onChange={setUntilDraft} />
@@ -410,17 +441,34 @@ export function TaskFormModal({
                 </Pressable>
               </View>
             </ScrollView>
-          </GlassCard>
-        </View>
+          </ModalPanel>
+        </ModalShade>
       </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  scrim: {
+    flex: 1,
+    backgroundColor: "rgba(6, 8, 10, 0.88)",
+  },
+  overlayInner: {
+    flex: 1,
+    justifyContent: "flex-start",
+  },
+  panel: {
+    width: "100%",
+    maxWidth: 440,
+    alignSelf: "center",
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+    padding: 20,
+  },
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(6, 8, 10, 0.88)",
     justifyContent: "flex-start",
   },
   card: { padding: 20 },

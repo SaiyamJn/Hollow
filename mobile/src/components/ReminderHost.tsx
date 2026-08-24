@@ -67,16 +67,23 @@ export function ReminderHost() {
       });
     });
 
-    void Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (!response) return;
-      void handleResponse(response, () => {
-        void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    const flushLast = () => {
+      void Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (!response) return;
+        void handleResponse(response, () => {
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        });
       });
+    };
+    flushLast();
+    const appState = AppState.addEventListener("change", (next) => {
+      if (next === "active") flushLast();
     });
 
     return () => {
       received.remove();
       responded.remove();
+      appState.remove();
     };
   }, [status, queryClient]);
 
@@ -137,13 +144,16 @@ async function handleResponse(
 
     const prompt = promptFromNotification(response.notification.request.content);
     if (!prompt) return;
+    const presentedId = response.notification.request.identifier;
     const action = response.actionIdentifier;
     if (action === ACTION_COMPLETE) {
+      await dismissTaskNotifications(prompt.taskId, presentedId);
       await completeTask(prompt.taskId);
       onChanged();
       return;
     }
     if (action === ACTION_SNOOZE) {
+      await dismissTaskNotifications(prompt.taskId, presentedId);
       await snoozeTaskReminder(prompt.taskId, prompt.title, prompt.kind);
       return;
     }
