@@ -100,6 +100,26 @@ export function nextDueAt(
   return advanceSimple(from, rule, step);
 }
 
+/**
+ * Advance until the next due is strictly after `after` (default: now).
+ * Completing an overdue repeat must not spawn another already-past due.
+ */
+export function nextFutureDueAt(
+  from: Date,
+  rule: RepeatRule,
+  days?: number[] | null,
+  interval = 1,
+  seriesAnchor?: Date | null,
+  after: Date = new Date()
+): Date {
+  const anchor = seriesAnchor ? new Date(seriesAnchor) : new Date(from);
+  let cursor = nextDueAt(from, rule, days, interval, anchor);
+  for (let n = 0; n < 500 && cursor.getTime() <= after.getTime(); n++) {
+    cursor = nextDueAt(cursor, rule, days, interval, anchor);
+  }
+  return cursor;
+}
+
 /** Whether a generated occurrence on `day` is still within the series end rules. */
 export function withinRepeatBounds(
   day: Date,

@@ -306,6 +306,11 @@ export async function fetchTasks() {
   return data;
 }
 
+export async function fetchTrashedTasks() {
+  const { data } = await api.get<Task[]>("/tasks", { params: { trashed: "true" } });
+  return data;
+}
+
 export async function createTask(input: {
   title: string;
   description?: string;
@@ -348,9 +353,20 @@ export async function updateTask(
   return data;
 }
 
+/** Soft-delete into the recycle bin (kept 7 days). */
 export async function deleteTask(id: string) {
   await api.delete(`/tasks/${id}`);
   void import("./notify").then((m) => m.dismissTaskNotification(id)).catch(() => undefined);
+}
+
+export async function deleteTaskPermanent(id: string) {
+  await api.delete(`/tasks/${id}`, { params: { permanent: "true" } });
+  void import("./notify").then((m) => m.dismissTaskNotification(id)).catch(() => undefined);
+}
+
+export async function restoreTask(id: string) {
+  const { data } = await api.post<Task>(`/tasks/${id}/restore`);
+  return data;
 }
 
 interface HealthInfo {

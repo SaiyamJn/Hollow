@@ -5,7 +5,7 @@ import { requireAuth, AuthedRequest } from "../middleware/auth";
 import { sealAtRest, unsealAtRest } from "../lib/encryption";
 import {
   clampInterval,
-  nextDueAt,
+  nextFutureDueAt,
   normalizeRepeatEnd,
   parseRepeatDays,
   serializeRepeatDays,
@@ -17,6 +17,16 @@ import { normalizeFocus } from "../lib/taskFocus";
 
 const router = Router();
 router.use(requireAuth);
+
+const TRASH_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Hard-delete tasks that have sat in the recycle bin longer than 7 days. */
+export async function purgeExpiredTasks() {
+  const cutoff = new Date(Date.now() - TRASH_MS);
+  await prisma.task.deleteMany({
+    where: { deletedAt: { not: null, lt: cutoff } },
+  });
+}
 
 const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "Invalid date");
 const repeatRuleSchema = z.enum(["daily", "weekly", "monthly", "yearly"]);
@@ -150,10 +160,29 @@ function normalizeEndFields(
 }
 
 router.get("/", async (req: AuthedRequest, res) => {
+  await purgeExpiredTasks();
+  const trashed = req.query.trashed === "true";
+
   const tasks = await prisma.task.findMany({
-    where: { ownerId: req.userId, parentTaskId: null },
-    include: { subtasks: { orderBy: { createdAt: "asc" } } },
-    orderBy: [{ starred: "desc" }, { createdAt: "desc" }],
+    where: {
+      ownerId: req.userId,
+      parentTaskId: null,
+      ...(trashed
+        ? { deletedAt: { not: null } }
+        : {
+            deletedAt: null,
+            // Nested subtasks stay out of trash lists until restored with the parent.
+          }),
+    },
+    include: {
+      subtasks: {
+        where: trashed ? undefined : { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+    orderBy: trashed
+      ? [{ deletedAt: "desc" }]
+      : [{ starred: "desc" }, { createdAt: "desc" }],
   });
   res.json(tasks.map(publicTask));
 });
@@ -178,7 +207,9 @@ router.post("/", async (req: AuthedRequest, res) => {
 
   if (parentTaskId) {
     const parent = await prisma.task.findUnique({ where: { id: parentTaskId } });
-    if (!parent || parent.ownerId !== req.userId) return res.status(404).json({ error: "Parent task not found" });
+    if (!parent || parent.ownerId !== req.userId || parent.deletedAt) {
+      return res.status(404).json({ error: "Parent task not found" });
+    }
   }
 
   const due = dueAt ? new Date(dueAt) : null;
@@ -217,7 +248,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
   const parsed = patchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
   const task = await prisma.task.findUnique({ where: { id: req.params.id } });
-  if (!task || task.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!task || task.ownerId !== req.userId || task.deletedAt) return res.status(404).json({ error: "Not found" });
 
   const {
     title,
@@ -316,11 +347,18 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
             }
           : {}),
       },
-      include: { subtasks: { orderBy: { createdAt: "asc" } } },
+      include: { subtasks: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } } },
     });
 
     if (markingDone && ruleForSpawn && dueForSpawn) {
-      const next = nextDueAt(dueForSpawn, ruleForSpawn, daysForSpawn, intervalForSpawn, dueForSpawn);
+      // Skip past occurrences so an overdue complete doesn't spawn another past due.
+      const next = nextFutureDueAt(
+        dueForSpawn,
+        ruleForSpawn,
+        daysForSpawn,
+        intervalForSpawn,
+        dueForSpawn
+      );
       const remaining =
         endForSpawn === "after" && countForSpawn != null ? countForSpawn - 1 : countForSpawn;
       const ok = withinRepeatBounds(next, {
@@ -362,11 +400,51 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
 router.delete("/:id", async (req: AuthedRequest, res) => {
   const task = await prisma.task.findUnique({ where: { id: req.params.id } });
   if (!task || task.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
-  await prisma.$transaction([
-    prisma.task.deleteMany({ where: { parentTaskId: task.id } }),
-    prisma.task.delete({ where: { id: task.id } }),
-  ]);
+
+  const permanent = req.query.permanent === "true";
+  // Subtasks are lightweight — remove them for good. Parent tasks go to the bin.
+  if (permanent || task.deletedAt || task.parentTaskId) {
+    await prisma.$transaction([
+      prisma.task.deleteMany({ where: { parentTaskId: task.id } }),
+      prisma.task.delete({ where: { id: task.id } }),
+    ]);
+  } else {
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.task.updateMany({
+        where: { parentTaskId: task.id, ownerId: req.userId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
+      prisma.task.update({
+        where: { id: task.id },
+        data: { deletedAt: now },
+      }),
+    ]);
+  }
   res.status(204).end();
+});
+
+router.post("/:id/restore", async (req: AuthedRequest, res) => {
+  const task = await prisma.task.findUnique({ where: { id: req.params.id } });
+  if (!task || task.ownerId !== req.userId || !task.deletedAt) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  // Restoring a subtask alone is fine; restoring a parent also restores its children.
+  await prisma.$transaction([
+    prisma.task.update({
+      where: { id: task.id },
+      data: { deletedAt: null },
+    }),
+    prisma.task.updateMany({
+      where: { parentTaskId: task.id, ownerId: req.userId },
+      data: { deletedAt: null },
+    }),
+  ]);
+  const restored = await prisma.task.findUnique({
+    where: { id: task.id },
+    include: { subtasks: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } } },
+  });
+  res.json(publicTask(restored!));
 });
 
 export default router;

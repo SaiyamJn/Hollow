@@ -139,6 +139,9 @@ export default function NotebooksScreen({ navigation }: any) {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="normal"
+        scrollEventThrottle={16}
       >
         <View style={{ marginBottom: 12, alignItems: "center" }}>
           <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>

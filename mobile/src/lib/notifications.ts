@@ -262,7 +262,8 @@ export async function snoozeTaskReminder(taskId: string, title: string, kind: Re
  * Rebuild local reminders from the task list.
  * - Future due → notify at that moment (9am if date-only / midnight).
  * - Snoozed → notify at the snooze time.
- * - Past due / no due → notify once soon (tracked so we don't spam on every sync).
+ * - Recently overdue (within 6h) → notify once soon (tracked so we don't spam).
+ * - Undated tasks and subtasks → never auto-notify (parents only).
  * - Done tasks → drop any leftover tray / scheduled notifications.
  */
 export async function syncTaskReminders(tasks: Task[] | undefined) {
@@ -284,11 +285,14 @@ export async function syncTaskReminders(tasks: Task[] | undefined) {
   await Notifications.cancelAllScheduledNotificationsAsync();
 
   const now = Date.now();
+  const RECENT_OVERDUE_MS = 6 * 60 * 60 * 1000;
   const fired = await getFiredOnce();
   const snoozes = await getSnoozes();
   const stillNeedsOnce = new Set<string>();
   const openIds = new Set<string>();
-  const all = tasks.flatMap((t) => [t, ...(t.subtasks ?? [])]);
+  // Parents only — nested subtasks inherit the parent's reminder surface and
+  // would otherwise spam the tray on every app open.
+  const all = tasks.filter((t) => !t.parentTaskId);
 
   for (const task of all) {
     if (task.done) {
@@ -305,22 +309,27 @@ export async function syncTaskReminders(tasks: Task[] | undefined) {
     }
     if (snoozeUntil) delete snoozes[task.id];
 
-    if (task.dueAt) {
-      const due = reminderDate(new Date(task.dueAt));
-      if (due.getTime() > now) {
-        await scheduleAt(due, "due", task.title, task.id);
-        continue;
-      }
-      stillNeedsOnce.add(task.id);
-      if (fired.has(task.id)) continue;
-      await scheduleIn(2, "overdue", task.title, task.id);
+    // No due date → no automatic reminder.
+    if (!task.dueAt) continue;
+
+    const due = reminderDate(new Date(task.dueAt));
+    if (due.getTime() > now) {
+      await scheduleAt(due, "due", task.title, task.id);
+      continue;
+    }
+
+    // Already overdue: only nudge once if it became due recently (or was snoozed).
+    const overdueFor = now - due.getTime();
+    if (overdueFor > RECENT_OVERDUE_MS && !snoozeUntil) {
+      // Stale backlog — remember so we don't suddenly fire later.
       fired.add(task.id);
+      stillNeedsOnce.add(task.id);
       continue;
     }
 
     stillNeedsOnce.add(task.id);
     if (fired.has(task.id)) continue;
-    await scheduleIn(2, "reminder", task.title, task.id);
+    await scheduleIn(8, "overdue", task.title, task.id);
     fired.add(task.id);
   }
 

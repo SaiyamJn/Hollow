@@ -244,7 +244,12 @@ export default function AppShell() {
             </div>
           </header>
         )}
-        <main className={clsx("flex-1 overflow-y-auto", !focusMode && "pt-12 pb-24")}>
+        <main
+          className={clsx(
+            "flex-1 overflow-y-auto overscroll-contain",
+            !focusMode && "pt-12 pb-28"
+          )}
+        >
           <Outlet />
         </main>
       </div>

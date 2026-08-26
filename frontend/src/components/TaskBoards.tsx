@@ -60,11 +60,19 @@ function BoardCard({
           >
             {task.title}
           </span>
-          {task.dueAt && (
-            <span className={clsx("block text-[10px] mt-0.5 tabular-nums", FOCUS_TEXT[focus])}>
-              {formatDueLabel(task.dueAt)}
-            </span>
-          )}
+          <span className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+            {task.dueAt && (
+              <span className={clsx("text-[10px] tabular-nums", FOCUS_TEXT[focus])}>
+                {formatDueLabel(task.dueAt)}
+              </span>
+            )}
+            {(task.subtasks?.length ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-soft px-1.5 py-px text-[9px] font-semibold text-accent">
+                <Check size={8} strokeWidth={3} />
+                {task.subtasks!.filter((s) => s.done).length}/{task.subtasks!.length}
+              </span>
+            )}
+          </span>
         </button>
       </div>
     </div>

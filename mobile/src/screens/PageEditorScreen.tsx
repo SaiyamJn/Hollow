@@ -22,6 +22,7 @@ import { PromptModal } from "../components/PromptModal";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
+import { useLayout } from "../lib/layout";
 
 // Slow breathing ring around the lock emblem on sealed content.
 function VaultSeal({ color, background }: { color: string; background: string }) {
@@ -71,6 +72,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const unlock = useUnlock();
   const queryClient = useQueryClient();
   const password = unlock.sectionPasswords[sectionId];
+  const { stackBottomClearance } = useLayout();
 
   const [text, setText] = useState<string | null>(null);
   const [wasRich, setWasRich] = useState(false);
@@ -345,7 +347,11 @@ export default function PageEditorScreen({ route, navigation }: any) {
       )}
       <TextInput
         ref={inputRef}
-        style={[styles.editor, { color: colors.textPrimary }, focus && styles.focusEditor]}
+        style={[
+          styles.editor,
+          { color: colors.textPrimary, paddingBottom: Math.max(stackBottomClearance(false), 28) + 24 },
+          focus && styles.focusEditor,
+        ]}
         multiline
         textAlignVertical="top"
         value={text}
@@ -372,7 +378,16 @@ export default function PageEditorScreen({ route, navigation }: any) {
         placeholder="Write freely…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
         scrollEnabled
+        // Keep typing fluid on long notes (esp. Android).
+        scrollEventThrottle={16}
       />
+      {focus && (
+        <View pointerEvents="none" style={[styles.focusTitle, { paddingTop: 12 }]}>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>
+            {page?.title ?? "Page"}
+          </Text>
+        </View>
+      )}
       {wikiSuggestions.length > 0 && (
         <GlassCard style={styles.wikiMenu} contentStyle={{ paddingVertical: 6, maxHeight: 220 }}>
           <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -474,6 +489,14 @@ const styles = StyleSheet.create({
   notice: { fontSize: 11, paddingHorizontal: 20, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   editor: { flex: 1, padding: 20, fontSize: 15, lineHeight: 22 },
   focusEditor: { paddingTop: 64, fontSize: 16, lineHeight: 26, paddingHorizontal: 24 },
+  focusTitle: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
   exitFocusWrap: {
     position: "absolute",
     bottom: 24,

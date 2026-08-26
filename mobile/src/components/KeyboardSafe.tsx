@@ -60,7 +60,14 @@ export function KeyboardSafe({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
     >
-      <View style={styles.flex}>{children}</View>
+      <View
+        style={[
+          styles.flex,
+          Platform.OS === "android" && keyboardHeight > 0 && { paddingBottom: keyboardHeight },
+        ]}
+      >
+        {children}
+      </View>
     </KeyboardAvoidingView>
   );
 }

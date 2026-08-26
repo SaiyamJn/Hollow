@@ -4,10 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import {
   deleteQuickNotePermanent,
+  deleteTaskPermanent,
   fetchQuickNotes,
+  fetchTrashedTasks,
   restoreQuickNote,
+  restoreTask,
 } from "../lib/api";
-import type { QuickNote } from "../lib/types";
+import type { QuickNote, Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import EmptyState from "../components/EmptyState";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -35,110 +38,180 @@ function previewLabel(note: QuickNote) {
   return body ? body.slice(0, 80) : "Note";
 }
 
+type Tab = "notes" | "tasks";
+
 export default function RecycleBinScreen() {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const { screenPad, stackBottomClearance } = useLayout();
+  const [tab, setTab] = useState<Tab>("notes");
   const [confirm, setConfirm] = useState<
     | { kind: "empty" }
     | { kind: "purge"; id: string }
     | null
   >(null);
 
-  const { data: trashed } = useQuery({
+  const { data: trashedNotes } = useQuery({
     queryKey: ["quicknotes", "trash"],
     queryFn: () => fetchQuickNotes(true, true),
   });
+  const { data: trashedTasks } = useQuery({
+    queryKey: ["tasks", "trash"],
+    queryFn: fetchTrashedTasks,
+  });
 
-  const invalidate = () => {
+  const invalidateNotes = () => {
     void queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
   };
+  const invalidateTasks = () => {
+    void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  };
 
-  const restore = useMutation({
+  const restoreNote = useMutation({
     mutationFn: restoreQuickNote,
     onMutate: () => animateListChange(),
-    onSuccess: invalidate,
+    onSuccess: invalidateNotes,
     onError: (err: any) => {
       Alert.alert("Couldn't restore", err?.response?.data?.error ?? "Try again.");
     },
   });
 
-  const purgeOne = useMutation({
+  const purgeNote = useMutation({
     mutationFn: deleteQuickNotePermanent,
     onMutate: () => animateListChange(),
-    onSuccess: invalidate,
+    onSuccess: invalidateNotes,
   });
 
-  const emptyAll = useMutation({
+  const emptyNotes = useMutation({
     mutationFn: async () => {
-      const ids = (trashed ?? []).map((n) => n.id);
+      const ids = (trashedNotes ?? []).map((n) => n.id);
       for (const id of ids) await deleteQuickNotePermanent(id);
     },
     onMutate: () => animateListChange(),
-    onSuccess: invalidate,
+    onSuccess: invalidateNotes,
   });
+
+  const restoreTaskMut = useMutation({
+    mutationFn: restoreTask,
+    onMutate: () => animateListChange(),
+    onSuccess: invalidateTasks,
+    onError: (err: any) => {
+      Alert.alert("Couldn't restore", err?.response?.data?.error ?? "Try again.");
+    },
+  });
+
+  const purgeTask = useMutation({
+    mutationFn: deleteTaskPermanent,
+    onMutate: () => animateListChange(),
+    onSuccess: invalidateTasks,
+  });
+
+  const emptyTasks = useMutation({
+    mutationFn: async () => {
+      const ids = (trashedTasks ?? []).map((t) => t.id);
+      for (const id of ids) await deleteTaskPermanent(id);
+    },
+    onMutate: () => animateListChange(),
+    onSuccess: invalidateTasks,
+  });
+
+  const notes = trashedNotes ?? [];
+  const tasks = trashedTasks ?? [];
+  const data = tab === "notes" ? notes : tasks;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       <FlatList
-        data={trashed ?? []}
-        keyExtractor={(n) => n.id}
+        data={data as Array<QuickNote | Task>}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={{
           padding: screenPad,
           paddingBottom: stackBottomClearance(false),
           flexGrow: 1,
         }}
+        decelerationRate="normal"
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={{ marginBottom: 14 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
-              Deleted notes & lists stay here for 7 days, then they're removed for good.
+          <View style={{ marginBottom: 12, gap: 10 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
+              Notes and tasks stay here for 7 days.
             </Text>
-            {(trashed?.length ?? 0) > 0 && (
+            <View style={styles.tabs}>
+              {(["notes", "tasks"] as const).map((id) => {
+                const active = tab === id;
+                const count = id === "notes" ? notes.length : tasks.length;
+                return (
+                  <Pressable
+                    key={id}
+                    onPress={() => setTab(id)}
+                    style={[
+                      styles.tab,
+                      {
+                        borderColor: active ? colors.accent : colors.glassBorder,
+                        backgroundColor: active ? colors.accentSoft : colors.glass,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: active ? colors.accent : colors.textSecondary, fontSize: 13, fontWeight: "700" }}>
+                      {id === "notes" ? "Notes" : "Tasks"}
+                      {count > 0 ? ` (${count})` : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {data.length > 0 && (
               <Pressable
                 onPress={() => setConfirm({ kind: "empty" })}
-                style={{ alignSelf: "flex-start", marginTop: 10 }}
+                style={{ alignSelf: "center", paddingVertical: 6, paddingHorizontal: 10 }}
               >
-                <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "500" }}>
-                  Empty bin
-                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Empty {tab}</Text>
               </Pressable>
             )}
           </View>
         }
         renderItem={({ item }) => {
-          const left = daysLeft(item.deletedAt);
+          if (tab === "notes") {
+            const note = item as QuickNote;
+            const left = daysLeft(note.deletedAt);
+            return (
+              <GlassCard style={{ marginBottom: 8 }} contentStyle={styles.row}>
+                <Feather name="file-text" size={15} color={colors.textSecondary} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }} numberOfLines={1}>
+                    {previewLabel(note)}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>{left}d left</Text>
+                </View>
+                <Pressable onPress={() => restoreNote.mutate(note.id)} hitSlop={8}>
+                  <Feather name="rotate-ccw" size={16} color={colors.accent} />
+                </Pressable>
+                <Pressable onPress={() => setConfirm({ kind: "purge", id: note.id })} hitSlop={8}>
+                  <Feather name="trash-2" size={16} color={colors.textSecondary} />
+                </Pressable>
+              </GlassCard>
+            );
+          }
+          const task = item as Task;
+          const left = daysLeft(task.deletedAt);
+          const subCount = task.subtasks?.length ?? 0;
           return (
-            <GlassCard style={{ marginBottom: 10 }} contentStyle={styles.row}>
-              <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
-                <Feather
-                  name={item.kind === "list" ? "check-square" : "file-text"}
-                  size={16}
-                  color={colors.accent}
-                />
-              </View>
+            <GlassCard style={{ marginBottom: 8 }} contentStyle={styles.row}>
+              <Feather name="check-square" size={15} color={colors.textSecondary} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }} numberOfLines={1}>
-                  {previewLabel(item)}
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }} numberOfLines={1}>
+                  {task.title}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {left === 0 ? "Deletes today" : `${left} day${left === 1 ? "" : "s"} left`}
-                  {item.kind === "list" ? " · List" : " · Note"}
+                <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                  {subCount > 0 ? `${subCount} sub · ` : ""}
+                  {left}d left
                 </Text>
               </View>
-              <Pressable
-                onPress={() => restore.mutate(item.id)}
-                hitSlop={8}
-                style={{ padding: 6 }}
-                accessibilityLabel="Restore"
-              >
+              <Pressable onPress={() => restoreTaskMut.mutate(task.id)} hitSlop={8}>
                 <Feather name="rotate-ccw" size={16} color={colors.accent} />
               </Pressable>
-              <Pressable
-                onPress={() => setConfirm({ kind: "purge", id: item.id })}
-                hitSlop={8}
-                style={{ padding: 6 }}
-              >
-                <Feather name="x" size={16} color={colors.textSecondary} />
+              <Pressable onPress={() => setConfirm({ kind: "purge", id: task.id })} hitSlop={8}>
+                <Feather name="trash-2" size={16} color={colors.textSecondary} />
               </Pressable>
             </GlassCard>
           );
@@ -146,24 +219,30 @@ export default function RecycleBinScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="trash-2"
-            title="Nothing in the bin"
-            subtitle="Deleted notes hang out here for a week, just in case."
+            title={tab === "notes" ? "No notes in the bin" : "No tasks in the bin"}
+            subtitle="Deleted items appear here for 7 days."
           />
         }
       />
       <ConfirmModal
         visible={confirm !== null}
-        title={confirm?.kind === "empty" ? "Empty recycle bin?" : "Delete forever?"}
+        title={confirm?.kind === "empty" ? `Empty ${tab}?` : "Delete forever?"}
         message={
           confirm?.kind === "empty"
-            ? "This permanently deletes everything here."
+            ? `Permanently delete ${data.length} ${tab === "notes" ? "note" : "task"}${data.length === 1 ? "" : "s"}? This can't be undone.`
             : "This can't be undone."
         }
         confirmLabel={confirm?.kind === "empty" ? "Empty" : "Delete"}
         onClose={() => setConfirm(null)}
-        onConfirm={() => {
-          if (confirm?.kind === "empty") emptyAll.mutate();
-          else if (confirm?.kind === "purge") purgeOne.mutate(confirm.id);
+        onConfirm={async () => {
+          if (confirm?.kind === "empty") {
+            if (tab === "notes") await emptyNotes.mutateAsync();
+            else await emptyTasks.mutateAsync();
+          } else if (confirm?.kind === "purge") {
+            if (tab === "notes") await purgeNote.mutateAsync(confirm.id);
+            else await purgeTask.mutateAsync(confirm.id);
+          }
+          setConfirm(null);
         }}
       />
     </View>
@@ -171,18 +250,18 @@ export default function RecycleBinScreen() {
 }
 
 const styles = StyleSheet.create({
+  tabs: { flexDirection: "row", gap: 8, justifyContent: "center" },
+  tab: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-  },
-  icon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

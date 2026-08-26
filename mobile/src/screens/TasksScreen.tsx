@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -8,10 +8,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
-import { syncTaskReminders } from "../lib/notifications";
 import { animateListChange, animateTaskComplete } from "../lib/motion";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
@@ -87,6 +87,7 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
 type EditDraft = TaskDraft & { id: string };
 
 export default function TasksScreen() {
+  const navigation = useNavigation<any>();
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
@@ -103,10 +104,6 @@ export default function TasksScreen() {
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
-
-  useEffect(() => {
-    void syncTaskReminders(tasks);
-  }, [tasks]);
 
   const create = useMutation({
     mutationFn: createTask,
@@ -263,6 +260,9 @@ export default function TasksScreen() {
         }}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
+        decelerationRate="normal"
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ marginBottom: 12 }}>
             <View style={styles.layoutRow}>
@@ -293,6 +293,16 @@ export default function TasksScreen() {
                   </Pressable>
                 );
               })}
+              <Pressable
+                onPress={() => navigation.navigate("RecycleBin")}
+                hitSlop={8}
+                style={[
+                  styles.layoutChip,
+                  { borderColor: colors.glassBorder, backgroundColor: colors.glass, marginLeft: "auto" },
+                ]}
+              >
+                <Feather name="trash-2" size={14} color={colors.textSecondary} />
+              </Pressable>
             </View>
             <GlassCard
               style={{ alignSelf: "stretch", width: "100%" }}
@@ -407,6 +417,35 @@ export default function TasksScreen() {
                     >
                       {task.title}
                     </Text>
+                    {subtasks.length > 0 && (
+                      <Pressable
+                        onPress={() =>
+                          setExpanded((prev) => {
+                            animateListChange();
+                            const next = new Set(prev);
+                            next.has(task.id) ? next.delete(task.id) : next.add(task.id);
+                            return next;
+                          })
+                        }
+                        hitSlop={6}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 3,
+                          paddingHorizontal: 7,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          backgroundColor: colors.accentSoft,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: `${colors.accent}55`,
+                        }}
+                      >
+                        <Feather name="check-square" size={10} color={colors.accent} />
+                        <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "700" }}>
+                          {subtasks.filter((s) => s.done).length}/{subtasks.length}
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                   {!!task.description && (
                     <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>

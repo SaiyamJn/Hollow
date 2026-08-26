@@ -282,6 +282,14 @@ function Editor({
     const unsubSel = editor.onSelectionChange(() => {
       if (scrollTimer) window.clearTimeout(scrollTimer);
       scrollTimer = window.setTimeout(persistPosition, 250);
+      // Keep the caret above the floating pill nav / formatting toolbar.
+      try {
+        const block = editor.getTextCursorPosition().block;
+        const el = editorShellRef.current?.querySelector(`[data-id="${block.id}"]`) as HTMLElement | null;
+        el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } catch {
+        // No cursor yet
+      }
     });
 
     return () => {
@@ -442,10 +450,10 @@ function Editor({
   return (
     <div
       className={clsx(
-        "w-full mx-auto animate-rise-in",
+        "w-full mx-auto animate-rise-in page-editor",
         focusMode
-          ? "max-w-5xl px-8 md:px-12 pt-14 pb-24 focus-prose"
-          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16 py-6"
+          ? "max-w-5xl px-8 md:px-12 pt-14 pb-28 focus-prose"
+          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16 py-6 pb-36"
       )}
     >
       {session.localOnly && (
@@ -453,13 +461,22 @@ function Editor({
           Editing offline from saved content — realtime sync will resume when connected.
         </p>
       )}
-      <div className="flex items-baseline justify-between gap-4">
+      <div
+        className={clsx(
+          "sticky z-10 flex items-baseline justify-between gap-4",
+          "border-b border-border/50 bg-[color-mix(in_srgb,var(--surface-0)_90%,transparent)] backdrop-blur-md",
+          focusMode
+            ? "top-0 -mx-8 md:-mx-12 px-8 md:px-12 py-2.5"
+            : "top-12 -mx-6 sm:-mx-10 lg:-mx-14 xl:-mx-16 px-6 sm:px-10 lg:px-14 xl:px-16 py-2.5"
+        )}
+      >
         <input
-          className="flex-1 bg-transparent text-2xl font-medium focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-lg sm:text-xl font-medium focus:outline-none truncate"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={commitTitle}
           onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          aria-label="Page title"
         />
         <span className="flex items-center gap-2 shrink-0">
           <span

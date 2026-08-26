@@ -158,9 +158,12 @@ model Task {
   parentTask   Task?     @relation("SubTasks", fields: [parentTaskId], references: [id])
   parentTaskId String?
   subtasks     Task[]    @relation("SubTasks")
+  /// Soft-delete — purged permanently 7 days after this timestamp
+  deletedAt    DateTime?
   createdAt    DateTime  @default(now())
 
   @@index([ownerId, parentTaskId])
+  @@index([ownerId, deletedAt])
 }
 
 model Tag {

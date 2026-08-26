@@ -111,7 +111,27 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 .bn-editor {
   background: transparent !important;
   padding-inline: 0.35rem !important;
+  /* Keep the last lines above the floating pill nav / formatting toolbar. */
+  padding-bottom: 5.5rem !important;
   font-family: var(--font-sans) !important;
+  scroll-margin-bottom: 6rem;
+}
+
+/* Floating formatting toolbar — sit above the bottom pill nav, not over prose. */
+.bn-container .bn-formatting-toolbar,
+.bn-mantine .bn-formatting-toolbar,
+[data-floating-ui-portal] .bn-formatting-toolbar {
+  margin-bottom: 4.5rem;
+}
+
+.page-editor .bn-editor .bn-block-outer:last-child {
+  margin-bottom: 2rem;
+}
+
+/* Smooth scroll for the main app shell. */
+main {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Keep selected-block outline off the glyphs — padding inside the highlight. */

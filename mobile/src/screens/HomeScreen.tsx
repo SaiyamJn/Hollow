@@ -176,6 +176,9 @@ export default function HomeScreen({ navigation }: any) {
       contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) + keyboardInset }}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
+      showsVerticalScrollIndicator={false}
+      decelerationRate="normal"
+      scrollEventThrottle={16}
     >
       {/* greeting + daily note */}
       <View style={[styles.headerRow, isNarrow && styles.headerStacked]}>

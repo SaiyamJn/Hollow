@@ -104,6 +104,7 @@ export interface Task {
   repeatCount?: number | null;
   parentTaskId: string | null;
   subtasks?: Task[];
+  deletedAt?: string | null;
   createdAt: string;
 }
 

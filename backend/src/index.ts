@@ -8,7 +8,7 @@ import notebookRoutes from "./routes/notebooks";
 import sectionRoutes from "./routes/sections";
 import pageRoutes from "./routes/pages";
 import quickNoteRoutes, { purgeExpiredQuickNotes } from "./routes/quicknotes";
-import taskRoutes from "./routes/tasks";
+import taskRoutes, { purgeExpiredTasks } from "./routes/tasks";
 import tagRoutes from "./routes/tags";
 import adminRoutes from "./routes/admin";
 import { registerCollab } from "./sockets/collab";
@@ -75,7 +75,9 @@ const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`API listening on port ${PORT}`);
   void purgeExpiredQuickNotes().catch((err) => console.error("Trash purge failed:", err));
+  void purgeExpiredTasks().catch((err) => console.error("Task trash purge failed:", err));
   setInterval(() => {
     void purgeExpiredQuickNotes().catch((err) => console.error("Trash purge failed:", err));
+    void purgeExpiredTasks().catch((err) => console.error("Task trash purge failed:", err));
   }, 6 * 60 * 60 * 1000);
 });

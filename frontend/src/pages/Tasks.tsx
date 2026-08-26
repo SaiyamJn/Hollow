@@ -2,6 +2,7 @@ import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
+import { Link } from "react-router-dom";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import type { Task } from "../lib/types";
 import { Input } from "../components/ui/input";
@@ -259,6 +260,9 @@ export default function Tasks() {
         <p className="text-sm text-secondary mt-1">
           Star to pin · Focus for important × urgent
         </p>
+        <Link to="/recycle-bin" className="inline-block mt-2 text-xs text-secondary hover:text-accent">
+          Recycle bin
+        </Link>
       </div>
 
       <div className="flex justify-center gap-1 mb-5 p-1 rounded-xl border border-border glass-strong w-fit mx-auto shadow-card">
@@ -656,6 +660,20 @@ function TaskRow({
               {task.title}
             </span>
             <FocusChip focus={task.focus} className="shrink-0" />
+            {subtasks.length > 0 && (
+              <button
+                type="button"
+                title={expanded ? "Hide subtasks" : "View subtasks"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-accent-soft/60 px-1.5 py-0.5 text-[10px] font-semibold text-accent hover:bg-accent-soft"
+              >
+                <CheckSquare size={10} />
+                {subtasks.filter((s) => s.done).length}/{subtasks.length}
+              </button>
+            )}
           </span>
           {task.description ? (
             <span className="block text-xs text-secondary truncate mt-0.5">{task.description}</span>
@@ -680,11 +698,6 @@ function TaskRow({
             </span>
           ) : null}
         </button>
-        {subtasks.length > 0 && (
-          <span className="status-chip status-chip-muted shrink-0">
-            {subtasks.filter((s) => s.done).length}/{subtasks.length}
-          </span>
-        )}
         <div className={clsx("row-actions flex items-center gap-1 shrink-0", task.starred && "!opacity-100")}>
           <button
             title={task.starred ? "Unstar" : "Star"}

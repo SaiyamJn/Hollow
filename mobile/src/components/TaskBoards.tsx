@@ -58,14 +58,21 @@ function CompactCard({
         >
           {task.title}
         </Text>
-        {!!task.dueAt && (
-          <Text
-            style={{ color: tint || colors.textSecondary, fontSize: 10, marginTop: 2, fontWeight: "600" }}
-            numberOfLines={1}
-          >
-            {formatDueLabel(task.dueAt)}
-          </Text>
-        )}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+          {!!task.dueAt && (
+            <Text
+              style={{ color: tint || colors.textSecondary, fontSize: 10, fontWeight: "600" }}
+              numberOfLines={1}
+            >
+              {formatDueLabel(task.dueAt)}
+            </Text>
+          )}
+          {(task.subtasks?.length ?? 0) > 0 && (
+            <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "700" }}>
+              {task.subtasks!.filter((s) => s.done).length}/{task.subtasks!.length} sub
+            </Text>
+          )}
+        </View>
       </View>
     </Pressable>
   );

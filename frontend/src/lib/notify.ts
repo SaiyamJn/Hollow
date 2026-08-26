@@ -143,7 +143,7 @@ export function notifyDueTasks(tasks: Task[]) {
   let changed = false;
   const openIds = new Set<string>();
 
-  for (const task of tasks.flatMap((t) => [t, ...(t.subtasks ?? [])])) {
+  for (const task of tasks) {
     if (task.done) {
       dismissTaskNotification(task.id);
       if (snoozes[task.id]) {
@@ -152,6 +152,8 @@ export function notifyDueTasks(tasks: Task[]) {
       }
       continue;
     }
+    // Skip nested subtasks — remind on the parent only.
+    if (task.parentTaskId) continue;
     openIds.add(task.id);
     if (!task.dueAt) continue;
     const due = new Date(task.dueAt).getTime();
