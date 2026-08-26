@@ -139,13 +139,18 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   background: transparent !important;
   /* Room for the selected-block outline so it isn't clipped on the sides. */
   padding-inline: 0.9rem !important;
-  /* Extra room so the caret can sit above the bottom while typing. */
-  padding-bottom: max(14rem, 34vh) !important;
+  /* Tight under the last line so the selection box doesn't swallow the page. */
+  padding-bottom: 1.5rem !important;
   font-family: var(--font-sans) !important;
 }
 
 .page-editor .bn-editor .bn-block-outer:last-child {
-  padding-bottom: 1.25rem;
+  padding-bottom: 0.35rem;
+}
+
+/* Scroll room lives on the page, not inside the editor highlight. */
+.page-editor {
+  padding-bottom: max(7rem, 20vh);
 }
 
 /* Keep selected-block outline off the glyphs — padding inside the highlight. */

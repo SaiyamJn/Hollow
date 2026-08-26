@@ -541,8 +541,8 @@ function Editor({
       className={clsx(
         "w-full mx-auto page-editor",
         focusMode
-          ? "max-w-5xl px-8 md:px-12 pt-3 pb-24 focus-prose"
-          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16 pb-8"
+          ? "max-w-5xl px-8 md:px-12 pt-3 focus-prose"
+          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16"
       )}
     >
       {session.localOnly && (
