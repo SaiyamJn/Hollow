@@ -147,6 +147,19 @@ export default function NotebooksScreen({ navigation }: any) {
           <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
             Organize pages — rename anytime.
           </Text>
+          <Pressable
+            onPress={() => navigation.navigate("RecycleBin", { tab: "pages" })}
+            style={[
+              styles.binChip,
+              { borderColor: colors.border, backgroundColor: colors.surface1, marginTop: 10 },
+            ]}
+          >
+            <Feather name="trash-2" size={14} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
+              Recycle bin
+            </Text>
+            <Feather name="chevron-right" size={14} color={colors.textSecondary} />
+          </Pressable>
         </View>
         {(notebooks ?? []).map((nb) => {
           const sealed = nb.isLocked && !unlock.unlockedNotebooks[nb.id];
@@ -306,4 +319,13 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   iconBox: { height: 38, width: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  binChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 });

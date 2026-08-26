@@ -178,6 +178,19 @@ export default function NotebookScreen({ route, navigation }: any) {
         decelerationRate="normal"
         scrollEventThrottle={16}
       >
+        <Pressable
+          onPress={() => navigation.navigate("RecycleBin", { tab: "pages" })}
+          style={[
+            styles.binChip,
+            { borderColor: colors.border, backgroundColor: colors.surface1, marginBottom: 12, alignSelf: "center" },
+          ]}
+        >
+          <Feather name="trash-2" size={14} color={colors.textSecondary} />
+          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
+            Recycle bin
+          </Text>
+          <Feather name="chevron-right" size={14} color={colors.textSecondary} />
+        </Pressable>
         {(notebook?.sections ?? []).map((sec) => {
           const sealed = sec.isLocked && !unlock.sectionPasswords[sec.id];
           const isOpen = expanded.has(sec.id) && !sealed;
@@ -361,15 +374,15 @@ export default function NotebookScreen({ route, navigation }: any) {
 
       <ConfirmModal
         visible={confirm !== null}
-        title={confirm?.kind === "section" ? "Delete section" : "Delete page"}
+        title={confirm?.kind === "section" ? "Delete section" : "Move to recycle bin?"}
         message={
           confirm?.kind === "section"
             ? `Delete “${confirm.section.title}”? All pages inside will be permanently removed.`
             : confirm?.kind === "page"
-              ? `Delete “${confirm.title}”? This cannot be undone.`
+              ? `Move “${confirm.title}” to the recycle bin? You can restore it within 7 days.`
               : ""
         }
-        confirmLabel="Delete"
+        confirmLabel={confirm?.kind === "page" ? "Move" : "Delete"}
         onClose={() => setConfirm(null)}
         onConfirm={async () => {
           if (!confirm) return;
@@ -402,4 +415,13 @@ const styles = StyleSheet.create({
   pages: { marginLeft: 7, paddingLeft: 14, borderLeftWidth: StyleSheet.hairlineWidth, paddingBottom: 8 },
   pageRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 },
   pageOpen: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, minWidth: 0 },
+  binChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 });

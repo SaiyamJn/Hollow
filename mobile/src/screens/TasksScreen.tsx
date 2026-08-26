@@ -293,17 +293,20 @@ export default function TasksScreen() {
                   </Pressable>
                 );
               })}
-              <Pressable
-                onPress={() => navigation.navigate("RecycleBin")}
-                hitSlop={8}
-                style={[
-                  styles.layoutChip,
-                  { borderColor: colors.glassBorder, backgroundColor: colors.glass, marginLeft: "auto" },
-                ]}
-              >
-                <Feather name="trash-2" size={14} color={colors.textSecondary} />
-              </Pressable>
             </View>
+            <Pressable
+              onPress={() => navigation.navigate("RecycleBin", { tab: "tasks" })}
+              style={[
+                styles.binChip,
+                { borderColor: colors.border, backgroundColor: colors.surface1 },
+              ]}
+            >
+              <Feather name="trash-2" size={14} color={colors.textSecondary} />
+              <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
+                Recycle bin
+              </Text>
+              <Feather name="chevron-right" size={14} color={colors.textSecondary} />
+            </Pressable>
             <GlassCard
               style={{ alignSelf: "stretch", width: "100%" }}
               contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}
@@ -672,6 +675,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
+  },
+  binChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 12,
   },
   quickAdd: { paddingVertical: 10, fontSize: 14 },
   groupHeader: {

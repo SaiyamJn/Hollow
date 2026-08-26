@@ -260,7 +260,14 @@ export default function Tasks() {
         <p className="text-sm text-secondary mt-1">
           Star to pin · Focus for important × urgent
         </p>
-        <Link to="/recycle-bin" className="inline-block mt-2 text-xs text-secondary hover:text-accent">
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
+        <Link
+          to="/recycle-bin?tab=tasks"
+          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
+        >
+          <Trash2 size={13} />
           Recycle bin
         </Link>
       </div>

@@ -50,7 +50,7 @@ export type RootStackParamList = {
   Notebook: { notebookId: string; title: string };
   Page: { pageId: string; sectionId: string; notebookId: string; title: string };
   QuickNote: { noteId: string; title?: string; content?: string; color?: string; kind?: "note" | "list" };
-  RecycleBin: undefined;
+  RecycleBin: { tab?: "notes" | "pages" | "tasks" } | undefined;
   Settings: undefined;
   Account: undefined;
   Devices: undefined;

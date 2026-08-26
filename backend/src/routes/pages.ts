@@ -10,13 +10,63 @@ import { hasActiveDoc } from "../sockets/collab";
 const router = Router();
 router.use(requireAuth);
 
+const TRASH_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function hardDeletePage(pageId: string) {
+  await prisma.$transaction([
+    prisma.pageLink.deleteMany({
+      where: { OR: [{ sourcePageId: pageId }, { targetPageId: pageId }] },
+    }),
+    prisma.pageDocState.deleteMany({ where: { pageId } }),
+    prisma.page.delete({ where: { id: pageId } }),
+  ]);
+}
+
+/** Hard-delete pages that have sat in the recycle bin longer than 7 days. */
+export async function purgeExpiredPages() {
+  const cutoff = new Date(Date.now() - TRASH_MS);
+  const expired = await prisma.page.findMany({
+    where: { deletedAt: { not: null, lt: cutoff } },
+    select: { id: true },
+  });
+  if (expired.length === 0) return;
+  const ids = expired.map((p) => p.id);
+  await prisma.$transaction([
+    prisma.pageLink.deleteMany({
+      where: { OR: [{ sourcePageId: { in: ids } }, { targetPageId: { in: ids } }] },
+    }),
+    prisma.pageDocState.deleteMany({ where: { pageId: { in: ids } } }),
+    prisma.page.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+}
+
+function publicTrashedPage(page: {
+  id: string;
+  title: string;
+  deletedAt: Date | null;
+  sectionId: string;
+  updatedAt: Date;
+  section: { title: string; notebookId: string; notebook: { title: string } };
+}) {
+  return {
+    id: page.id,
+    title: page.title,
+    deletedAt: page.deletedAt,
+    sectionId: page.sectionId,
+    sectionTitle: page.section.title,
+    notebookId: page.section.notebookId,
+    notebookTitle: page.section.notebook.title,
+    updatedAt: page.updatedAt,
+  };
+}
+
 // Static paths must be registered before "/:id" or Express treats them as ids.
 
 // Recently edited pages across every notebook the user owns.
 router.get("/recent", async (req: AuthedRequest, res) => {
   const limit = Math.min(parseInt(String(req.query.limit ?? "8"), 10) || 8, 25);
   const pages = await prisma.page.findMany({
-    where: { section: { notebook: { ownerId: req.userId! } } },
+    where: { deletedAt: null, section: { notebook: { ownerId: req.userId! } } },
     orderBy: { updatedAt: "desc" },
     take: limit,
     select: {
@@ -38,6 +88,32 @@ router.get("/recent", async (req: AuthedRequest, res) => {
   res.json(pages);
 });
 
+router.get("/trash", async (req: AuthedRequest, res) => {
+  await purgeExpiredPages();
+  const pages = await prisma.page.findMany({
+    where: {
+      deletedAt: { not: null },
+      section: { notebook: { ownerId: req.userId! } },
+    },
+    orderBy: { deletedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      deletedAt: true,
+      sectionId: true,
+      updatedAt: true,
+      section: {
+        select: {
+          title: true,
+          notebookId: true,
+          notebook: { select: { title: true } },
+        },
+      },
+    },
+  });
+  res.json(pages.map(publicTrashedPage));
+});
+
 // Find-or-create today's daily note. The client sends its local date so the
 // journal day boundary follows the user's timezone, not the server's.
 router.post("/daily", async (req: AuthedRequest, res) => {
@@ -54,14 +130,26 @@ router.post("/daily", async (req: AuthedRequest, res) => {
     section = await prisma.section.create({ data: { title: "Daily notes", notebookId: notebook.id } });
   }
 
-  let page = await prisma.page.findFirst({ where: { sectionId: section.id, title: date } });
+  let page = await prisma.page.findFirst({
+    where: { sectionId: section.id, title: date, deletedAt: null },
+  });
   let created = false;
   if (!page) {
-    if (section.isLocked) return res.status(423).json({ error: "Your daily notes section is locked" });
-    page = await prisma.page.create({
-      data: { title: date, sectionId: section.id, content: sealAtRest("") },
+    const trashed = await prisma.page.findFirst({
+      where: { sectionId: section.id, title: date, deletedAt: { not: null } },
     });
-    created = true;
+    if (trashed) {
+      page = await prisma.page.update({
+        where: { id: trashed.id },
+        data: { deletedAt: null },
+      });
+    } else {
+      if (section.isLocked) return res.status(423).json({ error: "Your daily notes section is locked" });
+      page = await prisma.page.create({
+        data: { title: date, sectionId: section.id, content: sealAtRest("") },
+      });
+      created = true;
+    }
   }
   res.json({ id: page.id, title: page.title, sectionId: section.id, notebookId: notebook.id, created });
 });
@@ -71,7 +159,7 @@ router.get("/:id", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     include: { section: { include: { notebook: true } }, tags: true },
   });
-  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
   if (page.section.isLocked) {
     const password = req.header("x-section-password");
@@ -129,7 +217,7 @@ router.put("/:id", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     include: { section: { include: { notebook: true } } },
   });
-  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
   let storedContent: string;
   if (page.section.isLocked) {
@@ -147,7 +235,7 @@ router.put("/:id", async (req: AuthedRequest, res) => {
   // Parse `[[Page Title]]` (+ clickable /pages/:id hrefs) from plaintext
   // content, resolve within this notebook, replace outgoing PageLink rows.
   const notebookPages = await prisma.page.findMany({
-    where: { section: { notebookId: page.section.notebookId } },
+    where: { deletedAt: null, section: { notebookId: page.section.notebookId } },
     select: { id: true, title: true },
   });
   const targetIds = resolveWikiTargets(content, page.id, notebookPages);
@@ -176,9 +264,9 @@ router.get("/:id/backlinks", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     include: { section: { include: { notebook: true } } },
   });
-  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
   const links = await prisma.pageLink.findMany({
-    where: { targetPageId: page.id },
+    where: { targetPageId: page.id, sourcePage: { deletedAt: null } },
     include: { sourcePage: { select: { id: true, title: true, sectionId: true, updatedAt: true } } },
   });
   res.json(links.map((l) => l.sourcePage));
@@ -190,9 +278,9 @@ router.get("/:id/outlinks", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     include: { section: { include: { notebook: true } } },
   });
-  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
   const links = await prisma.pageLink.findMany({
-    where: { sourcePageId: page.id },
+    where: { sourcePageId: page.id, targetPage: { deletedAt: null } },
     include: { targetPage: { select: { id: true, title: true, sectionId: true, updatedAt: true } } },
   });
   res.json(links.map((l) => l.targetPage));
@@ -205,7 +293,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     include: { section: { include: { notebook: true } } },
   });
-  if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
   const oldTitle = page.title;
   const newTitle = parsed.data.title.trim();
@@ -224,6 +312,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
     const siblings = await prisma.page.findMany({
       where: {
         id: { not: page.id },
+        deletedAt: null,
         section: { notebookId: page.section.notebookId, isLocked: false },
       },
       select: { id: true, content: true },
@@ -251,12 +340,45 @@ router.delete("/:id", async (req: AuthedRequest, res) => {
     include: { section: { include: { notebook: true } } },
   });
   if (!page || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
-  await prisma.$transaction([
-    prisma.pageLink.deleteMany({ where: { OR: [{ sourcePageId: page.id }, { targetPageId: page.id }] } }),
-    prisma.pageDocState.deleteMany({ where: { pageId: page.id } }),
-    prisma.page.delete({ where: { id: page.id } }),
-  ]);
+  const permanent = req.query.permanent === "true";
+  if (permanent || page.deletedAt) {
+    await hardDeletePage(page.id);
+  } else {
+    await prisma.page.update({
+      where: { id: page.id },
+      data: { deletedAt: new Date() },
+    });
+  }
   res.status(204).end();
+});
+
+router.post("/:id/restore", async (req: AuthedRequest, res) => {
+  const page = await prisma.page.findUnique({
+    where: { id: req.params.id },
+    include: { section: { include: { notebook: true } } },
+  });
+  if (!page || page.section.notebook.ownerId !== req.userId || !page.deletedAt) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  const restored = await prisma.page.update({
+    where: { id: page.id },
+    data: { deletedAt: null },
+    select: {
+      id: true,
+      title: true,
+      deletedAt: true,
+      sectionId: true,
+      updatedAt: true,
+      section: {
+        select: {
+          title: true,
+          notebookId: true,
+          notebook: { select: { title: true } },
+        },
+      },
+    },
+  });
+  res.json(publicTrashedPage(restored));
 });
 
 export default router;

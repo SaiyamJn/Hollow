@@ -13,7 +13,7 @@ async function getOwnedPage(pageId: string, userId: string) {
     where: { id: pageId },
     include: { section: { include: { notebook: true } } },
   });
-  if (!page || page.section.notebook.ownerId !== userId) return null;
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== userId) return null;
   return page;
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Book, Lock, LockOpen, Pencil, Plus, ShieldOff, Trash2 } from "lucide-react";
 import {
@@ -92,11 +92,20 @@ export default function Notebooks() {
       <div className="text-center mb-8">
         <h1 className="text-xl font-medium">Notebooks</h1>
         <p className="text-sm text-secondary mt-1">Your shelves — open one to browse sections and pages.</p>
-        <Button variant="accent" className="mt-4" onClick={() => setCreateOpen(true)}>
-          <span className="inline-flex items-center gap-1.5">
-            <Plus size={14} /> New notebook
-          </span>
-        </Button>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <Button variant="accent" onClick={() => setCreateOpen(true)}>
+            <span className="inline-flex items-center gap-1.5">
+              <Plus size={14} /> New notebook
+            </span>
+          </Button>
+          <Link
+            to="/recycle-bin?tab=pages"
+            className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
+          >
+            <Trash2 size={13} />
+            Recycle bin
+          </Link>
+        </div>
       </div>
 
       {isLoading && <p className="text-sm text-secondary text-center">Loading…</p>}

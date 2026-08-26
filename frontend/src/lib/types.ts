@@ -21,6 +21,17 @@ export interface PageMeta {
   updatedAt: string;
 }
 
+export interface TrashedPage {
+  id: string;
+  title: string;
+  deletedAt?: string | null;
+  sectionId: string;
+  sectionTitle: string;
+  notebookId: string;
+  notebookTitle: string;
+  updatedAt: string;
+}
+
 export interface Section {
   id: string;
   title: string;

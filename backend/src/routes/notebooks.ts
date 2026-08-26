@@ -38,6 +38,7 @@ router.get("/", async (req: AuthedRequest, res) => {
           isLocked: true,
           createdAt: true,
           pages: {
+            where: { deletedAt: null },
             select: { id: true, title: true, updatedAt: true },
             orderBy: { createdAt: "asc" },
           },
@@ -124,11 +125,14 @@ router.get("/:id/graph", async (req: AuthedRequest, res) => {
   const notebook = await getOwnedNotebook(req.params.id, req.userId!);
   if (!notebook) return res.status(404).json({ error: "Not found" });
   const pages = await prisma.page.findMany({
-    where: { section: { notebookId: notebook.id } },
+    where: { deletedAt: null, section: { notebookId: notebook.id } },
     select: { id: true, title: true },
   });
   const links = await prisma.pageLink.findMany({
-    where: { sourcePage: { section: { notebookId: notebook.id } } },
+    where: {
+      sourcePage: { deletedAt: null, section: { notebookId: notebook.id } },
+      targetPage: { deletedAt: null },
+    },
     select: { sourcePageId: true, targetPageId: true },
   });
   res.json({

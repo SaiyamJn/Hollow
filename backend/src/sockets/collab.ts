@@ -98,7 +98,7 @@ export function registerCollab(io: Server) {
           where: { id: pageId },
           include: { section: { include: { notebook: true } }, docState: true },
         });
-        if (!page || page.section.notebook.ownerId !== socket.userId)
+        if (!page || page.deletedAt || page.section.notebook.ownerId !== socket.userId)
           return callback?.({ error: "Not found" });
 
         // Locked sections require the password on join, mirroring the

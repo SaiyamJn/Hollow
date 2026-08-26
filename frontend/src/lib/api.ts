@@ -21,6 +21,7 @@ import type {
   Task,
   TaskFocus,
   TaskRepeatRule,
+  TrashedPage,
   User,
 } from "./types";
 
@@ -217,8 +218,23 @@ export async function renamePage(pageId: string, title: string) {
   return data;
 }
 
+/** Soft-delete into the recycle bin (kept 7 days). */
 export async function deletePage(pageId: string) {
   await api.delete(`/pages/${pageId}`);
+}
+
+export async function deletePagePermanent(pageId: string) {
+  await api.delete(`/pages/${pageId}`, { params: { permanent: "true" } });
+}
+
+export async function restorePage(pageId: string) {
+  const { data } = await api.post<TrashedPage>(`/pages/${pageId}/restore`);
+  return data;
+}
+
+export async function fetchTrashedPages() {
+  const { data } = await api.get<TrashedPage[]>("/pages/trash");
+  return data;
 }
 
 export async function fetchBacklinks(pageId: string) {

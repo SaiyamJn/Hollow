@@ -298,6 +298,13 @@ export default function NotebookDetail() {
               <Plus size={14} /> Section
             </span>
           </Button>
+          <Link
+            to="/recycle-bin?tab=pages"
+            className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
+          >
+            <Trash2 size={13} />
+            Recycle bin
+          </Link>
         </div>
       </div>
 
@@ -669,10 +676,10 @@ export default function NotebookDetail() {
       </Dialog>
 
       <Dialog open={deletePageTarget !== null} onOpenChange={(o) => !o && setDeletePageTarget(null)}>
-        <DialogContent title="Delete page">
+        <DialogContent title="Move to recycle bin?">
           <div className="space-y-3">
             <p className="text-sm text-secondary">
-              Delete “{deletePageTarget?.title}”? This cannot be undone.
+              Move “{deletePageTarget?.title}” to the recycle bin? You can restore it within 7 days.
             </p>
             <div className="flex gap-2">
               <Button className="flex-1" variant="ghost" onClick={() => setDeletePageTarget(null)}>
@@ -683,7 +690,7 @@ export default function NotebookDetail() {
                 disabled={removePage.isPending}
                 onClick={() => deletePageTarget && removePage.mutate(deletePageTarget.id)}
               >
-                <span className="text-danger">{removePage.isPending ? "Deleting…" : "Delete"}</span>
+                <span className="text-danger">{removePage.isPending ? "Moving…" : "Move"}</span>
               </Button>
             </div>
           </div>

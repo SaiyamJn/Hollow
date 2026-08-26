@@ -3,14 +3,17 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import {
+  deletePagePermanent,
   deleteQuickNotePermanent,
   deleteTaskPermanent,
   fetchQuickNotes,
+  fetchTrashedPages,
   fetchTrashedTasks,
+  restorePage,
   restoreQuickNote,
   restoreTask,
 } from "../lib/api";
-import type { QuickNote, Task } from "../lib/types";
+import type { QuickNote, Task, TrashedPage } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import EmptyState from "../components/EmptyState";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -38,13 +41,25 @@ function previewLabel(note: QuickNote) {
   return body ? body.slice(0, 80) : "Note";
 }
 
-type Tab = "notes" | "tasks";
+type Tab = "notes" | "pages" | "tasks";
 
-export default function RecycleBinScreen() {
+function noun(tab: Tab, n: number) {
+  const one = tab === "notes" ? "note" : tab === "pages" ? "page" : "task";
+  return n === 1 ? one : `${one}s`;
+}
+
+export default function RecycleBinScreen({
+  route,
+}: {
+  route?: { params?: { tab?: Tab } };
+}) {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const { screenPad, stackBottomClearance } = useLayout();
-  const [tab, setTab] = useState<Tab>("notes");
+  const incoming = route?.params?.tab;
+  const [tab, setTab] = useState<Tab>(
+    incoming === "tasks" || incoming === "pages" ? incoming : "notes"
+  );
   const [confirm, setConfirm] = useState<
     | { kind: "empty" }
     | { kind: "purge"; id: string }
@@ -55,6 +70,10 @@ export default function RecycleBinScreen() {
     queryKey: ["quicknotes", "trash"],
     queryFn: () => fetchQuickNotes(true, true),
   });
+  const { data: trashedPages } = useQuery({
+    queryKey: ["pages", "trash"],
+    queryFn: fetchTrashedPages,
+  });
   const { data: trashedTasks } = useQuery({
     queryKey: ["tasks", "trash"],
     queryFn: fetchTrashedTasks,
@@ -62,6 +81,10 @@ export default function RecycleBinScreen() {
 
   const invalidateNotes = () => {
     void queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+  };
+  const invalidatePages = () => {
+    void queryClient.invalidateQueries({ queryKey: ["pages"] });
+    void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
   };
   const invalidateTasks = () => {
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -75,20 +98,38 @@ export default function RecycleBinScreen() {
       Alert.alert("Couldn't restore", err?.response?.data?.error ?? "Try again.");
     },
   });
-
   const purgeNote = useMutation({
     mutationFn: deleteQuickNotePermanent,
     onMutate: () => animateListChange(),
     onSuccess: invalidateNotes,
   });
-
   const emptyNotes = useMutation({
     mutationFn: async () => {
-      const ids = (trashedNotes ?? []).map((n) => n.id);
-      for (const id of ids) await deleteQuickNotePermanent(id);
+      for (const id of (trashedNotes ?? []).map((n) => n.id)) await deleteQuickNotePermanent(id);
     },
     onMutate: () => animateListChange(),
     onSuccess: invalidateNotes,
+  });
+
+  const restorePageMut = useMutation({
+    mutationFn: restorePage,
+    onMutate: () => animateListChange(),
+    onSuccess: invalidatePages,
+    onError: (err: any) => {
+      Alert.alert("Couldn't restore", err?.response?.data?.error ?? "Try again.");
+    },
+  });
+  const purgePage = useMutation({
+    mutationFn: deletePagePermanent,
+    onMutate: () => animateListChange(),
+    onSuccess: invalidatePages,
+  });
+  const emptyPages = useMutation({
+    mutationFn: async () => {
+      for (const id of (trashedPages ?? []).map((p) => p.id)) await deletePagePermanent(id);
+    },
+    onMutate: () => animateListChange(),
+    onSuccess: invalidatePages,
   });
 
   const restoreTaskMut = useMutation({
@@ -99,30 +140,28 @@ export default function RecycleBinScreen() {
       Alert.alert("Couldn't restore", err?.response?.data?.error ?? "Try again.");
     },
   });
-
   const purgeTask = useMutation({
     mutationFn: deleteTaskPermanent,
     onMutate: () => animateListChange(),
     onSuccess: invalidateTasks,
   });
-
   const emptyTasks = useMutation({
     mutationFn: async () => {
-      const ids = (trashedTasks ?? []).map((t) => t.id);
-      for (const id of ids) await deleteTaskPermanent(id);
+      for (const id of (trashedTasks ?? []).map((t) => t.id)) await deleteTaskPermanent(id);
     },
     onMutate: () => animateListChange(),
     onSuccess: invalidateTasks,
   });
 
   const notes = trashedNotes ?? [];
+  const pages = trashedPages ?? [];
   const tasks = trashedTasks ?? [];
-  const data = tab === "notes" ? notes : tasks;
+  const data = tab === "notes" ? notes : tab === "pages" ? pages : tasks;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       <FlatList
-        data={data as Array<QuickNote | Task>}
+        data={data as Array<QuickNote | Task | TrashedPage>}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{
           padding: screenPad,
@@ -134,12 +173,12 @@ export default function RecycleBinScreen() {
         ListHeaderComponent={
           <View style={{ marginBottom: 12, gap: 10 }}>
             <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
-              Notes and tasks stay here for 7 days.
+              Notes, pages, and tasks stay here for 7 days.
             </Text>
             <View style={styles.tabs}>
-              {(["notes", "tasks"] as const).map((id) => {
+              {(["notes", "pages", "tasks"] as const).map((id) => {
                 const active = tab === id;
-                const count = id === "notes" ? notes.length : tasks.length;
+                const count = id === "notes" ? notes.length : id === "pages" ? pages.length : tasks.length;
                 return (
                   <Pressable
                     key={id}
@@ -153,7 +192,7 @@ export default function RecycleBinScreen() {
                     ]}
                   >
                     <Text style={{ color: active ? colors.accent : colors.textSecondary, fontSize: 13, fontWeight: "700" }}>
-                      {id === "notes" ? "Notes" : "Tasks"}
+                      {id === "notes" ? "Notes" : id === "pages" ? "Pages" : "Tasks"}
                       {count > 0 ? ` (${count})` : ""}
                     </Text>
                   </Pressable>
@@ -192,6 +231,29 @@ export default function RecycleBinScreen() {
               </GlassCard>
             );
           }
+          if (tab === "pages") {
+            const page = item as TrashedPage;
+            const left = daysLeft(page.deletedAt);
+            return (
+              <GlassCard style={{ marginBottom: 8 }} contentStyle={styles.row}>
+                <Feather name="book-open" size={15} color={colors.textSecondary} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }} numberOfLines={1}>
+                    {page.title}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                    {page.notebookTitle} · {page.sectionTitle} · {left}d left
+                  </Text>
+                </View>
+                <Pressable onPress={() => restorePageMut.mutate(page.id)} hitSlop={8}>
+                  <Feather name="rotate-ccw" size={16} color={colors.accent} />
+                </Pressable>
+                <Pressable onPress={() => setConfirm({ kind: "purge", id: page.id })} hitSlop={8}>
+                  <Feather name="trash-2" size={16} color={colors.textSecondary} />
+                </Pressable>
+              </GlassCard>
+            );
+          }
           const task = item as Task;
           const left = daysLeft(task.deletedAt);
           const subCount = task.subtasks?.length ?? 0;
@@ -219,7 +281,7 @@ export default function RecycleBinScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="trash-2"
-            title={tab === "notes" ? "No notes in the bin" : "No tasks in the bin"}
+            title={`No ${noun(tab, 2)} in the bin`}
             subtitle="Deleted items appear here for 7 days."
           />
         }
@@ -229,7 +291,7 @@ export default function RecycleBinScreen() {
         title={confirm?.kind === "empty" ? `Empty ${tab}?` : "Delete forever?"}
         message={
           confirm?.kind === "empty"
-            ? `Permanently delete ${data.length} ${tab === "notes" ? "note" : "task"}${data.length === 1 ? "" : "s"}? This can't be undone.`
+            ? `Permanently delete ${data.length} ${noun(tab, data.length)}? This can't be undone.`
             : "This can't be undone."
         }
         confirmLabel={confirm?.kind === "empty" ? "Empty" : "Delete"}
@@ -237,9 +299,11 @@ export default function RecycleBinScreen() {
         onConfirm={async () => {
           if (confirm?.kind === "empty") {
             if (tab === "notes") await emptyNotes.mutateAsync();
+            else if (tab === "pages") await emptyPages.mutateAsync();
             else await emptyTasks.mutateAsync();
           } else if (confirm?.kind === "purge") {
             if (tab === "notes") await purgeNote.mutateAsync(confirm.id);
+            else if (tab === "pages") await purgePage.mutateAsync(confirm.id);
             else await purgeTask.mutateAsync(confirm.id);
           }
           setConfirm(null);
@@ -250,7 +314,7 @@ export default function RecycleBinScreen() {
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: "row", gap: 8, justifyContent: "center" },
+  tabs: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
   tab: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,

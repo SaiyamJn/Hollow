@@ -474,9 +474,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
       )}
       <ConfirmModal
         visible={confirmDelete}
-        title="Delete page"
-        message={`Delete “${page?.title ?? "this page"}”? This cannot be undone.`}
-        confirmLabel="Delete"
+        title="Move to recycle bin?"
+        message={`Move “${page?.title ?? "this page"}” to the recycle bin? You can restore it within 7 days.`}
+        confirmLabel="Move"
         onClose={() => setConfirmDelete(false)}
         onConfirm={async () => {
           skipSave.current = true;

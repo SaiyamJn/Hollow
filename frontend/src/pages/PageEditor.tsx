@@ -716,17 +716,17 @@ function Editor({
       )}
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent title="Delete page">
+        <DialogContent title="Move to recycle bin?">
           <div className="space-y-3">
             <p className="text-sm text-secondary">
-              Delete “{page.title}”? This cannot be undone.
+              Move “{page.title}” to the recycle bin? You can restore it within 7 days.
             </p>
             <div className="flex gap-2">
               <Button className="flex-1" variant="ghost" onClick={() => setConfirmDelete(false)}>
                 Cancel
               </Button>
               <Button className="flex-1" disabled={deleting} onClick={() => void removePage()}>
-                <span className="text-danger">{deleting ? "Deleting…" : "Delete"}</span>
+                <span className="text-danger">{deleting ? "Moving…" : "Move"}</span>
               </Button>
             </div>
           </div>
