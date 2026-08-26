@@ -174,6 +174,9 @@ export default function NotebookScreen({ route, navigation }: any) {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="normal"
+        scrollEventThrottle={16}
       >
         {(notebook?.sections ?? []).map((sec) => {
           const sealed = sec.isLocked && !unlock.sectionPasswords[sec.id];

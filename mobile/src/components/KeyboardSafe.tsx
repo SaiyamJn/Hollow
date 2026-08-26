@@ -47,6 +47,9 @@ export function KeyboardSafe({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           showsVerticalScrollIndicator={false}
+          decelerationRate="normal"
+          scrollEventThrottle={16}
+          nestedScrollEnabled
         >
           {children}
         </ScrollView>

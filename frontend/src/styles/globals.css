@@ -100,6 +100,11 @@ html {
   background-color: var(--surface-0);
   background-image: var(--glow);
 }
+.app-shell main {
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-top: 4.25rem;
+  scroll-padding-bottom: 32vh;
+}
 h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 
 ::selection {
@@ -134,8 +139,8 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   background: transparent !important;
   /* Room for the selected-block outline so it isn't clipped on the sides. */
   padding-inline: 0.9rem !important;
-  /* Keep the last lines above the floating pill nav. */
-  padding-bottom: 4.5rem !important;
+  /* Extra room so the caret can sit above the bottom while typing. */
+  padding-bottom: max(14rem, 34vh) !important;
   font-family: var(--font-sans) !important;
 }
 

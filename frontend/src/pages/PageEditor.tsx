@@ -37,6 +37,7 @@ import { Dialog, DialogContent } from "../components/ui/dialog";
 import { PAGE_TEMPLATES } from "../lib/templates";
 import {
   findEditorScrollParent,
+  keepCaretComfort,
   loadPagePosition,
   savePagePosition,
 } from "../lib/pagePosition";
@@ -349,9 +350,8 @@ function Editor({
     return () => root.removeEventListener("click", onClick);
   }, [navigate, editor]);
 
-  // ProseMirror often swallows wheel events even when it has nothing to
-  // scroll — forward them to the page scroller so hovering text still moves
-  // the page.
+  // If ProseMirror swallows a wheel event, recover it on the page scroller.
+  // Don't preventDefault — that kills trackpad momentum.
   useEffect(() => {
     const root = editorShellRef.current;
     if (!root) return;
@@ -370,12 +370,80 @@ function Editor({
         }
         node = node.parentElement;
       }
-      main.scrollTop += e.deltaY;
-      e.preventDefault();
+      const before = main.scrollTop;
+      const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      queueMicrotask(() => {
+        if (main.scrollTop === before) main.scrollTop = before + delta;
+      });
     };
-    root.addEventListener("wheel", onWheel, { capture: true, passive: false });
+    root.addEventListener("wheel", onWheel, { capture: true, passive: true });
     return () => root.removeEventListener("wheel", onWheel, true);
   }, [editor]);
+
+  // Follow the caret while typing (including holding Enter) and keep a band
+  // of empty space under the line — native scrollIntoView only runs after a
+  // character is inserted, so empty paragraphs would otherwise fall off-screen.
+  useEffect(() => {
+    const root = editorShellRef.current;
+    if (!root) return;
+    let follow = false;
+    let raf = 0;
+
+    const run = () => {
+      if (!follow) return;
+      if (!root.contains(document.activeElement)) return;
+      const scroller = findEditorScrollParent(root);
+      if (!scroller) return;
+      let blockEl: HTMLElement | null = null;
+      try {
+        const id = editor.getTextCursorPosition().block.id;
+        blockEl = root.querySelector(`[data-id="${id}"]`);
+      } catch {
+        // No cursor yet.
+      }
+      keepCaretComfort(scroller, blockEl, {
+        topPad: 72,
+        bottomRatio: focusMode ? 0.24 : 0.3,
+      });
+    };
+
+    const requestFollow = () => {
+      follow = true;
+      if (raf) return;
+      const pump = () => {
+        run();
+        raf = requestAnimationFrame(() => {
+          run();
+          raf = 0;
+          follow = false;
+        });
+      };
+      raf = requestAnimationFrame(pump);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (
+        e.key.length === 1 ||
+        e.key === "Enter" ||
+        e.key === "Backspace" ||
+        e.key === "Delete" ||
+        e.key.startsWith("Arrow")
+      ) {
+        requestFollow();
+      }
+    };
+
+    root.addEventListener("keydown", onKeyDown);
+    root.addEventListener("input", requestFollow);
+    const unsub = editor.onChange(requestFollow);
+    return () => {
+      root.removeEventListener("keydown", onKeyDown);
+      root.removeEventListener("input", requestFollow);
+      if (typeof unsub === "function") unsub();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [editor, focusMode]);
 
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebookPages = useMemo(

@@ -72,7 +72,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const unlock = useUnlock();
   const queryClient = useQueryClient();
   const password = unlock.sectionPasswords[sectionId];
-  const { stackBottomClearance } = useLayout();
+  const { stackBottomClearance, height } = useLayout();
 
   const [text, setText] = useState<string | null>(null);
   const [wasRich, setWasRich] = useState(false);
@@ -89,7 +89,13 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const pendingText = useRef<string | null>(null);
   const posTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const selectionRef = useRef<{ start: number; end: number } | undefined>(undefined);
+  const textRef = useRef<string | null>(null);
+  const editingRef = useRef(false);
+  const viewportH = useRef(0);
+  const contentH = useRef(0);
+  const scrollY = useRef(0);
 
   const { data: page, error, isLoading } = useQuery({
     queryKey: ["page", pageId, password ?? null],
@@ -104,6 +110,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
     if (page && text === null) {
       const body = contentToText(page.content);
       setText(body);
+      textRef.current = body;
       setWasRich(isRichContent(page.content));
       void loadPagePosition(pageId).then((pos) => {
         if (pos) {
@@ -152,10 +159,39 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   function onChangeText(next: string) {
     setText(next);
+    textRef.current = next;
     pendingText.current = next;
+    editingRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(saveNow, 800);
+    requestAnimationFrame(followCaret);
   }
+
+  const followCaret = useCallback(() => {
+    if (!editingRef.current) return;
+    const t = textRef.current ?? "";
+    const sel = selectionRef.current;
+    const viewH = viewportH.current;
+    if (viewH <= 0) return;
+    const atEnd = !sel || (sel.start >= t.length && sel.end >= t.length);
+    if (atEnd) {
+      scrollRef.current?.scrollToEnd({ animated: false });
+      return;
+    }
+    const lineIndex = t.slice(0, sel.start).split("\n").length - 1;
+    const totalLines = Math.max(1, t.split("\n").length);
+    const y =
+      contentH.current > 0
+        ? (contentH.current * lineIndex) / totalLines
+        : lineIndex * 22;
+    const comfort = Math.max(150, viewH * 0.3);
+    if (y + 24 > scrollY.current + viewH - comfort) {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y + 24 - viewH + comfort),
+        animated: false,
+      });
+    }
+  }, []);
 
   const wikiQuery = (() => {
     if (text == null) return null;
@@ -345,11 +381,41 @@ export default function PageEditorScreen({ route, navigation }: any) {
           </Pressable>
         </ScrollView>
       )}
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingBottom: Math.max(stackBottomClearance(false), 28) + Math.max(160, Math.round(height * 0.28)),
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+        decelerationRate="normal"
+        scrollEventThrottle={16}
+        nestedScrollEnabled
+        onLayout={(e) => {
+          viewportH.current = e.nativeEvent.layout.height;
+        }}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset?.y;
+          const sel = selectionRef.current;
+          if (typeof y === "number") scrollY.current = y;
+          if (typeof y !== "number" || !sel) return;
+          if (posTimer.current) clearTimeout(posTimer.current);
+          posTimer.current = setTimeout(() => {
+            void savePagePosition(pageId, { selection: sel.start, scrollOffset: y });
+          }, 250);
+        }}
+      >
       <TextInput
         ref={inputRef}
         style={[
           styles.editor,
-          { color: colors.textPrimary, paddingBottom: Math.max(stackBottomClearance(false), 28) + 24 },
+          {
+            color: colors.textPrimary,
+            minHeight: Math.max(viewportH.current || height * 0.6, 280),
+          },
           focus && styles.focusEditor,
         ]}
         multiline
@@ -357,6 +423,10 @@ export default function PageEditorScreen({ route, navigation }: any) {
         value={text}
         onChangeText={onChangeText}
         {...(selection ? { selection } : {})}
+        onContentSizeChange={(e) => {
+          contentH.current = e.nativeEvent.contentSize.height;
+          requestAnimationFrame(followCaret);
+        }}
         onSelectionChange={(e) => {
           const next = e.nativeEvent.selection;
           selectionRef.current = next;
@@ -367,21 +437,13 @@ export default function PageEditorScreen({ route, navigation }: any) {
           posTimer.current = setTimeout(() => {
             void savePagePosition(pageId, { selection: next.start });
           }, 250);
-        }}
-        onScroll={(e) => {
-          const y = e.nativeEvent.contentOffset?.y;
-          const sel = selectionRef.current;
-          if (typeof y !== "number" || !sel) return;
-          if (posTimer.current) clearTimeout(posTimer.current);
-          posTimer.current = setTimeout(() => {
-            void savePagePosition(pageId, { selection: sel.start, scrollOffset: y });
-          }, 250);
+          requestAnimationFrame(followCaret);
         }}
         placeholder="Write freely…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
-        scrollEnabled
-        scrollEventThrottle={16}
+        scrollEnabled={false}
       />
+      </ScrollView>
       {focus && (
         <View pointerEvents="none" style={[styles.focusTitle, { paddingTop: 12 }]}>
           <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>
@@ -488,7 +550,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   notice: { fontSize: 11, paddingHorizontal: 20, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  editor: { flex: 1, padding: 20, fontSize: 15, lineHeight: 22 },
+  editor: { padding: 20, fontSize: 15, lineHeight: 22 },
   focusEditor: { paddingTop: 64, fontSize: 16, lineHeight: 26, paddingHorizontal: 24 },
   focusTitle: {
     position: "absolute",
