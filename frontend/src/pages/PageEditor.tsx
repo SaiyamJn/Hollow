@@ -421,7 +421,7 @@ function Editor({
       raf = requestAnimationFrame(pump);
     };
 
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (
         e.key.length === 1 ||
