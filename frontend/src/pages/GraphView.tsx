@@ -8,7 +8,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { useUiStore } from "../stores/ui";
 
 // One hue per section so clusters read at a glance; works on light and dark.
-const SECTION_COLORS = ["#62d9ae", "#60a5fa", "#c084fc", "#f59e0b", "#f472b6", "#34d399", "#f87171", "#a3e635"];
+const SECTION_COLORS = ["#6edcb6", "#60a5fa", "#c084fc", "#f59e0b", "#f472b6", "#34d399", "#f87171", "#a3e635"];
 
 export default function GraphView() {
   const { notebookId } = useParams() as { notebookId: string };

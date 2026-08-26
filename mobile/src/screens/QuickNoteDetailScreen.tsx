@@ -19,28 +19,20 @@ import {
 import type { ChecklistItem } from "../lib/types";
 import { packNoteBody, resolveNoteFields } from "../lib/noteFields";
 import { useTheme } from "../contexts/theme";
+import { NOTE_COLOR_KEYS, noteTint } from "../theme";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useLayout } from "../lib/layout";
 import { animateListChange } from "../lib/motion";
 
-const PALETTE: Record<string, string> = {
-  gray: "transparent",
-  yellow: "rgba(234, 179, 8, 0.14)",
-  green: "rgba(93, 202, 165, 0.14)",
-  blue: "rgba(96, 165, 250, 0.14)",
-  red: "rgba(248, 113, 113, 0.14)",
-  purple: "rgba(192, 132, 252, 0.14)",
-};
-
 const DOT_COLORS: Record<string, string> = {
   gray: "#8a8d93",
-  yellow: "rgb(234, 179, 8)",
-  green: "rgb(93, 202, 165)",
-  blue: "rgb(96, 165, 250)",
-  red: "rgb(248, 113, 113)",
-  purple: "rgb(192, 132, 252)",
+  yellow: "rgb(250, 184, 8)",
+  green: "rgb(16, 185, 129)",
+  blue: "rgb(59, 130, 246)",
+  red: "rgb(244, 63, 94)",
+  purple: "rgb(168, 85, 247)",
 };
 
 function newItemId() {
@@ -326,7 +318,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
           style={{ flex: 1 }}
           contentStyle={[
             styles.editorCard,
-            color !== "gray" ? { backgroundColor: PALETTE[color] } : null,
+            color !== "gray" ? { backgroundColor: noteTint(colors, color) } : null,
           ]}
         >
           {isList ? (
@@ -408,7 +400,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
 
         <View style={styles.toolbar}>
           <View style={[styles.dots, isNarrow && { gap: 8 }]}>
-            {Object.keys(PALETTE).map((c) => {
+            {NOTE_COLOR_KEYS.map((c) => {
               const selected = color === c;
               return (
                 <TouchableOpacity

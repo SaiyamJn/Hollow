@@ -79,7 +79,7 @@ const config = {
     [
       "expo-notifications",
       {
-        color: "#62d9ae",
+        color: "#0e9f72",
         defaultChannel: "reminders",
       },
     ],

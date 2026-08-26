@@ -3,62 +3,73 @@
 @tailwind utilities;
 
 :root {
-  --surface-0: #fafaf8;
+  --surface-0: #f3f8f5;
   --surface-1: #ffffff;
-  --surface-2: #f1f1ee;
-  --text-primary: #1c1c1a;
-  --text-secondary: #6d6f74;
-  --border: #e4e4e0;
-  --accent: #0d8a68;
-  --accent-soft: rgba(13, 138, 104, 0.09);
-  --danger: #dc2626;
-  --warn: #b45309;
-  --focus-critical: #dc2626;
-  --focus-steady: #0d8a68;
-  --focus-swift: #b45309;
-  --focus-quiet: #64748b;
-  --focus-critical-wash: rgba(220, 38, 38, 0.11);
-  --focus-steady-wash: rgba(13, 138, 104, 0.11);
-  --focus-swift-wash: rgba(180, 83, 9, 0.11);
-  --focus-quiet-wash: rgba(100, 116, 139, 0.1);
-  --focus-critical-pane: rgba(220, 38, 38, 0.06);
-  --focus-steady-pane: rgba(13, 138, 104, 0.06);
-  --focus-swift-pane: rgba(180, 83, 9, 0.06);
-  --focus-quiet-pane: rgba(100, 116, 139, 0.05);
-  --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.05);
-  --shadow-pop: 0 4px 24px rgba(20, 20, 20, 0.12);
-  --glow: radial-gradient(ellipse 60% 45% at 50% -6%, rgba(13, 138, 104, 0.055), transparent 55%),
-    radial-gradient(ellipse 40% 30% at 92% 8%, rgba(180, 83, 9, 0.03), transparent 50%);
+  --surface-2: #e7f3ec;
+  --text-primary: #12241c;
+  --text-secondary: #547066;
+  --border: #cfe0d6;
+  --accent: #0e9f72;
+  --accent-soft: rgba(14, 159, 114, 0.16);
+  --danger: #e24747;
+  --warn: #e08912;
+  --focus-critical: #e24747;
+  --focus-steady: #0e9f72;
+  --focus-swift: #e08912;
+  --focus-quiet: #5b8494;
+  --focus-critical-wash: rgba(226, 71, 71, 0.18);
+  --focus-steady-wash: rgba(14, 159, 114, 0.18);
+  --focus-swift-wash: rgba(224, 137, 18, 0.18);
+  --focus-quiet-wash: rgba(91, 132, 148, 0.14);
+  --focus-critical-pane: rgba(226, 71, 71, 0.11);
+  --focus-steady-pane: rgba(14, 159, 114, 0.11);
+  --focus-swift-pane: rgba(224, 137, 18, 0.11);
+  --focus-quiet-pane: rgba(91, 132, 148, 0.08);
+  --note-yellow: rgba(250, 184, 8, 0.42);
+  --note-green: rgba(16, 185, 129, 0.30);
+  --note-blue: rgba(59, 130, 246, 0.28);
+  --note-red: rgba(244, 63, 94, 0.26);
+  --note-purple: rgba(168, 85, 247, 0.26);
+  --shadow-card: 0 1px 2px rgba(18, 36, 28, 0.06);
+  --shadow-pop: 0 6px 28px rgba(14, 159, 114, 0.12);
+  --glow: radial-gradient(ellipse 70% 50% at 50% -8%, rgba(14, 159, 114, 0.16), transparent 58%),
+    radial-gradient(ellipse 42% 34% at 94% 6%, rgba(224, 137, 18, 0.08), transparent 52%),
+    radial-gradient(ellipse 36% 30% at 6% 12%, rgba(226, 71, 71, 0.05), transparent 50%);
   --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
 }
 .dark {
-  --surface-0: #0f1012;
-  --surface-1: #16181b;
-  --surface-2: #1e2126;
-  --text-primary: #edeef0;
-  --text-secondary: #979aa1;
-  --border: #26292f;
-  --accent: #62d9ae;
-  --accent-soft: rgba(98, 217, 174, 0.1);
-  --danger: #f87171;
-  --warn: #eab308;
-  --focus-critical: #f87171;
-  --focus-steady: #62d9ae;
-  --focus-swift: #eab308;
-  --focus-quiet: #94a3b8;
-  --focus-critical-wash: rgba(248, 113, 113, 0.26);
-  --focus-steady-wash: rgba(98, 217, 174, 0.24);
-  --focus-swift-wash: rgba(234, 179, 8, 0.24);
-  --focus-quiet-wash: rgba(148, 163, 184, 0.2);
-  --focus-critical-pane: rgba(248, 113, 113, 0.12);
-  --focus-steady-pane: rgba(98, 217, 174, 0.11);
-  --focus-swift-pane: rgba(234, 179, 8, 0.11);
-  --focus-quiet-pane: rgba(148, 163, 184, 0.09);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.45);
-  --glow: radial-gradient(ellipse 65% 48% at 50% -4%, rgba(98, 217, 174, 0.09), transparent 55%),
-    radial-gradient(ellipse 42% 32% at 88% 12%, rgba(234, 179, 8, 0.05), transparent 50%),
-    radial-gradient(ellipse 35% 28% at 12% 18%, rgba(248, 113, 113, 0.04), transparent 50%);
+  --surface-0: #0c1010;
+  --surface-1: #131918;
+  --surface-2: #1b2422;
+  --text-primary: #eef6f2;
+  --text-secondary: #8fa39a;
+  --border: #2a3532;
+  --accent: #6edcb6;
+  --accent-soft: rgba(110, 220, 182, 0.14);
+  --danger: #fb8383;
+  --warn: #edb84a;
+  --focus-critical: #fb8383;
+  --focus-steady: #6edcb6;
+  --focus-swift: #edb84a;
+  --focus-quiet: #8eabc0;
+  --focus-critical-wash: rgba(251, 131, 131, 0.28);
+  --focus-steady-wash: rgba(110, 220, 182, 0.26);
+  --focus-swift-wash: rgba(237, 184, 74, 0.24);
+  --focus-quiet-wash: rgba(142, 171, 192, 0.2);
+  --focus-critical-pane: rgba(251, 131, 131, 0.14);
+  --focus-steady-pane: rgba(110, 220, 182, 0.13);
+  --focus-swift-pane: rgba(237, 184, 74, 0.12);
+  --focus-quiet-pane: rgba(142, 171, 192, 0.1);
+  --note-yellow: rgba(250, 204, 21, 0.2);
+  --note-green: rgba(52, 211, 153, 0.18);
+  --note-blue: rgba(96, 165, 250, 0.18);
+  --note-red: rgba(251, 113, 133, 0.18);
+  --note-purple: rgba(192, 132, 252, 0.18);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.46);
+  --glow: radial-gradient(ellipse 68% 50% at 50% -5%, rgba(110, 220, 182, 0.13), transparent 56%),
+    radial-gradient(ellipse 42% 32% at 90% 10%, rgba(237, 184, 74, 0.06), transparent 52%),
+    radial-gradient(ellipse 34% 28% at 10% 16%, rgba(251, 131, 131, 0.05), transparent 50%);
 }
 
 body {
@@ -127,16 +138,16 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 /* Glass chrome — translucent + blur. Use on floating UI and panel cards. */
 .glass {
   background: color-mix(in srgb, var(--surface-1) 58%, transparent);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.55);
+  -webkit-backdrop-filter: blur(18px) saturate(1.55);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
     var(--shadow-card);
 }
 .glass-strong {
   background: color-mix(in srgb, var(--surface-1) 72%, transparent);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
     var(--shadow-pop);
@@ -221,7 +232,7 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   box-sizing: border-box;
 }
 .focus-pill:hover {
-  filter: brightness(1.04);
+  filter: brightness(1.08);
 }
 .focus-pill-critical {
   --pill-accent: var(--focus-critical);
@@ -394,19 +405,19 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--accent) 5%, transparent),
+      color-mix(in srgb, var(--accent) 9%, transparent),
       transparent 28%
     ),
     color-mix(in srgb, var(--surface-1) 78%, transparent);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.45);
   box-shadow: var(--shadow-card);
 }
 .dark .cal-month-board {
   background:
     linear-gradient(
       165deg,
-      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--accent) 12%, transparent),
       transparent 36%
     ),
     linear-gradient(
@@ -449,10 +460,10 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   border-right: none;
 }
 .cal-day-cell.weekend {
-  background: color-mix(in srgb, var(--accent) 3.5%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .dark .cal-day-cell.weekend {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .cal-day-cell.past {
   opacity: 0.4;
@@ -465,17 +476,17 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   background: color-mix(in srgb, var(--surface-0) 55%, transparent);
 }
 .cal-day-cell.today {
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
 }
 .dark .cal-day-cell.today {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
-    inset 0 0 24px color-mix(in srgb, var(--accent) 8%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .cal-day-cell.selected:not(.today) {
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 .cal-day-cell.drop {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -505,7 +516,7 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
   flex-shrink: 0;
 }
 .cal-day-tasks .focus-pill:hover {
-  filter: brightness(1.06);
+  filter: brightness(1.08);
 }
 .cal-pill-time {
   flex-shrink: 0;

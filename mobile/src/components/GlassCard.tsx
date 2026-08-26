@@ -30,7 +30,7 @@ export function GlassCard({ children, style, contentStyle, strong }: GlassCardPr
           style={[
             StyleSheet.absoluteFill,
             {
-              backgroundColor: theme === "dark" ? "rgba(22, 24, 27, 0.92)" : "rgba(255, 255, 255, 0.92)",
+              backgroundColor: colors.surface1,
             },
           ]}
         />

@@ -31,20 +31,20 @@ import { shouldHandleItemDelete } from "../lib/keys";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
-  yellow: "rgba(234, 179, 8, 0.14)",
-  green: "rgba(93, 202, 165, 0.14)",
-  blue: "rgba(96, 165, 250, 0.14)",
-  red: "rgba(248, 113, 113, 0.14)",
-  purple: "rgba(192, 132, 252, 0.14)",
+  yellow: "var(--note-yellow)",
+  green: "var(--note-green)",
+  blue: "var(--note-blue)",
+  red: "var(--note-red)",
+  purple: "var(--note-purple)",
 };
 
 const DOT_COLORS: Record<string, string> = {
   gray: "rgba(128, 128, 128, 0.6)",
-  yellow: "rgb(234, 179, 8)",
-  green: "rgb(93, 202, 165)",
-  blue: "rgb(96, 165, 250)",
-  red: "rgb(248, 113, 113)",
-  purple: "rgb(192, 132, 252)",
+  yellow: "rgb(250, 184, 8)",
+  green: "rgb(16, 185, 129)",
+  blue: "rgb(59, 130, 246)",
+  red: "rgb(244, 63, 94)",
+  purple: "rgb(168, 85, 247)",
 };
 
 function newItemId() {
@@ -336,9 +336,9 @@ export default function QuickNotes() {
               type="button"
               disabled={createBlank.isPending}
               onClick={() => createBlank.mutate("note")}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-[rgb(234,179,8)]/50 hover:bg-[rgb(234,179,8)]/8 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-[rgb(250,184,8)]/50 hover:bg-[rgb(250,184,8)]/12 transition-colors"
             >
-              <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center bg-[rgb(234,179,8)]/15 text-[rgb(180,83,9)] dark:text-[rgb(234,179,8)]">
+              <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center bg-[rgb(250,184,8)]/22 text-[rgb(180,83,9)] dark:text-[rgb(250,204,21)]">
                 <StickyNote size={15} />
               </span>
               Note

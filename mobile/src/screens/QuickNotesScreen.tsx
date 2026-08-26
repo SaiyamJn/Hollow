@@ -18,6 +18,7 @@ import { createQuickNote, deleteQuickNote, fetchQuickNotes, reorderQuickNotes, u
 import type { QuickNote } from "../lib/types";
 import { resolveNoteFields } from "../lib/noteFields";
 import { useTheme } from "../contexts/theme";
+import { NOTE_COLOR_KEYS, noteTint } from "../theme";
 import { ConfirmModal } from "../components/ConfirmModal";
 import EmptyState from "../components/EmptyState";
 import { Fab } from "../components/Fab";
@@ -28,31 +29,22 @@ import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 import { animateListChange } from "../lib/motion";
 
-const PALETTE: Record<string, string> = {
-  gray: "transparent",
-  yellow: "rgba(234, 179, 8, 0.18)",
-  green: "rgba(93, 202, 165, 0.18)",
-  blue: "rgba(96, 165, 250, 0.18)",
-  red: "rgba(248, 113, 113, 0.18)",
-  purple: "rgba(192, 132, 252, 0.18)",
-};
-
 const ACCENT_BAR: Record<string, string> = {
   gray: "transparent",
-  yellow: "rgb(234, 179, 8)",
-  green: "rgb(93, 202, 165)",
-  blue: "rgb(96, 165, 250)",
-  red: "rgb(248, 113, 113)",
-  purple: "rgb(192, 132, 252)",
+  yellow: "rgb(250, 184, 8)",
+  green: "rgb(16, 185, 129)",
+  blue: "rgb(59, 130, 246)",
+  red: "rgb(244, 63, 94)",
+  purple: "rgb(168, 85, 247)",
 };
 
 const DOT_COLORS: Record<string, string> = {
   gray: "#8a8d93",
-  yellow: "rgb(234, 179, 8)",
-  green: "rgb(93, 202, 165)",
-  blue: "rgb(96, 165, 250)",
-  red: "rgb(248, 113, 113)",
-  purple: "rgb(192, 132, 252)",
+  yellow: "rgb(250, 184, 8)",
+  green: "rgb(16, 185, 129)",
+  blue: "rgb(59, 130, 246)",
+  red: "rgb(244, 63, 94)",
+  purple: "rgb(168, 85, 247)",
 };
 
 const GRID_GAP = 10;
@@ -350,8 +342,8 @@ export default function QuickNotesScreen({ navigation }: any) {
                       },
                     ]}
                   >
-                    <View style={[styles.quickIcon, { backgroundColor: "rgba(234, 179, 8, 0.2)" }]}>
-                      <Feather name="edit-3" size={16} color="rgb(234, 179, 8)" />
+                    <View style={[styles.quickIcon, { backgroundColor: "rgba(250, 184, 8, 0.28)" }]}>
+                      <Feather name="edit-3" size={16} color="rgb(250, 184, 8)" />
                     </View>
                     <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
                       {createBlankNote.isPending ? "Opening…" : "Note"}
@@ -371,8 +363,8 @@ export default function QuickNotesScreen({ navigation }: any) {
                       },
                     ]}
                   >
-                    <View style={[styles.quickIcon, { backgroundColor: "rgba(93, 202, 165, 0.2)" }]}>
-                      <Feather name="check-square" size={16} color="rgb(93, 202, 165)" />
+                    <View style={[styles.quickIcon, { backgroundColor: colors.accentSoft }]}>
+                      <Feather name="check-square" size={16} color={colors.accent} />
                     </View>
                     <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
                       {createList.isPending ? "Creating…" : "List"}
@@ -391,7 +383,8 @@ export default function QuickNotesScreen({ navigation }: any) {
                     style={[
                       styles.composer,
                       {
-                        backgroundColor: colors.surface1,
+                        backgroundColor:
+                          draftColor !== "gray" ? noteTint(colors, draftColor) : colors.surface1,
                         borderColor: colors.border,
                         borderLeftColor: ACCENT_BAR[draftColor] || colors.accent,
                       },
@@ -417,7 +410,7 @@ export default function QuickNotesScreen({ navigation }: any) {
                     />
                     <View style={styles.composerRow}>
                       <View style={[styles.dots, isNarrow && { gap: 8 }]}>
-                        {Object.keys(PALETTE).map((color) => {
+                        {NOTE_COLOR_KEYS.map((color) => {
                           const isSelected = draftColor === color;
                           const size = isNarrow ? 18 : 22;
                           return (
@@ -696,7 +689,7 @@ function NoteCard({
   const items = (note.items ?? []).filter((i) => i.text.trim() || !i.done);
   const previewItems = items.slice(0, 5);
   const bar = ACCENT_BAR[note.color] ?? colors.border;
-  const tint = note.color !== "gray" ? PALETTE[note.color] : colors.surface1;
+  const tint = note.color !== "gray" ? noteTint(colors, note.color) : colors.surface1;
   const cardScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {

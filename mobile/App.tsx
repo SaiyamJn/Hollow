@@ -90,7 +90,7 @@ function GlassChrome() {
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: theme === "dark" ? "#0f1012" : "#f4f5f7",
+            backgroundColor: colors.surface0,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.glassBorder,
           },

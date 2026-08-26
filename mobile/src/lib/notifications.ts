@@ -13,7 +13,7 @@ export const TASK_CATEGORY = "taskreminder";
 export const ACTION_COMPLETE = "complete";
 export const ACTION_SNOOZE = "snooze";
 
-const ACCENT = "#62d9ae";
+const ACCENT = "#0e9f72";
 const SNOOZE_MS = 60 * 60 * 1000;
 
 export type ReminderPrompt = {

@@ -42,7 +42,7 @@ import {
 } from "../lib/pagePosition";
 
 // Deterministic per-user cursor color for collaborative editing.
-const CURSOR_COLORS = ["#62d9ae", "#60a5fa", "#c084fc", "#f87171", "#eab308", "#f472b6"];
+const CURSOR_COLORS = ["#6edcb6", "#60a5fa", "#c084fc", "#f87171", "#eab308", "#f472b6"];
 function colorFor(userId: string | undefined): string {
   let hash = 0;
   for (const ch of userId ?? "") hash = (hash * 31 + ch.charCodeAt(0)) | 0;

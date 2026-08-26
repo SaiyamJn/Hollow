@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "description": "Hollow mobile client",
   "main": "index.ts",
   "dependencies": {
