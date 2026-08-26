@@ -72,10 +72,14 @@
     radial-gradient(ellipse 36% 30% at 10% 16%, rgba(255, 138, 138, 0.07), transparent 50%);
 }
 
-body {
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background-color: var(--surface-0);
-  background-image: var(--glow);
-  background-attachment: fixed;
+}
+
+body {
   color: var(--text-primary);
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -86,6 +90,15 @@ html {
   font-weight: 400;
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Glow lives on the viewport chrome — not on body — so overscroll never
+   flashes a second gradient behind the app. */
+.app-shell {
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--surface-0);
+  background-image: var(--glow);
 }
 h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 
@@ -108,9 +121,19 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 *::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
 /* Let the app surfaces show through the BlockNote editor. */
+.bn-container,
+.bn-editor,
+.bn-block-group,
+.bn-block-outer,
+.bn-block,
+.bn-editor .ProseMirror {
+  overflow: visible !important;
+}
+
 .bn-editor {
   background: transparent !important;
-  padding-inline: 0.35rem !important;
+  /* Room for the selected-block outline so it isn't clipped on the sides. */
+  padding-inline: 0.9rem !important;
   /* Keep the last lines above the floating pill nav. */
   padding-bottom: 4.5rem !important;
   font-family: var(--font-sans) !important;
@@ -122,12 +145,19 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 
 /* Keep selected-block outline off the glyphs — padding inside the highlight. */
 .bn-editor .bn-block-content {
-  padding-inline: 0.55rem;
+  padding-inline: 0.65rem;
   padding-block: 0.22rem;
   border-radius: 0.4rem;
+  outline-offset: 0;
 }
 .bn-editor .bn-inline-content {
   padding-inline: 0.12rem;
+}
+
+.page-sticky-title {
+  background-color: color-mix(in srgb, var(--surface-0) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 /* Soft-enter paragraphs should read as continuous prose, not stacked cards. */

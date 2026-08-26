@@ -56,7 +56,6 @@ export default function AppShell() {
   const setFocusMode = useUiStore((s) => s.setFocusMode);
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   const binds = useKeybindsStore((s) => s.binds);
-  const isPageEditor = /\/pages\//.test(location.pathname);
 
   // Don't compete with Home/notebooks on first paint — start task polling after idle.
   const [taskPollReady, setTaskPollReady] = useState(false);
@@ -203,10 +202,10 @@ export default function AppShell() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-surface-0 text-primary">
-      <div className="flex-1 flex flex-col min-w-0 relative">
+    <div className="app-shell flex flex-col text-primary">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 relative">
         {!focusMode && (
-          <header className="absolute inset-x-0 top-0 z-20 h-12 glass-strong border-b border-border flex items-center justify-between px-3">
+          <header className="shrink-0 z-20 h-12 glass-strong border-b border-border flex items-center justify-between px-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -247,21 +246,11 @@ export default function AppShell() {
         )}
         <main
           className={clsx(
-            "flex-1 min-h-0",
-            isPageEditor || focusMode
-              ? "overflow-hidden flex flex-col"
-              : "overflow-y-auto",
-            !focusMode && "pt-12",
-            !focusMode && !isPageEditor && "pb-28"
+            "flex-1 min-h-0 overflow-y-auto overscroll-none",
+            !focusMode && "pb-28"
           )}
         >
-          {isPageEditor || focusMode ? (
-            <div className="flex-1 min-h-0 flex flex-col h-full">
-              <Outlet />
-            </div>
-          ) : (
-            <Outlet />
-          )}
+          <Outlet />
         </main>
       </div>
       {!focusMode && <Sidebar />}
