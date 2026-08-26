@@ -97,7 +97,7 @@ export function withAlpha(hexOrRgb: string, alpha: number): string {
 }
 
 /** Soft washes — prefer `useFocusColors().washFor` when custom tints are enabled. */
-export function focusWash(focus: TaskFocus, accent = "#0e9f72"): string {
+export function focusWash(focus: TaskFocus, accent = "#0cb879"): string {
   switch (focus) {
     case "critical":
       return "rgba(220, 38, 38, 0.16)";
@@ -112,7 +112,7 @@ export function focusWash(focus: TaskFocus, accent = "#0e9f72"): string {
   }
 }
 
-export function focusBorder(focus: TaskFocus, accent = "#0e9f72", fallback = "#cfe0d6"): string {
+export function focusBorder(focus: TaskFocus, accent = "#0cb879", fallback = "#b9ddcb"): string {
   switch (focus) {
     case "critical":
       return "rgba(220, 38, 38, 0.28)";

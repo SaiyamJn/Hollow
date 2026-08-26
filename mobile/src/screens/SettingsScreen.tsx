@@ -125,7 +125,7 @@ export default function SettingsScreen({ navigation }: any) {
     if (!editingFocus) return;
     const normalized = normalizeHex(hexDraft);
     if (!normalized) {
-      Alert.alert("Invalid color", "Enter a hex like #0e9f72 or 0e9f72.");
+      Alert.alert("Invalid color", "Enter a hex like #0cb879 or 0cb879.");
       return;
     }
     setCategoryColor(editingFocus, normalized);
@@ -296,7 +296,7 @@ export default function SettingsScreen({ navigation }: any) {
                     onChangeText={setHexDraft}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholder="#0e9f72"
+                    placeholder="#0cb879"
                     placeholderTextColor={colors.textSecondary}
                     style={[styles.hexInput, { color: colors.textPrimary, borderColor: colors.border }]}
                     onSubmitEditing={applyHex}

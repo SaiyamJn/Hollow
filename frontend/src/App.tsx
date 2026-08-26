@@ -21,7 +21,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
 function RouteFallback() {
   return (
-    <div className="flex flex-1 items-center justify-center py-24 text-sm text-secondary">Loading…</div>
+    <div className="flex flex-1 h-full min-h-0 items-center justify-center py-24 text-sm text-secondary">Loading…</div>
   );
 }
 

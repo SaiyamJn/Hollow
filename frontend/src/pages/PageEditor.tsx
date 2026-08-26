@@ -42,7 +42,7 @@ import {
 } from "../lib/pagePosition";
 
 // Deterministic per-user cursor color for collaborative editing.
-const CURSOR_COLORS = ["#6edcb6", "#60a5fa", "#c084fc", "#f87171", "#eab308", "#f472b6"];
+const CURSOR_COLORS = ["#5ee9b5", "#60a5fa", "#c084fc", "#f87171", "#eab308", "#f472b6"];
 function colorFor(userId: string | undefined): string {
   let hash = 0;
   for (const ch of userId ?? "") hash = (hash * 31 + ch.charCodeAt(0)) | 0;
@@ -282,14 +282,6 @@ function Editor({
     const unsubSel = editor.onSelectionChange(() => {
       if (scrollTimer) window.clearTimeout(scrollTimer);
       scrollTimer = window.setTimeout(persistPosition, 250);
-      // Keep the caret above the floating pill nav / formatting toolbar.
-      try {
-        const block = editor.getTextCursorPosition().block;
-        const el = editorShellRef.current?.querySelector(`[data-id="${block.id}"]`) as HTMLElement | null;
-        el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      } catch {
-        // No cursor yet
-      }
     });
 
     return () => {
@@ -450,28 +442,20 @@ function Editor({
   return (
     <div
       className={clsx(
-        "w-full mx-auto animate-rise-in page-editor",
+        "w-full mx-auto animate-rise-in page-editor flex flex-col min-h-0 h-full flex-1",
         focusMode
-          ? "max-w-5xl px-8 md:px-12 pt-14 pb-28 focus-prose"
-          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16 py-6 pb-36"
+          ? "max-w-5xl px-8 md:px-12 pt-3 focus-prose"
+          : "max-w-[1600px] px-6 sm:px-10 lg:px-14 xl:px-16"
       )}
     >
       {session.localOnly && (
-        <p className="mb-3 text-[11px] text-secondary">
+        <p className="mb-2 shrink-0 text-[11px] text-secondary">
           Editing offline from saved content — realtime sync will resume when connected.
         </p>
       )}
-      <div
-        className={clsx(
-          "sticky z-10 flex items-baseline justify-between gap-4",
-          "border-b border-border/50 bg-[color-mix(in_srgb,var(--surface-0)_90%,transparent)] backdrop-blur-md",
-          focusMode
-            ? "top-0 -mx-8 md:-mx-12 px-8 md:px-12 py-2.5"
-            : "top-12 -mx-6 sm:-mx-10 lg:-mx-14 xl:-mx-16 px-6 sm:px-10 lg:px-14 xl:px-16 py-2.5"
-        )}
-      >
+      <div className="shrink-0 flex items-baseline justify-between gap-4 py-3 border-b border-border/40">
         <input
-          className="flex-1 min-w-0 bg-transparent text-lg sm:text-xl font-medium focus:outline-none truncate"
+          className="flex-1 min-w-0 bg-transparent text-lg sm:text-xl font-medium focus:outline-none"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={commitTitle}
@@ -536,103 +520,109 @@ function Editor({
         </span>
       </div>
 
-      {!focusMode && <PageTags page={page} password={password} />}
+      {/* Only this pane scrolls — title stays put; wheel / touch scroll freely. */}
+      <div
+        ref={editorShellRef}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pt-3 pb-28"
+      >
+        {!focusMode && <PageTags page={page} password={password} />}
 
-      {showTemplates && (
-        <div className="mt-4 flex flex-wrap items-center gap-1.5 animate-fade-in">
-          <span className="text-xs text-secondary mr-1">Start with</span>
-          {PAGE_TEMPLATES.map((t) => (
+        {showTemplates && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 animate-fade-in">
+            <span className="text-xs text-secondary mr-1">Start with</span>
+            {PAGE_TEMPLATES.map((t) => (
+              <button
+                key={t.id}
+                className="rounded-full border border-border px-2.5 py-1 text-xs text-secondary
+                           hover:text-accent hover:border-accent transition-colors"
+                onClick={() => applyTemplate(t.blocks)}
+              >
+                {t.name}
+              </button>
+            ))}
             <button
-              key={t.id}
-              className="rounded-full border border-border px-2.5 py-1 text-xs text-secondary
-                         hover:text-accent hover:border-accent transition-colors"
-              onClick={() => applyTemplate(t.blocks)}
+              className="rounded-full px-2 py-1 text-xs text-secondary hover:text-primary transition-colors"
+              onClick={() => setShowTemplates(false)}
             >
-              {t.name}
+              Blank
             </button>
-          ))}
-          <button
-            className="rounded-full px-2 py-1 text-xs text-secondary hover:text-primary transition-colors"
-            onClick={() => setShowTemplates(false)}
-          >
-            Blank
-          </button>
-        </div>
-      )}
+          </div>
+        )}
 
-      <div className="mt-5" ref={editorShellRef}>
-        <BlockNoteView editor={editor} theme={theme}>
-          {/* Wiki-link autocomplete: type `[[` to search pages in this notebook.
-              Picking one inserts a clickable `[[Title]]` link. */}
-          <SuggestionMenuController
-            triggerCharacter="["
-            getItems={async (query) => {
-              // Require the second `[` so a single bracket doesn't open the menu.
-              if (!query.startsWith("[")) return [];
-              const q = query.slice(1).toLowerCase();
-              return notebookPages
-                .filter((p) => p.id !== page.id && p.title.toLowerCase().includes(q))
-                .slice(0, 8)
-                .map((p) => ({
-                  title: p.title,
-                  onItemClick: () =>
-                    editor.insertInlineContent([
-                      {
-                        type: "link",
-                        href: `/notebooks/${notebookId}/sections/${p.sectionId}/pages/${p.id}`,
-                        content: `[[${p.title}]]`,
-                      },
-                      " ",
-                    ]),
-                }));
-            }}
-          />
-        </BlockNoteView>
-        {!focusMode && (
-          <p className="mt-3 text-xs text-secondary text-center">
-            Enter for a new line · Shift+Enter for a new block ·{" "}
-            <span className="text-primary">/</span> for headings & lists ·{" "}
-            <span className="text-primary">[[</span> to link pages
-          </p>
+        <div className="mt-3">
+          <BlockNoteView editor={editor} theme={theme}>
+            {/* Wiki-link autocomplete: type `[[` to search pages in this notebook.
+                Picking one inserts a clickable `[[Title]]` link. */}
+            <SuggestionMenuController
+              triggerCharacter="["
+              getItems={async (query) => {
+                // Require the second `[` so a single bracket doesn't open the menu.
+                if (!query.startsWith("[")) return [];
+                const q = query.slice(1).toLowerCase();
+                return notebookPages
+                  .filter((p) => p.id !== page.id && p.title.toLowerCase().includes(q))
+                  .slice(0, 8)
+                  .map((p) => ({
+                    title: p.title,
+                    onItemClick: () =>
+                      editor.insertInlineContent([
+                        {
+                          type: "link",
+                          href: `/notebooks/${notebookId}/sections/${p.sectionId}/pages/${p.id}`,
+                          content: `[[${p.title}]]`,
+                        },
+                        " ",
+                      ]),
+                  }));
+              }}
+            />
+          </BlockNoteView>
+          {!focusMode && (
+            <p className="mt-3 text-xs text-secondary text-center">
+              Enter for a new line · Shift+Enter for a new block ·{" "}
+              <span className="text-primary">/</span> for headings & lists ·{" "}
+              <span className="text-primary">[[</span> to link pages
+            </p>
+          )}
+        </div>
+
+        {!focusMode && ((outlinks && outlinks.length > 0) || (backlinks && backlinks.length > 0)) && (
+          <div className="mt-8 pt-4 border-t border-border space-y-4 text-center">
+            {outlinks && outlinks.length > 0 && (
+              <div>
+                <p className="text-xs text-secondary mb-2">Links to</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {outlinks.map((ol) => (
+                    <Link
+                      key={ol.id}
+                      to={`/notebooks/${notebookId}/sections/${ol.sectionId}/pages/${ol.id}`}
+                      className="text-sm text-accent hover:underline"
+                    >
+                      {ol.title}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+            {backlinks && backlinks.length > 0 && (
+              <div>
+                <p className="text-xs text-secondary mb-2">Linked from</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {backlinks.map((bl) => (
+                    <Link
+                      key={bl.id}
+                      to={`/notebooks/${notebookId}/sections/${bl.sectionId}/pages/${bl.id}`}
+                      className="text-sm text-accent hover:underline"
+                    >
+                      {bl.title}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
-
-      {!focusMode && ((outlinks && outlinks.length > 0) || (backlinks && backlinks.length > 0)) && (
-        <div className="mt-8 pt-4 border-t border-border space-y-4 text-center">
-          {outlinks && outlinks.length > 0 && (
-            <div>
-              <p className="text-xs text-secondary mb-2">Links to</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {outlinks.map((ol) => (
-                  <Link
-                    key={ol.id}
-                    to={`/notebooks/${notebookId}/sections/${ol.sectionId}/pages/${ol.id}`}
-                    className="text-sm text-accent hover:underline"
-                  >
-                    {ol.title}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-          {backlinks && backlinks.length > 0 && (
-            <div>
-              <p className="text-xs text-secondary mb-2">Linked from</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {backlinks.map((bl) => (
-                  <Link
-                    key={bl.id}
-                    to={`/notebooks/${notebookId}/sections/${bl.sectionId}/pages/${bl.id}`}
-                    className="text-sm text-accent hover:underline"
-                  >
-                    {bl.title}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent title="Delete page">

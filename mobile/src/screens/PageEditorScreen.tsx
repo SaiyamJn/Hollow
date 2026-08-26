@@ -110,8 +110,8 @@ export default function PageEditorScreen({ route, navigation }: any) {
           const start = Math.min(Math.max(0, pos.selection), body.length);
           setSelection({ start, end: start });
         } else {
-          // New visit — leave caret at end so long notes don't jump to the top.
-          setSelection({ start: body.length, end: body.length });
+          // Stay at the top so long notes aren't yanked to the bottom on open.
+          setSelection(undefined);
         }
         setPositionReady(true);
       });
@@ -356,11 +356,13 @@ export default function PageEditorScreen({ route, navigation }: any) {
         textAlignVertical="top"
         value={text}
         onChangeText={onChangeText}
-        selection={selection}
+        {...(selection ? { selection } : {})}
         onSelectionChange={(e) => {
           const next = e.nativeEvent.selection;
           selectionRef.current = next;
-          setSelection(next);
+          // Clear one-shot restore selection so the field stays uncontrolled
+          // (controlled selection fights manual scrolling on Android).
+          if (selection) setSelection(undefined);
           if (posTimer.current) clearTimeout(posTimer.current);
           posTimer.current = setTimeout(() => {
             void savePagePosition(pageId, { selection: next.start });
@@ -378,7 +380,6 @@ export default function PageEditorScreen({ route, navigation }: any) {
         placeholder="Write freely…  Type [[ to link a page"
         placeholderTextColor={colors.textSecondary}
         scrollEnabled
-        // Keep typing fluid on long notes (esp. Android).
         scrollEventThrottle={16}
       />
       {focus && (

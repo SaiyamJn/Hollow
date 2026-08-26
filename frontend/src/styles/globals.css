@@ -3,73 +3,73 @@
 @tailwind utilities;
 
 :root {
-  --surface-0: #f3f8f5;
+  --surface-0: #eef8f2;
   --surface-1: #ffffff;
-  --surface-2: #e7f3ec;
-  --text-primary: #12241c;
-  --text-secondary: #547066;
-  --border: #cfe0d6;
-  --accent: #0e9f72;
-  --accent-soft: rgba(14, 159, 114, 0.16);
-  --danger: #e24747;
-  --warn: #e08912;
-  --focus-critical: #e24747;
-  --focus-steady: #0e9f72;
-  --focus-swift: #e08912;
-  --focus-quiet: #5b8494;
-  --focus-critical-wash: rgba(226, 71, 71, 0.18);
-  --focus-steady-wash: rgba(14, 159, 114, 0.18);
-  --focus-swift-wash: rgba(224, 137, 18, 0.18);
-  --focus-quiet-wash: rgba(91, 132, 148, 0.14);
-  --focus-critical-pane: rgba(226, 71, 71, 0.11);
-  --focus-steady-pane: rgba(14, 159, 114, 0.11);
-  --focus-swift-pane: rgba(224, 137, 18, 0.11);
-  --focus-quiet-pane: rgba(91, 132, 148, 0.08);
-  --note-yellow: rgba(250, 184, 8, 0.42);
-  --note-green: rgba(16, 185, 129, 0.30);
-  --note-blue: rgba(59, 130, 246, 0.28);
-  --note-red: rgba(244, 63, 94, 0.26);
-  --note-purple: rgba(168, 85, 247, 0.26);
-  --shadow-card: 0 1px 2px rgba(18, 36, 28, 0.06);
-  --shadow-pop: 0 6px 28px rgba(14, 159, 114, 0.12);
-  --glow: radial-gradient(ellipse 70% 50% at 50% -8%, rgba(14, 159, 114, 0.16), transparent 58%),
-    radial-gradient(ellipse 42% 34% at 94% 6%, rgba(224, 137, 18, 0.08), transparent 52%),
-    radial-gradient(ellipse 36% 30% at 6% 12%, rgba(226, 71, 71, 0.05), transparent 50%);
+  --surface-2: #dff3e8;
+  --text-primary: #0f2a1f;
+  --text-secondary: #4a7262;
+  --border: #b9ddcb;
+  --accent: #0cb879;
+  --accent-soft: rgba(12, 184, 121, 0.2);
+  --danger: #ef4444;
+  --warn: #f59e0b;
+  --focus-critical: #ef4444;
+  --focus-steady: #0cb879;
+  --focus-swift: #f59e0b;
+  --focus-quiet: #4f8aa0;
+  --focus-critical-wash: rgba(239, 68, 68, 0.2);
+  --focus-steady-wash: rgba(12, 184, 121, 0.2);
+  --focus-swift-wash: rgba(245, 158, 11, 0.2);
+  --focus-quiet-wash: rgba(79, 138, 160, 0.16);
+  --focus-critical-pane: rgba(239, 68, 68, 0.12);
+  --focus-steady-pane: rgba(12, 184, 121, 0.12);
+  --focus-swift-pane: rgba(245, 158, 11, 0.12);
+  --focus-quiet-pane: rgba(79, 138, 160, 0.1);
+  --note-yellow: rgba(250, 184, 8, 0.5);
+  --note-green: rgba(16, 185, 129, 0.38);
+  --note-blue: rgba(59, 130, 246, 0.34);
+  --note-red: rgba(244, 63, 94, 0.32);
+  --note-purple: rgba(168, 85, 247, 0.32);
+  --shadow-card: 0 1px 2px rgba(15, 42, 31, 0.07);
+  --shadow-pop: 0 8px 32px rgba(12, 184, 121, 0.16);
+  --glow: radial-gradient(ellipse 72% 52% at 50% -8%, rgba(12, 184, 121, 0.22), transparent 58%),
+    radial-gradient(ellipse 44% 36% at 94% 6%, rgba(245, 158, 11, 0.12), transparent 52%),
+    radial-gradient(ellipse 38% 32% at 6% 12%, rgba(239, 68, 68, 0.07), transparent 50%);
   --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
 }
 .dark {
-  --surface-0: #0c1010;
-  --surface-1: #131918;
-  --surface-2: #1b2422;
-  --text-primary: #eef6f2;
-  --text-secondary: #8fa39a;
-  --border: #2a3532;
-  --accent: #6edcb6;
-  --accent-soft: rgba(110, 220, 182, 0.14);
-  --danger: #fb8383;
-  --warn: #edb84a;
-  --focus-critical: #fb8383;
-  --focus-steady: #6edcb6;
-  --focus-swift: #edb84a;
-  --focus-quiet: #8eabc0;
-  --focus-critical-wash: rgba(251, 131, 131, 0.28);
-  --focus-steady-wash: rgba(110, 220, 182, 0.26);
-  --focus-swift-wash: rgba(237, 184, 74, 0.24);
-  --focus-quiet-wash: rgba(142, 171, 192, 0.2);
-  --focus-critical-pane: rgba(251, 131, 131, 0.14);
-  --focus-steady-pane: rgba(110, 220, 182, 0.13);
-  --focus-swift-pane: rgba(237, 184, 74, 0.12);
-  --focus-quiet-pane: rgba(142, 171, 192, 0.1);
-  --note-yellow: rgba(250, 204, 21, 0.2);
-  --note-green: rgba(52, 211, 153, 0.18);
-  --note-blue: rgba(96, 165, 250, 0.18);
-  --note-red: rgba(251, 113, 133, 0.18);
-  --note-purple: rgba(192, 132, 252, 0.18);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.32);
-  --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.46);
-  --glow: radial-gradient(ellipse 68% 50% at 50% -5%, rgba(110, 220, 182, 0.13), transparent 56%),
-    radial-gradient(ellipse 42% 32% at 90% 10%, rgba(237, 184, 74, 0.06), transparent 52%),
-    radial-gradient(ellipse 34% 28% at 10% 16%, rgba(251, 131, 131, 0.05), transparent 50%);
+  --surface-0: #0a0f0e;
+  --surface-1: #121a18;
+  --surface-2: #1c2825;
+  --text-primary: #f2faf6;
+  --text-secondary: #8fb5a6;
+  --border: #2e403b;
+  --accent: #5ee9b5;
+  --accent-soft: rgba(94, 233, 181, 0.18);
+  --danger: #ff8a8a;
+  --warn: #fbbf24;
+  --focus-critical: #ff8a8a;
+  --focus-steady: #5ee9b5;
+  --focus-swift: #fbbf24;
+  --focus-quiet: #9ec0d4;
+  --focus-critical-wash: rgba(255, 138, 138, 0.3);
+  --focus-steady-wash: rgba(94, 233, 181, 0.28);
+  --focus-swift-wash: rgba(251, 191, 36, 0.26);
+  --focus-quiet-wash: rgba(158, 192, 212, 0.22);
+  --focus-critical-pane: rgba(255, 138, 138, 0.16);
+  --focus-steady-pane: rgba(94, 233, 181, 0.15);
+  --focus-swift-pane: rgba(251, 191, 36, 0.14);
+  --focus-quiet-pane: rgba(158, 192, 212, 0.12);
+  --note-yellow: rgba(250, 204, 21, 0.26);
+  --note-green: rgba(52, 211, 153, 0.24);
+  --note-blue: rgba(96, 165, 250, 0.24);
+  --note-red: rgba(251, 113, 133, 0.24);
+  --note-purple: rgba(192, 132, 252, 0.24);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.36);
+  --shadow-pop: 0 10px 36px rgba(0, 0, 0, 0.5);
+  --glow: radial-gradient(ellipse 70% 52% at 50% -5%, rgba(94, 233, 181, 0.18), transparent 56%),
+    radial-gradient(ellipse 44% 34% at 90% 10%, rgba(251, 191, 36, 0.09), transparent 52%),
+    radial-gradient(ellipse 36% 30% at 10% 16%, rgba(255, 138, 138, 0.07), transparent 50%);
 }
 
 body {
@@ -111,27 +111,13 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 .bn-editor {
   background: transparent !important;
   padding-inline: 0.35rem !important;
-  /* Keep the last lines above the floating pill nav / formatting toolbar. */
-  padding-bottom: 5.5rem !important;
+  /* Keep the last lines above the floating pill nav. */
+  padding-bottom: 4.5rem !important;
   font-family: var(--font-sans) !important;
-  scroll-margin-bottom: 6rem;
-}
-
-/* Floating formatting toolbar — sit above the bottom pill nav, not over prose. */
-.bn-container .bn-formatting-toolbar,
-.bn-mantine .bn-formatting-toolbar,
-[data-floating-ui-portal] .bn-formatting-toolbar {
-  margin-bottom: 4.5rem;
 }
 
 .page-editor .bn-editor .bn-block-outer:last-child {
-  margin-bottom: 2rem;
-}
-
-/* Smooth scroll for the main app shell. */
-main {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
+  padding-bottom: 1.25rem;
 }
 
 /* Keep selected-block outline off the glyphs — padding inside the highlight. */
