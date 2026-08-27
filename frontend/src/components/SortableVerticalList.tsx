@@ -21,7 +21,7 @@ export function SortableVerticalList<T extends { id: string }>({
   items: T[];
   enabled: boolean;
   className?: string;
-  renderItem: (item: T, opts: { dragging: boolean; grip?: React.ReactNode }) => React.ReactNode;
+  renderItem: (item: T, opts: { dragging: boolean; grip?: React.ReactNode; moveUp?: () => void; moveDown?: () => void; isFirst?: boolean; isLast?: boolean }) => React.ReactNode;
   onReorder: (orderedIds: string[]) => void;
 }) {
   const [order, setOrder] = useState(items.map((i) => i.id));
@@ -70,6 +70,21 @@ export function SortableVerticalList<T extends { id: string }>({
     <div className={clsx("space-y-0.5", className)}>
       {ordered.map((item, index) => {
         const dragging = draggingId === item.id;
+        const isFirst = index === 0;
+        const isLast = index === ordered.length - 1;
+        
+        const moveUp = enabled && !isFirst ? () => {
+          const next = moveItem(order.slice(), index, index - 1);
+          setOrder(next);
+          onReorder(next);
+        } : undefined;
+        
+        const moveDown = enabled && !isLast ? () => {
+          const next = moveItem(order.slice(), index, index + 1);
+          setOrder(next);
+          onReorder(next);
+        } : undefined;
+
         const grip = enabled ? (
           <div
             className="cursor-grab active:cursor-grabbing rounded-md p-1 text-secondary hover:text-primary hover:bg-surface-2/80 shrink-0"
@@ -96,7 +111,7 @@ export function SortableVerticalList<T extends { id: string }>({
               dragging && "opacity-60 scale-[1.01] z-10"
             )}
           >
-            {renderItem(item, { dragging, grip })}
+            {renderItem(item, { dragging, grip, moveUp, moveDown, isFirst, isLast })}
           </div>
         );
       })}

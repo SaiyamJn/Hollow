@@ -6,6 +6,7 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   FileText,
   GripVertical,
   Layers,
@@ -362,7 +363,7 @@ export default function NotebookDetail() {
               await reorderSections(notebook.id, ids);
               void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
             }}
-            renderItem={(sec, { grip }) => {
+            renderItem={(sec, { grip, moveUp, moveDown }) => {
             const secSealed = sec.isLocked && !sectionPasswords[sec.id];
             const open = expanded.has(sec.id) && !secSealed;
             return (
@@ -450,6 +451,12 @@ export default function NotebookDetail() {
                     </button>
                   </div>
                   )}
+                  {reorderMode && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button type="button" onClick={moveUp} disabled={!moveUp} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move up"><ChevronUp size={14} /></button>
+                      <button type="button" onClick={moveDown} disabled={!moveDown} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move down"><ChevronDown size={14} /></button>
+                    </div>
+                  )}
                 </div>
 
                 {open && (
@@ -461,7 +468,7 @@ export default function NotebookDetail() {
                         await reorderPages(sec.id, ids);
                         void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
                       }}
-                      renderItem={(page, { grip: pageGrip }) => (
+                      renderItem={(page, { grip: pageGrip, moveUp: pageMoveUp, moveDown: pageMoveDown }) => (
                       <div
                         className="group/page flex items-center gap-1 rounded-md hover:bg-surface-2 transition-colors"
                         onMouseEnter={() => setActiveItem({ kind: "page", id: page.id, title: page.title })}
@@ -506,6 +513,12 @@ export default function NotebookDetail() {
                           <Trash2 size={13} />
                         </button>
                         </>
+                        )}
+                        {reorderMode && (
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button type="button" onClick={pageMoveUp} disabled={!pageMoveUp} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move up"><ChevronUp size={13} /></button>
+                            <button type="button" onClick={pageMoveDown} disabled={!pageMoveDown} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move down"><ChevronDown size={13} /></button>
+                          </div>
                         )}
                       </div>
                       )}
