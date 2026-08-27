@@ -107,6 +107,12 @@ router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =
   const notebook = await prisma.notebook.findUnique({ where: { id: req.params.notebookId } });
   if (!notebook || notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
 
+  const maxOrder = await prisma.section.aggregate({
+    where: { notebookId: notebook.id },
+    _max: { sortOrder: true },
+  });
+  const sortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
+
   // Locked notebooks: new sections must be vault-encrypted with the same password.
   if (notebook.isLocked) {
     const password = req.header("x-section-password");
@@ -116,7 +122,7 @@ router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =
     if (!ok) return res.status(401).json({ error: "Incorrect notebook password" });
 
     const section = await prisma.section.create({
-      data: { title: parsed.data.title, notebookId: notebook.id },
+      data: { title: parsed.data.title, notebookId: notebook.id, sortOrder },
     });
     await lockSectionWithPassword(section.id, password);
     const locked = await prisma.section.findUnique({
@@ -127,7 +133,7 @@ router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =
   }
 
   const section = await prisma.section.create({
-    data: { title: parsed.data.title, notebookId: notebook.id },
+    data: { title: parsed.data.title, notebookId: notebook.id, sortOrder },
   });
   res.status(201).json(publicSection(section));
 });
@@ -196,6 +202,32 @@ router.post("/sections/:id/remove-lock", async (req: AuthedRequest, res) => {
   res.json({ locked: false });
 });
 
+router.post("/sections/:id/pages/reorder", async (req: AuthedRequest, res) => {
+  const parsed = z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  const section = await getOwnedSection(req.params.id, req.userId!);
+  if (!section) return res.status(404).json({ error: "Not found" });
+
+  const owned = await prisma.page.findMany({
+    where: { sectionId: section.id, id: { in: parsed.data.ids }, deletedAt: null },
+    select: { id: true },
+  });
+  if (owned.length !== parsed.data.ids.length) {
+    return res.status(400).json({ error: "Invalid page ids" });
+  }
+
+  const base = Math.floor(Date.now() / 1000);
+  await prisma.$transaction(
+    parsed.data.ids.map((id, index) =>
+      prisma.page.update({
+        where: { id },
+        data: { sortOrder: base - index },
+      })
+    )
+  );
+  res.json({ ok: true });
+});
+
 router.post("/sections/:id/pages", async (req: AuthedRequest, res) => {
   const parsed = titleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
@@ -212,8 +244,14 @@ router.post("/sections/:id/pages", async (req: AuthedRequest, res) => {
     content = encrypt("", deriveKey(password, section.salt));
   }
 
+  const maxOrder = await prisma.page.aggregate({
+    where: { sectionId: section.id, deletedAt: null },
+    _max: { sortOrder: true },
+  });
+  const sortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
+
   const page = await prisma.page.create({
-    data: { title: parsed.data.title, sectionId: section.id, content },
+    data: { title: parsed.data.title, sectionId: section.id, content, sortOrder },
   });
   res.status(201).json({ id: page.id, title: page.title, sectionId: page.sectionId, updatedAt: page.updatedAt, content: "" });
 });

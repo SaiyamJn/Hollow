@@ -59,6 +59,8 @@ model Section {
   isLocked     Boolean  @default(false)
   passwordHash String?
   salt         String?
+  /// Higher = nearer the top within a notebook
+  sortOrder    Int      @default(0)
   pages        Page[]
   createdAt    DateTime @default(now())
 
@@ -73,10 +75,13 @@ model Page {
   content       String        @default("")
   section       Section       @relation(fields: [sectionId], references: [id])
   sectionId     String
+  /// Higher = nearer the top within a section
+  sortOrder     Int           @default(0)
   tags          Tag[]         @relation("PageTags")
   outgoingLinks PageLink[]    @relation("SourcePage")
   incomingLinks PageLink[]    @relation("TargetPage")
   docState      PageDocState?
+  uploads       PageUpload[]
   updatedAt     DateTime      @updatedAt
   createdAt     DateTime      @default(now())
   /// Soft-delete — purged permanently 7 days after this timestamp
@@ -85,6 +90,20 @@ model Page {
   @@index([sectionId])
   @@index([updatedAt])
   @@index([sectionId, deletedAt])
+}
+
+/// Files embedded in BlockNote page content (images, attachments).
+model PageUpload {
+  id          String   @id @default(uuid())
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageId      String
+  filename    String
+  mimeType    String
+  size        Int
+  storageKey  String
+  createdAt   DateTime @default(now())
+
+  @@index([pageId])
 }
 
 // Snapshot of the Yjs CRDT state for realtime collaboration, encoded as

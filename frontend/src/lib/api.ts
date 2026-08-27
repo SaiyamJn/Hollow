@@ -218,6 +218,40 @@ export async function renamePage(pageId: string, title: string) {
   return data;
 }
 
+export async function movePage(pageId: string, sectionId: string) {
+  const { data } = await api.patch<PageMeta>(`/pages/${pageId}`, { sectionId });
+  return data;
+}
+
+export async function uploadPageFile(pageId: string, file: File, sectionPassword?: string) {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<{ url: string }>(`/pages/${pageId}/uploads`, form, {
+    headers: {
+      ...sectionHeaders(sectionPassword),
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return data.url;
+}
+
+export function publicUploadUrl(relativePath: string) {
+  const base = apiBase.startsWith("http")
+    ? apiBase
+    : `${window.location.origin}${apiBase.startsWith("/") ? apiBase : `/${apiBase}`}`;
+  const clean = base.replace(/\/$/, "");
+  const path = relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
+  return `${clean}${path}`;
+}
+
+export async function reorderSections(notebookId: string, ids: string[]) {
+  await api.post(`/notebooks/${notebookId}/sections/reorder`, { ids });
+}
+
+export async function reorderPages(sectionId: string, ids: string[]) {
+  await api.post(`/sections/${sectionId}/pages/reorder`, { ids });
+}
+
 /** Soft-delete into the recycle bin (kept 7 days). */
 export async function deletePage(pageId: string) {
   await api.delete(`/pages/${pageId}`);

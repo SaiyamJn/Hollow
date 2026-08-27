@@ -356,6 +356,19 @@ export async function renamePage(pageId: string, title: string) {
   return data;
 }
 
+export async function movePage(pageId: string, sectionId: string) {
+  const { data } = await api.patch<PageMeta>(`/pages/${pageId}`, { sectionId });
+  return data;
+}
+
+export async function reorderSections(notebookId: string, ids: string[]) {
+  await api.post(`/notebooks/${notebookId}/sections/reorder`, { ids });
+}
+
+export async function reorderPages(sectionId: string, ids: string[]) {
+  await api.post(`/sections/${sectionId}/pages/reorder`, { ids });
+}
+
 export async function fetchBacklinks(pageId: string) {
   const { data } = await api.get<Backlink[]>(`/pages/${pageId}/backlinks`);
   return data;

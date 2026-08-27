@@ -3,9 +3,11 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowRightLeft,
   ChevronDown,
   ChevronRight,
   FileText,
+  GripVertical,
   Layers,
   Lock,
   LockOpen,
@@ -24,9 +26,12 @@ import {
   fetchNotebooks,
   lockNotebook,
   lockSection,
+  movePage,
   renameNotebook,
   renamePage,
   renameSection,
+  reorderPages,
+  reorderSections,
   removeNotebookLock,
   removeSectionLock,
   unlockNotebook,
@@ -36,6 +41,7 @@ import type { Section } from "../lib/types";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { PasswordDialog } from "../components/PasswordDialog";
+import { SortableVerticalList } from "../components/SortableVerticalList";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -50,6 +56,7 @@ type DialogKind =
   | { kind: "remove-lock-section"; section: Section }
   | { kind: "new-section" }
   | { kind: "new-page"; section: Section }
+  | { kind: "move-page"; pageId: string; pageTitle: string; fromSectionId: string }
   | null;
 
 type EditTarget =
@@ -83,6 +90,8 @@ export default function NotebookDetail() {
     | { kind: "page"; id: string; title: string }
     | null
   >(null);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [moveSectionId, setMoveSectionId] = useState("");
 
   useEffect(() => {
     if (notebookId) setActiveNotebook(notebookId);
@@ -165,6 +174,15 @@ export default function NotebookDetail() {
     onSuccess: () => {
       invalidate();
       setDeletePageTarget(null);
+    },
+  });
+
+  const movePg = useMutation({
+    mutationFn: ({ pageId, sectionId }: { pageId: string; sectionId: string }) => movePage(pageId, sectionId),
+    onSuccess: () => {
+      invalidate();
+      setDialog(null);
+      setMoveSectionId("");
     },
   });
 
@@ -305,6 +323,14 @@ export default function NotebookDetail() {
             <Trash2 size={13} />
             Recycle bin
           </Link>
+          <Button
+            variant={reorderMode ? "accent" : "default"}
+            title="Rearrange sections and pages"
+            onClick={() => setReorderMode((v) => !v)}
+            disabled={sealed}
+          >
+            <GripVertical size={14} />
+          </Button>
         </div>
       </div>
 
@@ -318,17 +344,29 @@ export default function NotebookDetail() {
         </div>
       ) : (
         <div className="space-y-2">
+          {reorderMode && (
+            <p className="text-xs text-secondary px-1">
+              Drag sections or pages by the grip handle to rearrange. Use the move icon to shift a page to another section.
+            </p>
+          )}
           {notebook.sections.length === 0 && (
             <p className="text-sm text-secondary py-8 text-center">
               No sections yet — add one and start writing.
             </p>
           )}
-          {notebook.sections.map((sec) => {
+          <SortableVerticalList
+            items={notebook.sections}
+            enabled={reorderMode}
+            className="space-y-2"
+            onReorder={async (ids) => {
+              await reorderSections(notebook.id, ids);
+              void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+            }}
+            renderItem={(sec, { grip }) => {
             const secSealed = sec.isLocked && !sectionPasswords[sec.id];
             const open = expanded.has(sec.id) && !secSealed;
             return (
               <div
-                key={sec.id}
                 className="rounded-xl border border-border glass overflow-hidden"
                 onMouseEnter={() => setActiveItem({ kind: "section", section: sec })}
               >
@@ -336,10 +374,11 @@ export default function NotebookDetail() {
                   className="group flex items-center gap-1 px-2 py-1.5 hover:bg-surface-2/60 transition-colors"
                   onMouseEnter={() => setActiveItem({ kind: "section", section: sec })}
                 >
+                  {grip}
                   <button
                     type="button"
                     className="flex-1 flex items-center gap-2.5 px-1.5 py-1.5 text-left min-w-0"
-                    onClick={() => toggleSection(sec)}
+                    onClick={() => !reorderMode && toggleSection(sec)}
                   >
                     {open ? (
                       <ChevronDown size={15} className="text-secondary shrink-0" />
@@ -353,6 +392,7 @@ export default function NotebookDetail() {
                     )}
                     <span className="text-xs text-secondary">{sec.pages.length}</span>
                   </button>
+                  {!reorderMode && (
                   <div className="row-actions flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
@@ -409,24 +449,45 @@ export default function NotebookDetail() {
                       <Trash2 size={14} />
                     </button>
                   </div>
+                  )}
                 </div>
 
                 {open && (
                   <div className="border-t border-border px-3.5 py-2 space-y-0.5">
-                    {sec.pages.map((page) => (
+                    <SortableVerticalList
+                      items={sec.pages}
+                      enabled={reorderMode}
+                      onReorder={async (ids) => {
+                        await reorderPages(sec.id, ids);
+                        void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+                      }}
+                      renderItem={(page, { grip: pageGrip }) => (
                       <div
-                        key={page.id}
                         className="group/page flex items-center gap-1 rounded-md hover:bg-surface-2 transition-colors"
                         onMouseEnter={() => setActiveItem({ kind: "page", id: page.id, title: page.title })}
                       >
+                        {pageGrip}
                         <button
                           type="button"
                           className="flex-1 flex items-center gap-2 px-2 py-2 text-sm text-secondary
                                      hover:text-primary text-left min-w-0"
-                          onClick={() => openPage(sec, page.id, page.title)}
+                          onClick={() => !reorderMode && openPage(sec, page.id, page.title)}
                         >
                           <FileText size={13} className="shrink-0" />
                           <span className="truncate flex-1">{page.title}</span>
+                        </button>
+                        {!reorderMode && (
+                        <>
+                        <button
+                          type="button"
+                          title="Move to section"
+                          className="p-1.5 rounded-md text-secondary hover:text-primary shrink-0"
+                          onClick={() => {
+                            setMoveSectionId("");
+                            setDialog({ kind: "move-page", pageId: page.id, pageTitle: page.title, fromSectionId: sec.id });
+                          }}
+                        >
+                          <ArrowRightLeft size={13} />
                         </button>
                         <button
                           type="button"
@@ -444,8 +505,12 @@ export default function NotebookDetail() {
                         >
                           <Trash2 size={13} />
                         </button>
+                        </>
+                        )}
                       </div>
-                    ))}
+                      )}
+                    />
+                    {!reorderMode && (
                     <button
                       type="button"
                       className="w-full flex items-center gap-2 rounded-md px-2 py-2 text-sm text-secondary
@@ -454,11 +519,13 @@ export default function NotebookDetail() {
                     >
                       <Plus size={13} /> New page
                     </button>
+                    )}
                   </div>
                 )}
               </div>
             );
-          })}
+            }}
+          />
         </div>
       )}
 
@@ -587,6 +654,58 @@ export default function NotebookDetail() {
               {createSec.isPending || createPg.isPending ? "Creating…" : "Create"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dialog?.kind === "move-page"}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDialog(null);
+            setMoveSectionId("");
+            movePg.reset();
+          }
+        }}
+      >
+        <DialogContent
+          title={
+            dialog?.kind === "move-page"
+              ? `Move “${dialog.pageTitle}” to section`
+              : "Move page"
+          }
+        >
+          {dialog?.kind === "move-page" && notebook && (
+            <div className="space-y-3">
+              <select
+                className="w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm text-primary"
+                value={moveSectionId}
+                onChange={(e) => setMoveSectionId(e.target.value)}
+              >
+                <option value="">Choose section…</option>
+                {notebook.sections
+                  .filter((s) => s.id !== dialog.fromSectionId)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+              </select>
+              {(movePg.error as any)?.response?.data?.error && (
+                <p className="text-sm text-danger text-center">
+                  {(movePg.error as any).response.data.error}
+                </p>
+              )}
+              <Button
+                className="w-full"
+                disabled={!moveSectionId || movePg.isPending}
+                onClick={() =>
+                  movePg.mutate({ pageId: dialog.pageId, sectionId: moveSectionId })
+                }
+              >
+                {movePg.isPending ? "Moving…" : "Move page"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

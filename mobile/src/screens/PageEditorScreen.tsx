@@ -72,7 +72,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const unlock = useUnlock();
   const queryClient = useQueryClient();
   const password = unlock.sectionPasswords[sectionId];
-  const { stackBottomClearance, height } = useLayout();
+  const { stackBottomClearance, insets } = useLayout();
 
   const [text, setText] = useState<string | null>(null);
   const [wasRich, setWasRich] = useState(false);
@@ -89,13 +89,10 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const pendingText = useRef<string | null>(null);
   const posTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
-  const scrollRef = useRef<ScrollView>(null);
   const selectionRef = useRef<{ start: number; end: number } | undefined>(undefined);
   const textRef = useRef<string | null>(null);
-  const editingRef = useRef(false);
-  const viewportH = useRef(0);
-  const contentH = useRef(0);
-  const scrollY = useRef(0);
+  const scrollOffsetRef = useRef(0);
+  const restoredScrollRef = useRef(false);
 
   const { data: page, error, isLoading } = useQuery({
     queryKey: ["page", pageId, password ?? null],
@@ -112,13 +109,15 @@ export default function PageEditorScreen({ route, navigation }: any) {
       setText(body);
       textRef.current = body;
       setWasRich(isRichContent(page.content));
+      restoredScrollRef.current = false;
       void loadPagePosition(pageId).then((pos) => {
         if (pos) {
           const start = Math.min(Math.max(0, pos.selection), body.length);
           setSelection({ start, end: start });
+          scrollOffsetRef.current = pos.scrollOffset ?? 0;
         } else {
-          // Stay at the top so long notes aren't yanked to the bottom on open.
           setSelection(undefined);
+          scrollOffsetRef.current = 0;
         }
         setPositionReady(true);
       });
@@ -132,7 +131,6 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   useEffect(() => {
     if (!positionReady || selection == null) return;
-    // Restore caret; only open the keyboard when this page was just created.
     const t = setTimeout(() => {
       if (shouldAutoFocus) inputRef.current?.focus();
       inputRef.current?.setNativeProps?.({ selection });
@@ -140,6 +138,24 @@ export default function PageEditorScreen({ route, navigation }: any) {
     }, 50);
     return () => clearTimeout(t);
   }, [positionReady, pageId, shouldAutoFocus]);
+
+  // Restore scroll position once the TextInput has laid out (internal scroll, like Quick Notes).
+  useEffect(() => {
+    if (!positionReady || restoredScrollRef.current) return;
+    const y = scrollOffsetRef.current;
+    if (y <= 0) {
+      restoredScrollRef.current = true;
+      return;
+    }
+    const t = setTimeout(() => {
+      (inputRef.current as TextInput & { scrollTo?: (opts: { y: number; animated?: boolean }) => void })?.scrollTo?.({
+        y,
+        animated: false,
+      });
+      restoredScrollRef.current = true;
+    }, 80);
+    return () => clearTimeout(t);
+  }, [positionReady, pageId]);
 
   const saveNow = useCallback(async () => {
     if (pendingText.current === null) return;
@@ -161,37 +177,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
     setText(next);
     textRef.current = next;
     pendingText.current = next;
-    editingRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(saveNow, 800);
-    requestAnimationFrame(followCaret);
   }
-
-  const followCaret = useCallback(() => {
-    if (!editingRef.current) return;
-    const t = textRef.current ?? "";
-    const sel = selectionRef.current;
-    const viewH = viewportH.current;
-    if (viewH <= 0) return;
-    const atEnd = !sel || (sel.start >= t.length && sel.end >= t.length);
-    if (atEnd) {
-      scrollRef.current?.scrollToEnd({ animated: false });
-      return;
-    }
-    const lineIndex = t.slice(0, sel.start).split("\n").length - 1;
-    const totalLines = Math.max(1, t.split("\n").length);
-    const y =
-      contentH.current > 0
-        ? (contentH.current * lineIndex) / totalLines
-        : lineIndex * 22;
-    const comfort = Math.max(150, viewH * 0.3);
-    if (y + 24 > scrollY.current + viewH - comfort) {
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, y + 24 - viewH + comfort),
-        animated: false,
-      });
-    }
-  }, []);
 
   const wikiQuery = (() => {
     if (text == null) return null;
@@ -224,7 +212,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
       if (posTimer.current) clearTimeout(posTimer.current);
       void saveNow();
       const sel = selectionRef.current;
-      if (sel) void savePagePosition(pageId, { selection: sel.start });
+      if (sel) {
+        void savePagePosition(pageId, { selection: sel.start, scrollOffset: scrollOffsetRef.current });
+      }
     };
   }, [saveNow, pageId]);
 
@@ -349,7 +339,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const showTemplates = !templatesDismissed && !page?.content && text.trim() === "";
 
   return (
-    <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
+    <KeyboardSafe style={{ flex: 1, backgroundColor: colors.surface0 }}>
       {wasRich && !focus && (
         <Text style={[styles.notice, { color: colors.textSecondary, borderBottomColor: colors.border }]}>
           Editing as plain text — rich formatting from the web is flattened on save.
@@ -381,69 +371,48 @@ export default function PageEditorScreen({ route, navigation }: any) {
           </Pressable>
         </ScrollView>
       )}
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingBottom: Math.max(stackBottomClearance(false), 28) + Math.max(160, Math.round(height * 0.28)),
-          flexGrow: 1,
-        }}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-        showsVerticalScrollIndicator={false}
-        decelerationRate="normal"
-        scrollEventThrottle={16}
-        nestedScrollEnabled
-        onLayout={(e) => {
-          viewportH.current = e.nativeEvent.layout.height;
-        }}
-        onScroll={(e) => {
-          const y = e.nativeEvent.contentOffset?.y;
-          const sel = selectionRef.current;
-          if (typeof y === "number") scrollY.current = y;
-          if (typeof y !== "number" || !sel) return;
-          if (posTimer.current) clearTimeout(posTimer.current);
-          posTimer.current = setTimeout(() => {
-            void savePagePosition(pageId, { selection: sel.start, scrollOffset: y });
-          }, 250);
+      <View
+        style={{
+          flex: 1,
+          paddingBottom: Math.max(stackBottomClearance(false), insets.bottom, 12),
         }}
       >
-      <TextInput
-        ref={inputRef}
-        style={[
-          styles.editor,
-          {
-            color: colors.textPrimary,
-            minHeight: Math.max(viewportH.current || height * 0.6, 280),
-          },
-          focus && styles.focusEditor,
-        ]}
-        multiline
-        textAlignVertical="top"
-        value={text}
-        onChangeText={onChangeText}
-        {...(selection ? { selection } : {})}
-        onContentSizeChange={(e) => {
-          contentH.current = e.nativeEvent.contentSize.height;
-          requestAnimationFrame(followCaret);
-        }}
-        onSelectionChange={(e) => {
-          const next = e.nativeEvent.selection;
-          selectionRef.current = next;
-          // Clear one-shot restore selection so the field stays uncontrolled
-          // (controlled selection fights manual scrolling on Android).
-          if (selection) setSelection(undefined);
-          if (posTimer.current) clearTimeout(posTimer.current);
-          posTimer.current = setTimeout(() => {
-            void savePagePosition(pageId, { selection: next.start });
-          }, 250);
-          requestAnimationFrame(followCaret);
-        }}
-        placeholder="Write freely…  Type [[ to link a page"
-        placeholderTextColor={colors.textSecondary}
-        scrollEnabled={false}
-      />
-      </ScrollView>
+        <TextInput
+          ref={inputRef}
+          style={[
+            styles.editor,
+            { color: colors.textPrimary, flex: 1 },
+            focus && styles.focusEditor,
+          ]}
+          multiline
+          scrollEnabled
+          textAlignVertical="top"
+          value={text}
+          onChangeText={onChangeText}
+          {...(selection ? { selection } : {})}
+          onScroll={(e) => {
+            const y = e.nativeEvent.contentOffset.y;
+            scrollOffsetRef.current = y;
+            const sel = selectionRef.current;
+            if (!sel) return;
+            if (posTimer.current) clearTimeout(posTimer.current);
+            posTimer.current = setTimeout(() => {
+              void savePagePosition(pageId, { selection: sel.start, scrollOffset: y });
+            }, 250);
+          }}
+          onSelectionChange={(e) => {
+            const next = e.nativeEvent.selection;
+            selectionRef.current = next;
+            if (selection) setSelection(undefined);
+            if (posTimer.current) clearTimeout(posTimer.current);
+            posTimer.current = setTimeout(() => {
+              void savePagePosition(pageId, { selection: next.start, scrollOffset: scrollOffsetRef.current });
+            }, 250);
+          }}
+          placeholder="Write freely…  Type [[ to link a page"
+          placeholderTextColor={colors.textSecondary}
+        />
+      </View>
       {focus && (
         <View pointerEvents="none" style={[styles.focusTitle, { paddingTop: 12 }]}>
           <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>

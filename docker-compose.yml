@@ -35,10 +35,13 @@ services:
       JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env}"
       CONTENT_ENCRYPTION_KEY: "${CONTENT_ENCRYPTION_KEY:?Set CONTENT_ENCRYPTION_KEY in .env}"
       PORT: "4000"
+      UPLOAD_DIR: /data/uploads
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       NODE_ENV: production
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,3 +61,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

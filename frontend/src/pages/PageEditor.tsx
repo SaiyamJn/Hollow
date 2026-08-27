@@ -22,6 +22,8 @@ import {
   renamePage,
   savePageContent,
   unlockSection,
+  uploadPageFile,
+  publicUploadUrl,
 } from "../lib/api";
 import type { Page } from "../lib/types";
 import { useTheme } from "../theme/ThemeProvider";
@@ -236,13 +238,17 @@ function Editor({
       extensions: [newBlockOnShiftEnter],
       // Focus after we restore the last caret/scroll — autofocus would jump to top.
       autofocus: false,
+      uploadFile: async (file: File) => {
+        const relative = await uploadPageFile(page.id, file, password);
+        return publicUploadUrl(relative);
+      },
       collaboration: {
         provider: { awareness: session.awareness },
         fragment: session.doc.getXmlFragment("document-store"),
         user: { name: user?.name ?? "Anonymous", color: colorFor(user?.id) },
       },
     }),
-    [session]
+    [session, page.id, password]
   );
 
   // First client on a page with no CRDT state yet: seed the shared doc from

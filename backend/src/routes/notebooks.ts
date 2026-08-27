@@ -40,15 +40,41 @@ router.get("/", async (req: AuthedRequest, res) => {
           pages: {
             where: { deletedAt: null },
             select: { id: true, title: true, updatedAt: true },
-            orderBy: { createdAt: "asc" },
+            orderBy: [{ sortOrder: "desc" }, { createdAt: "asc" }],
           },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ sortOrder: "desc" }, { createdAt: "asc" }],
       },
     },
     orderBy: { createdAt: "asc" },
   });
   res.json(notebooks.map((nb) => publicNotebook(nb)));
+});
+
+router.post("/:id/sections/reorder", async (req: AuthedRequest, res) => {
+  const parsed = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  const notebook = await getOwnedNotebook(req.params.id, req.userId!);
+  if (!notebook) return res.status(404).json({ error: "Not found" });
+
+  const owned = await prisma.section.findMany({
+    where: { notebookId: notebook.id, id: { in: parsed.data.ids } },
+    select: { id: true },
+  });
+  if (owned.length !== parsed.data.ids.length) {
+    return res.status(400).json({ error: "Invalid section ids" });
+  }
+
+  const base = Math.floor(Date.now() / 1000);
+  await prisma.$transaction(
+    parsed.data.ids.map((id, index) =>
+      prisma.section.update({
+        where: { id },
+        data: { sortOrder: base - index },
+      })
+    )
+  );
+  res.json({ ok: true });
 });
 
 router.post("/", async (req: AuthedRequest, res) => {

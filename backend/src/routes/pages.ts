@@ -6,6 +6,9 @@ import { requireAuth, AuthedRequest } from "../middleware/auth";
 import { deriveKey, encrypt, decrypt, sealAtRest, unsealAtRest, isSealedAtRest } from "../lib/encryption";
 import { publicPage } from "../lib/sanitize";
 import { hasActiveDoc } from "../sockets/collab";
+import { pageUpload } from "../middleware/pageUpload";
+import { signUploadToken, verifyUploadToken } from "../lib/mediaToken";
+import { deletePageUploadDir, deleteUploadFiles, readUpload, writeUpload } from "../lib/uploadStorage";
 
 const router = Router();
 router.use(requireAuth);
@@ -13,6 +16,7 @@ router.use(requireAuth);
 const TRASH_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function hardDeletePage(pageId: string) {
+  const uploads = await prisma.pageUpload.findMany({ where: { pageId }, select: { storageKey: true } });
   await prisma.$transaction([
     prisma.pageLink.deleteMany({
       where: { OR: [{ sourcePageId: pageId }, { targetPageId: pageId }] },
@@ -20,6 +24,8 @@ async function hardDeletePage(pageId: string) {
     prisma.pageDocState.deleteMany({ where: { pageId } }),
     prisma.page.delete({ where: { id: pageId } }),
   ]);
+  await deleteUploadFiles(uploads.map((u) => u.storageKey));
+  await deletePageUploadDir(pageId);
 }
 
 /** Hard-delete pages that have sat in the recycle bin longer than 7 days. */
@@ -31,6 +37,10 @@ export async function purgeExpiredPages() {
   });
   if (expired.length === 0) return;
   const ids = expired.map((p) => p.id);
+  const uploads = await prisma.pageUpload.findMany({
+    where: { pageId: { in: ids } },
+    select: { storageKey: true, pageId: true },
+  });
   await prisma.$transaction([
     prisma.pageLink.deleteMany({
       where: { OR: [{ sourcePageId: { in: ids } }, { targetPageId: { in: ids } }] },
@@ -38,6 +48,8 @@ export async function purgeExpiredPages() {
     prisma.pageDocState.deleteMany({ where: { pageId: { in: ids } } }),
     prisma.page.deleteMany({ where: { id: { in: ids } } }),
   ]);
+  await deleteUploadFiles(uploads.map((u) => u.storageKey));
+  for (const pageId of ids) await deletePageUploadDir(pageId);
 }
 
 function publicTrashedPage(page: {
@@ -114,7 +126,79 @@ router.get("/trash", async (req: AuthedRequest, res) => {
   res.json(pages.map(publicTrashedPage));
 });
 
-// Find-or-create today's daily note. The client sends its local date so the
+// Embedded file/image blocks — stored on disk, referenced by URL in page JSON.
+router.post("/:id/uploads", pageUpload.single("file"), async (req: AuthedRequest, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: "No file uploaded" });
+
+  const page = await prisma.page.findUnique({
+    where: { id: req.params.id },
+    include: { section: { include: { notebook: true } } },
+  });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  if (page.section.isLocked) {
+    const password = req.header("x-section-password");
+    if (!password || !page.section.salt || !page.section.passwordHash) {
+      return res.status(423).json({ error: "Section is locked" });
+    }
+    const ok = await bcrypt.compare(password, page.section.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Incorrect section password" });
+  }
+
+  const { uploadId, storageKey } = await writeUpload(page.id, file.buffer);
+  const upload = await prisma.pageUpload.create({
+    data: {
+      id: uploadId,
+      pageId: page.id,
+      filename: file.originalname.slice(0, 255) || "file",
+      mimeType: file.mimetype || "application/octet-stream",
+      size: file.size,
+      storageKey,
+    },
+  });
+
+  const token = signUploadToken(upload.id, page.id);
+  const url = `/pages/uploads/${upload.id}?pageId=${page.id}&token=${token}`;
+  res.status(201).json({ url, id: upload.id, filename: upload.filename, mimeType: upload.mimeType, size: upload.size });
+});
+
+router.get("/uploads/:uploadId", async (req: AuthedRequest, res) => {
+  const pageId = String(req.query.pageId ?? "");
+  const token = String(req.query.token ?? "");
+  const uploadId = req.params.uploadId;
+
+  if (!pageId || !verifyUploadToken(uploadId, pageId, token)) {
+    return res.status(401).json({ error: "Invalid upload token" });
+  }
+
+  const upload = await prisma.pageUpload.findUnique({
+    where: { id: uploadId },
+    include: { page: { include: { section: { include: { notebook: true } } } } },
+  });
+  if (
+    !upload ||
+    upload.pageId !== pageId ||
+    upload.page.deletedAt ||
+    upload.page.section.notebook.ownerId !== req.userId
+  ) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  try {
+    const data = await readUpload(upload.storageKey);
+    res.setHeader("Content-Type", upload.mimeType);
+    res.setHeader("Content-Disposition", `inline; filename="${upload.filename.replace(/"/g, "")}"`);
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.send(data);
+  } catch {
+    res.status(404).json({ error: "File missing" });
+  }
+});
+
+// Find-or-create today's daily note.
 // journal day boundary follows the user's timezone, not the server's.
 router.post("/daily", async (req: AuthedRequest, res) => {
   const parsed = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(req.body);
@@ -287,28 +371,69 @@ router.get("/:id/outlinks", async (req: AuthedRequest, res) => {
 });
 
 router.patch("/:id", async (req: AuthedRequest, res) => {
-  const parsed = z.object({ title: z.string().min(1) }).safeParse(req.body);
+  const parsed = z
+    .object({
+      title: z.string().min(1).optional(),
+      sectionId: z.string().uuid().optional(),
+    })
+    .safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  if (!parsed.data.title && !parsed.data.sectionId) {
+    return res.status(400).json({ error: "Nothing to update" });
+  }
+
   const page = await prisma.page.findUnique({
     where: { id: req.params.id },
     include: { section: { include: { notebook: true } } },
   });
-  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) return res.status(404).json({ error: "Not found" });
+  if (!page || page.deletedAt || page.section.notebook.ownerId !== req.userId) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  let targetSectionId = page.sectionId;
+  if (parsed.data.sectionId && parsed.data.sectionId !== page.sectionId) {
+    const target = await prisma.section.findUnique({
+      where: { id: parsed.data.sectionId },
+      include: { notebook: true },
+    });
+    if (!target || target.notebookId !== page.section.notebookId) {
+      return res.status(400).json({ error: "Invalid section" });
+    }
+    if (target.isLocked && !page.section.isLocked) {
+      return res.status(400).json({ error: "Cannot move an unlocked page into a locked section" });
+    }
+    if (!target.isLocked && page.section.isLocked) {
+      return res.status(400).json({ error: "Cannot move a locked page into an unlocked section" });
+    }
+    targetSectionId = target.id;
+  }
 
   const oldTitle = page.title;
-  const newTitle = parsed.data.title.trim();
+  const newTitle = parsed.data.title?.trim() ?? page.title;
 
-  // Titles are never encrypted (only content is), so renaming works while locked.
+  const maxOrder =
+    targetSectionId !== page.sectionId
+      ? await prisma.page.aggregate({
+          where: { sectionId: targetSectionId, deletedAt: null },
+          _max: { sortOrder: true },
+        })
+      : null;
+
   const updated = await prisma.page.update({
     where: { id: page.id },
-    data: { title: newTitle },
+    data: {
+      ...(parsed.data.title ? { title: newTitle } : {}),
+      ...(parsed.data.sectionId
+        ? { sectionId: targetSectionId, sortOrder: (maxOrder?._max.sortOrder ?? 0) + 1 }
+        : {}),
+    },
     select: { id: true, title: true, sectionId: true, updatedAt: true },
   });
 
   // Keep [[links]] resolving after rename: rewrite wiki titles in other pages'
   // plaintext (or server-sealed) content. Locked pages stay password-encrypted —
   // PageLink rows already use ids so edges survive.
-  if (oldTitle !== newTitle) {
+  if (parsed.data.title && oldTitle !== newTitle) {
     const siblings = await prisma.page.findMany({
       where: {
         id: { not: page.id },
