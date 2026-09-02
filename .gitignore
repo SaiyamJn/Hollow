@@ -67,3 +67,4 @@ noteapp-starter.zip
 *.zip
 docs/
 docs_2/
+.claude/
