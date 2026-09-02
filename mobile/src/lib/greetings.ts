@@ -57,9 +57,8 @@ function bucket(h: number): string[] {
   return EVENING;
 }
 
-/** Stable-ish pick that changes every `periodMs` so the greeting feels alive. */
-export function pickGreeting(now = new Date(), periodMs = 4 * 60_000): string {
+/** Random pick within the right time-of-day bucket — lively but still apt for the hour. */
+export function pickGreeting(now = new Date()): string {
   const list = bucket(now.getHours());
-  const slot = Math.floor(now.getTime() / periodMs);
-  return list[slot % list.length];
+  return list[Math.floor(Math.random() * list.length)];
 }

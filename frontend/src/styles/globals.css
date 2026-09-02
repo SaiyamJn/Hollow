@@ -102,6 +102,7 @@ html {
 }
 .app-shell main {
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
   scroll-padding-top: 4.25rem;
   scroll-padding-bottom: 32vh;
 }

@@ -57,8 +57,9 @@ function bucket(h: number): string[] {
   return EVENING;
 }
 
-export function pickGreeting(now = new Date(), periodMs = 4 * 60_000): string {
+export function pickGreeting(now = new Date()): string {
   const list = bucket(now.getHours());
-  const slot = Math.floor(now.getTime() / periodMs);
-  return list[slot % list.length];
+  // Random within the right time-of-day bucket, so it stays suitable to the hour
+  // but isn't the same deterministic cycle every visit.
+  return list[Math.floor(Math.random() * list.length)];
 }

@@ -150,7 +150,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface-0 text-primary">
+    <div className="h-screen overflow-y-auto overscroll-none bg-surface-0 text-primary">
       <header className="h-12 border-b border-border glass-strong flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
           <BrandMark size="sm" />

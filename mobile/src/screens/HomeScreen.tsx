@@ -74,7 +74,7 @@ export default function HomeScreen({ navigation }: any) {
     data: recent,
     isLoading,
     refetch,
-  } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(8) });
+  } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(5) });
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
 
   const daily = useMutation({
@@ -411,6 +411,7 @@ export default function HomeScreen({ navigation }: any) {
             title: taskDraft.title.trim(),
             description: taskDraft.description.trim() || undefined,
             dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
+            focus: taskDraft.focus,
             ...repeatPayload(taskDraft),
           });
           queryClient.invalidateQueries({ queryKey: ["tasks"] });

@@ -4,6 +4,7 @@ import {
   Animated,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -204,6 +205,15 @@ export default function PageEditorScreen({ route, navigation }: any) {
     onChangeText(next);
   }
 
+  async function exportPage() {
+    if (text == null) return;
+    try {
+      await Share.share({ message: text, title: page?.title ?? "Page" });
+    } catch {
+      // user cancelled
+    }
+  }
+
   // Flush pending edits + caret when leaving the screen.
   useEffect(() => {
     return () => {
@@ -237,6 +247,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
                   ? "Couldn't save"
                   : "Saved"}
           </Text>
+          <Pressable onPress={() => void exportPage()} hitSlop={8} accessibilityLabel="Export page">
+            <Feather name="share-2" size={15} color={colors.textSecondary} />
+          </Pressable>
           <Pressable onPress={() => setPrompt("rename")} hitSlop={8} accessibilityLabel="Rename page">
             <Feather name="edit-2" size={15} color={colors.textSecondary} />
           </Pressable>

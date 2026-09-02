@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -94,6 +95,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
     () => note?.items ?? (isList ? [{ id: newItemId(), text: "", done: false }] : [])
   );
   const [color, setColor] = useState(initialColor ?? note?.color ?? "gray");
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<{
@@ -207,10 +209,15 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
       if (discarded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const snap = latest.current;
-      if (shouldAutoFocus && isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
+      // Auto-delete notes/lists left empty. Brand-new drafts are removed outright;
+      // an emptied existing note goes to the recycle bin so it can be restored.
+      if (isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
         discarded.current = true;
         pending.current = null;
-        void deleteQuickNotePermanent(noteId).then(invalidate);
+        void (shouldAutoFocus
+          ? deleteQuickNotePermanent(noteId)
+          : deleteQuickNote(noteId)
+        ).then(invalidate);
         return;
       }
       if (pending.current) {
@@ -225,7 +232,8 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
       if (discarded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const snap = latest.current;
-      if (shouldAutoFocus && isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
+      // Auto-delete notes/lists left empty, whether freshly created or emptied here.
+      if (isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
         discarded.current = true;
         pending.current = null;
         void deleteQuickNotePermanent(noteId).then(() => {
@@ -236,6 +244,23 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
       void saveNow();
     };
   }, [noteId, queryClient, saveNow, shouldAutoFocus]);
+
+  async function exportNote() {
+    const name = title.trim() || (isList ? "List" : "Note");
+    let body = name;
+    if (isList) {
+      body = items
+        .map((i) => `${i.done ? "- [x]" : "- [ ]"} ${i.text.trim() || "Item"}`)
+        .join("\n");
+    } else {
+      body = content.trim() || name;
+    }
+    try {
+      await Share.share({ message: body, title: name });
+    } catch {
+      // user cancelled
+    }
+  }
 
   const togglePin = useMutation({
     mutationFn: () => updateQuickNote(noteId, { pinned: !(note?.pinned ?? false) }),
@@ -288,7 +313,11 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   }
 
   function addItem() {
-    patchItems([...items, { id: newItemId(), text: "", done: false }]);
+    const id = newItemId();
+    patchItems([...items, { id, text: "", done: false }]);
+    // Focus the fresh row so pressing Enter keeps the keyboard open and the
+    // caret lands in the next empty item instead of dismissing.
+    setFocusId(id);
   }
 
   function removeItem(id: string) {
@@ -338,8 +367,12 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                 <ChecklistRow
                   key={item.id}
                   item={item}
+                  focusId={focusId}
                   onToggle={() => updateItem(item.id, { done: !item.done })}
-                  onChangeText={(text) => updateItem(item.id, { text })}
+                  onChangeText={(text) => {
+                    if (focusId === item.id) setFocusId(null);
+                    updateItem(item.id, { text });
+                  }}
                   onRemove={() => removeItem(item.id)}
                   onSubmit={addItem}
                 />
@@ -424,6 +457,9 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
             })}
           </View>
           <View style={[styles.actions, isNarrow && { gap: 20 }]}>
+            <Pressable onPress={() => void exportNote()} hitSlop={8} accessibilityLabel="Export note">
+              <Feather name="share-2" size={18} color={colors.textSecondary} />
+            </Pressable>
             <Pressable onPress={() => togglePin.mutate()} hitSlop={8}>
               <Feather name="star" size={18} color={pinned ? colors.accent : colors.textSecondary} />
             </Pressable>
@@ -458,14 +494,20 @@ function ChecklistRow({
   onChangeText,
   onRemove,
   onSubmit,
+  focusId,
 }: {
   item: ChecklistItem;
   onToggle: () => void;
   onChangeText: (text: string) => void;
   onRemove: () => void;
   onSubmit?: () => void;
+  focusId?: string | null;
 }) {
   const { colors } = useTheme();
+  const inputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (focusId === item.id) inputRef.current?.focus();
+  }, [focusId, item.id]);
   return (
     <View style={styles.checkRow}>
       <Pressable onPress={onToggle} hitSlop={8} style={{ paddingTop: 2 }}>
@@ -476,6 +518,7 @@ function ChecklistRow({
         />
       </Pressable>
       <TextInput
+        ref={inputRef}
         style={[
           styles.checkInput,
           {

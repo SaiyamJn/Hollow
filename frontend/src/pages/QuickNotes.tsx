@@ -5,7 +5,9 @@ import {
   Archive,
   ArchiveRestore,
   CheckSquare,
+  FileDown,
   ListTodo,
+  Printer,
   Square,
   Star,
   StickyNote,
@@ -28,6 +30,7 @@ import { Dialog, DialogContent } from "../components/ui/dialog";
 import { SortableNotesSection } from "../components/SortableNotesSection";
 import { EmptyState } from "../components/EmptyState";
 import { shouldHandleItemDelete } from "../lib/keys";
+import { downloadMarkdown, printHtml } from "../lib/export";
 
 const PALETTE: Record<string, string> = {
   gray: "transparent",
@@ -215,10 +218,16 @@ export default function QuickNotes() {
       clearTimeout(editSaveTimer.current);
       editSaveTimer.current = null;
     }
-    // Only discard brand-new empty drafts. Emptied existing notes stay (may be recycled intentionally via trash).
-    if (editing.isNew && isEmptyEdit(editing)) {
+    // Auto-delete notes/lists that end up empty (no title, no content, no items).
+    // Brand-new drafts are removed outright; an existing note that's emptied goes
+    // to the recycle bin so it can still be restored within 7 days.
+    if (isEmptyEdit(editing)) {
       try {
-        await deleteQuickNotePermanent(editing.id);
+        if (editing.isNew) {
+          await deleteQuickNotePermanent(editing.id);
+        } else {
+          await deleteQuickNote(editing.id);
+        }
         invalidate();
       } catch {
         // ignore
@@ -227,7 +236,7 @@ export default function QuickNotes() {
       return;
     }
     // Flush latest draft before closing so keystrokes aren't lost.
-    if (!isEmptyEdit(editing)) {
+    {
       try {
         await updateQuickNote(editing.id, {
           title: editing.title,
@@ -312,6 +321,46 @@ export default function QuickNotes() {
         if (seq === editSaveSeq.current) invalidate();
       });
     }, 400);
+  }
+
+  function exportNote() {
+    if (!editing) return;
+    const name = editing.title?.trim() || (editing.kind === "list" ? "List" : "Note");
+    if (editing.kind === "list") {
+      const md = editing.items
+        .map((i) => `${i.done ? "- [x]" : "- [ ]"} ${i.text.trim() || "Item"}`)
+        .join("\n");
+      downloadMarkdown(name, md);
+      return;
+    }
+    const md = editing.content.trim();
+    downloadMarkdown(name, md || " ");
+  }
+
+  function exportNotePdf() {
+    if (!editing) return;
+    const name = editing.title?.trim() || (editing.kind === "list" ? "List" : "Note");
+    if (editing.kind === "list") {
+      const rows = editing.items
+        .map((i) => `<li>${i.done ? "☑" : "☐"} ${escapeText(i.text.trim() || "Item")}</li>`)
+        .join("");
+      printHtml(name, `<ul>${rows}</ul>`);
+      return;
+    }
+    const body = editing.content
+      .trim()
+      .split(/\n{2,}/)
+      .map((p) => `<p>${escapeText(p).replace(/\n/g, "<br/>")}</p>`)
+      .join("");
+    printHtml(name, body || "<p></p>");
+  }
+
+  function escapeText(s: string): string {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   const anySelectedPinned = [...selected].some((id) => notes.find((n) => n.id === id)?.pinned);
@@ -535,7 +584,9 @@ export default function QuickNotes() {
               />
               {editing.kind === "list" ? (
                 <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
-                  {editing.items.map((item, idx) => (
+                  {[...editing.items]
+                    .sort((a, b) => Number(a.done) - Number(b.done))
+                    .map((item, idx) => (
                     <div key={item.id} className="flex items-center gap-2">
                       <button
                         type="button"
@@ -601,8 +652,25 @@ export default function QuickNotes() {
                 value={editing.color}
                 onPick={(color) => persistEdit({ ...editing, color })}
               />
-              <div className="flex gap-2">
-                <Button className="flex-1" variant="ghost" onClick={() => void closeEditor()}>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  title="Export as Markdown"
+                  className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
+                  onClick={exportNote}
+                >
+                  <FileDown size={14} />
+                </button>
+                <button
+                  type="button"
+                  title="Export as PDF"
+                  className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
+                  onClick={exportNotePdf}
+                >
+                  <Printer size={14} />
+                </button>
+                <span className="flex-1" />
+                <Button className="flex-1 max-w-[10rem]" variant="ghost" onClick={() => void closeEditor()}>
                   Done
                 </Button>
                 <Button

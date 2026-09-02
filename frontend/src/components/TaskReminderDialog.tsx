@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { updateTask } from "../lib/api";
 import {
+  dismissTaskNotification,
   snoozeTaskReminder,
   subscribeReminderClear,
   subscribeReminderPrompt,
@@ -29,6 +30,9 @@ export function TaskReminderDialog() {
     setBusy(true);
     try {
       await updateTask(prompt.taskId, { done: true });
+      // Close the system notification + clear the in-app prompt immediately so
+      // completing from the notification center doesn't leave it lingering.
+      dismissTaskNotification(prompt.taskId);
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
       setPrompt(null);
     } finally {

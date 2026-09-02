@@ -5,7 +5,7 @@ import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { PartialBlock } from "@blocknote/core";
 import { withCollaboration } from "@blocknote/core/yjs";
-import { Lock, LockOpen, Maximize2, Minimize2, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
+import { Download, FileDown, Lock, LockOpen, Maximize2, Minimize2, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -37,6 +37,7 @@ import { PasswordDialog } from "../components/PasswordDialog";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { PAGE_TEMPLATES } from "../lib/templates";
+import { downloadMarkdown, printHtml } from "../lib/export";
 import {
   findEditorScrollParent,
   keepCaretComfort,
@@ -231,6 +232,7 @@ function Editor({
   const editorShellRef = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
   const [deleting, setDeleting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const editor = useCreateBlockNote(
     withCollaboration({
@@ -541,6 +543,27 @@ function Editor({
     setShowTemplates(false);
   }
 
+  useEffect(() => {
+    if (!exportOpen) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-export-menu]")) return;
+      setExportOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [exportOpen]);
+
+  function exportMarkdown() {
+    const md = editor.blocksToMarkdownLossy(editor.document);
+    downloadMarkdown(title || page.title, md);
+  }
+
+  function exportPdf() {
+    const html = editor.blocksToHTMLLossy(editor.document);
+    printHtml(title || page.title, html);
+  }
+
   return (
     <div
       ref={editorShellRef}
@@ -609,6 +632,41 @@ function Editor({
               <Trash2 size={14} />
             </button>
           )}
+          <span className="relative" data-export-menu>
+            <button
+              title="Export page"
+              className="text-secondary hover:text-primary transition-colors"
+              onClick={() => setExportOpen((v) => !v)}
+            >
+              <Download size={14} />
+            </button>
+            {exportOpen && (
+              <span
+                className="absolute right-0 top-full mt-1 z-30 flex flex-col rounded-xl border border-border glass-strong shadow-pop py-1 min-w-[160px] animate-fade-in"
+              >
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
+                  onClick={() => {
+                    exportMarkdown();
+                    setExportOpen(false);
+                  }}
+                >
+                  <FileDown size={13} /> Markdown (.md)
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
+                  onClick={() => {
+                    exportPdf();
+                    setExportOpen(false);
+                  }}
+                >
+                  <FileDown size={13} /> PDF (print)
+                </button>
+              </span>
+            )}
+          </span>
           <button
             title={
               focusMode
