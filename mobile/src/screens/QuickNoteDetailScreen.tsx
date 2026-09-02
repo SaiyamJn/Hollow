@@ -98,6 +98,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emptyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<{
     title: string;
     content: string;
@@ -202,12 +203,36 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
     };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => void saveNow(), 500);
+
+    // Auto-delete the moment the note/list becomes empty while editing, so an
+    // emptied note doesn't linger. Brand-new drafts are removed outright; an
+    // existing note goes to the recycle bin (restorable within 7 days).
+    if (emptyTimer.current) clearTimeout(emptyTimer.current);
+    if (isEmptyDraft(kind, nextTitle, nextContent, nextItems ?? items)) {
+      emptyTimer.current = setTimeout(() => {
+        if (discarded.current) return;
+        discarded.current = true;
+        pending.current = null;
+        if (saveTimer.current) {
+          clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+        }
+        void (shouldAutoFocus
+          ? deleteQuickNotePermanent(noteId)
+          : deleteQuickNote(noteId)
+        ).then(() => {
+          queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+          navigation.goBack();
+        });
+      }, 800);
+    }
   }
 
   useEffect(() => {
     const unsub = navigation.addListener("beforeRemove", () => {
       if (discarded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (emptyTimer.current) clearTimeout(emptyTimer.current);
       const snap = latest.current;
       // Auto-delete notes/lists left empty. Brand-new drafts are removed outright;
       // an emptied existing note goes to the recycle bin so it can be restored.
@@ -231,6 +256,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
     return () => {
       if (discarded.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (emptyTimer.current) clearTimeout(emptyTimer.current);
       const snap = latest.current;
       // Auto-delete notes/lists left empty, whether freshly created or emptied here.
       if (isEmptyDraft(snap.kind, snap.title, snap.content, snap.items)) {
@@ -304,6 +330,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   }, [navigation, saveState, colors, isList]);
 
   function patchItems(next: ChecklistItem[]) {
+    animateListChange();
     setItems(next);
     scheduleSave(title, content, color, next);
   }

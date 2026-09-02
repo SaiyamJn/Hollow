@@ -689,7 +689,10 @@ function NoteCard({
   const fields = resolveNoteFields(note);
   const title = fields.title;
   const body = fields.content;
-  const items = (note.items ?? []).filter((i) => i.text.trim() || !i.done);
+  // Show open (unchecked) items first, completed items last — mirror the editor.
+  const items = (note.items ?? [])
+    .filter((i) => i.text.trim() || !i.done)
+    .sort((a, b) => Number(a.done) - Number(b.done));
   const previewItems = items.slice(0, 5);
   const bar = ACCENT_BAR[note.color] ?? colors.border;
   const tint = note.color !== "gray" ? noteTint(colors, note.color) : colors.surface1;

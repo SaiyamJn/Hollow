@@ -61,7 +61,7 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  const { data: recent } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(6) });
+  const { data: recent } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(5) });
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
 
   const daily = useMutation({
@@ -237,21 +237,26 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
       <h2 className="section-label mb-3">Continue writing</h2>
       {list.length === 0 && <p className="text-sm text-secondary">Pages you edit will show up here.</p>}
       <ul className="space-y-0.5">
-        {list.map((p) => (
-          <li key={p.id}>
+        {list.map((p, i) => (
+          <li key={p.id} className="animate-rise-in" style={{ animationDelay: `${i * 45}ms` }}>
             <Link
               to={pageRoute(p)}
-              className="flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
+              className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
                          text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
             >
-              <span className="icon-well h-7 w-7 rounded-lg shrink-0">
+              <span className="icon-well h-7 w-7 rounded-lg shrink-0 mt-0.5">
                 <FileText size={12} />
               </span>
-              <span className="truncate flex-1 text-primary">{p.title}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block truncate text-primary">{p.title}</span>
+                <span className="block truncate text-xs text-secondary">
+                  {p.section.notebook.title} / {p.section.title}
+                </span>
+              </span>
               {p.section.isLocked && !sectionPasswords[p.section.id] && (
-                <Lock size={11} className="shrink-0 text-secondary" />
+                <Lock size={11} className="shrink-0 mt-1 text-secondary" />
               )}
-              <span className="status-chip status-chip-muted shrink-0">{relativeTime(p.updatedAt)}</span>
+              <span className="status-chip status-chip-muted shrink-0 mt-0.5">{relativeTime(p.updatedAt)}</span>
             </Link>
           </li>
         ))}
@@ -350,12 +355,13 @@ function TodayTasks() {
         </p>
       )}
       <ul className="space-y-1">
-        {list.map(({ task, overdue: isOverdue }) => {
+        {list.map(({ task, overdue: isOverdue }, i) => {
           const leaving = !!completing[task.id];
           return (
             <li
               key={task.id}
-              className={clsx(
+              style={{ animationDelay: `${i * 45}ms` }}
+              className={clsx("animate-rise-in",
                 "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm transition-all duration-300 border border-transparent",
                 leaving
                   ? "opacity-0 translate-x-2 pointer-events-none"

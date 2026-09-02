@@ -145,6 +145,8 @@ export default function QuickNotes() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
   const editSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSaveSeq = useRef(0);
+  const emptyDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emptyDeleteSeq = useRef(0);
 
   async function persistOrder(group: QuickNote[], orderedIds: string[]) {
     const pinnedIds = notes.filter((n) => n.pinned).map((n) => n.id);
@@ -217,6 +219,10 @@ export default function QuickNotes() {
     if (editSaveTimer.current) {
       clearTimeout(editSaveTimer.current);
       editSaveTimer.current = null;
+    }
+    if (emptyDeleteTimer.current) {
+      clearTimeout(emptyDeleteTimer.current);
+      emptyDeleteTimer.current = null;
     }
     // Auto-delete notes/lists that end up empty (no title, no content, no items).
     // Brand-new drafts are removed outright; an existing note that's emptied goes
@@ -321,6 +327,29 @@ export default function QuickNotes() {
         if (seq === editSaveSeq.current) invalidate();
       });
     }, 400);
+
+    // Auto-delete the note the moment it becomes empty while editing, so an
+    // emptied note/list doesn't linger in the collection. Brand-new drafts are
+    // removed outright; an existing note goes to the recycle bin (restorable).
+    if (emptyDeleteTimer.current) clearTimeout(emptyDeleteTimer.current);
+    if (isEmptyEdit(next)) {
+      const delSeq = ++emptyDeleteSeq.current;
+      emptyDeleteTimer.current = setTimeout(() => {
+        if (delSeq !== emptyDeleteSeq.current) return;
+        if (editSaveTimer.current) {
+          clearTimeout(editSaveTimer.current);
+          editSaveTimer.current = null;
+        }
+        void (next.isNew
+          ? deleteQuickNotePermanent(next.id)
+          : deleteQuickNote(next.id)
+        ).then(() => {
+          if (delSeq !== emptyDeleteSeq.current) return;
+          invalidate();
+          setEditing((cur) => (cur?.id === next.id ? null : cur));
+        });
+      }, 800);
+    }
   }
 
   function exportNote() {
@@ -677,7 +706,14 @@ export default function QuickNotes() {
                   className="flex-1"
                   variant="accent"
                   disabled={saveEdit.isPending}
-                  onClick={() =>
+                  onClick={() => {
+                    if (!editing) return;
+                    // An emptied note/list is deleted (new → permanent, existing → recycle bin)
+                    // instead of being saved as a blank note.
+                    if (isEmptyEdit(editing)) {
+                      void closeEditor();
+                      return;
+                    }
                     saveEdit.mutate({
                       id: editing.id,
                       patch: {
@@ -686,8 +722,8 @@ export default function QuickNotes() {
                         color: editing.color,
                         items: editing.kind === "list" ? editing.items : undefined,
                       },
-                    })
-                  }
+                    });
+                  }}
                 >
                   {saveEdit.isPending ? "Saving…" : "Save"}
                 </Button>
@@ -716,7 +752,11 @@ function NoteCard({
   onToggleSelect: () => void;
 }) {
   const isList = note.kind === "list";
-  const items = (note.items ?? []).filter((i) => i.text.trim() || !i.done).slice(0, 5);
+  // Show open (unchecked) items first, completed items last — mirror the editor.
+  const items = (note.items ?? [])
+    .filter((i) => i.text.trim() || !i.done)
+    .sort((a, b) => Number(a.done) - Number(b.done))
+    .slice(0, 5);
   const holdTimer = useRef<number | null>(null);
   const held = useRef(false);
 

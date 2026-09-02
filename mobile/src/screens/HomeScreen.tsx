@@ -74,7 +74,7 @@ export default function HomeScreen({ navigation }: any) {
     data: recent,
     isLoading,
     refetch,
-  } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(5) });
+  } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(3) });
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
 
   const daily = useMutation({
@@ -322,6 +322,9 @@ export default function HomeScreen({ navigation }: any) {
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>
                 {p.title}
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 1 }} numberOfLines={1}>
+                {p.section.notebook.title} / {p.section.title}
               </Text>
             </View>
             <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
