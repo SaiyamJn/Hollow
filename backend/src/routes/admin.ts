@@ -107,7 +107,7 @@ router.get("/stats", async (_req: Request, res) => {
 
   const detailed = await Promise.all(
     users.map(async (u) => {
-      const [sections, lockedSections, pages, tasksDone, lastPage, lastNote, lastTask] =
+      const [sections, lockedSections, pages, tasksDone, lastPage, lastNote, lastTask, lastSession] =
         await Promise.all([
           prisma.section.count({ where: { notebook: { ownerId: u.id } } }),
           prisma.section.count({ where: { notebook: { ownerId: u.id }, isLocked: true } }),
@@ -128,11 +128,19 @@ router.get("/stats", async (_req: Request, res) => {
             orderBy: { createdAt: "desc" },
             select: { createdAt: true },
           }),
+          prisma.authSession.findFirst({
+            where: { userId: u.id, revokedAt: null },
+            orderBy: { lastSeenAt: "desc" },
+            select: { lastSeenAt: true },
+          }),
         ]);
 
-      const activityDates = [lastPage?.updatedAt, lastNote?.createdAt, lastTask?.createdAt].filter(
-        Boolean
-      ) as Date[];
+      const activityDates = [
+        lastPage?.updatedAt,
+        lastNote?.createdAt,
+        lastTask?.createdAt,
+        lastSession?.lastSeenAt,
+      ].filter(Boolean) as Date[];
       const lastActive =
         activityDates.length > 0
           ? new Date(Math.max(...activityDates.map((d) => d.getTime())))

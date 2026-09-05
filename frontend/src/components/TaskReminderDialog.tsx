@@ -34,16 +34,22 @@ export function TaskReminderDialog() {
       // completing from the notification center doesn't leave it lingering.
       dismissTaskNotification(prompt.taskId);
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      setPrompt(null);
+    } catch {
+      // Even if the API call fails, dismiss the notification so it doesn't linger.
+      dismissTaskNotification(prompt.taskId);
     } finally {
+      setPrompt(null);
       setBusy(false);
     }
   }
 
   function onSnooze() {
     if (!prompt) return;
-    snoozeTaskReminder(prompt.taskId, prompt.title, prompt.kind);
-    setPrompt(null);
+    try {
+      snoozeTaskReminder(prompt.taskId, prompt.title, prompt.kind);
+    } finally {
+      setPrompt(null);
+    }
   }
 
   const heading =

@@ -232,20 +232,21 @@ export default function PageEditorScreen({ route, navigation }: any) {
     navigation.setOptions({
       headerShown: !focus,
       headerRight: () => (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text
+            numberOfLines={1}
             style={{
               color: saveState === "error" ? colors.danger : colors.textSecondary,
-              fontSize: 12,
+              fontSize: 11,
             }}
           >
             {saveState === "saving"
               ? "Saving…"
               : saveState === "queued"
-                ? "Offline — queued"
+                ? "Offline"
                 : saveState === "error"
-                  ? "Couldn't save"
-                  : "Saved"}
+                  ? "Error"
+                  : ""}
           </Text>
           <Pressable onPress={() => void exportPage()} hitSlop={8} accessibilityLabel="Export page">
             <Feather name="share-2" size={15} color={colors.textSecondary} />

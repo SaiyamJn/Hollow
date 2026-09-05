@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
+import { dismissTaskNotifications } from "../lib/notifications";
 import { animateListChange, animateTaskComplete } from "../lib/motion";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
@@ -182,7 +183,10 @@ export default function TasksScreen() {
     },
   });
   const remove = useMutation({
-    mutationFn: deleteTask,
+    mutationFn: (id: string) => {
+      void dismissTaskNotifications(id);
+      return deleteTask(id);
+    },
     onMutate: () => animateListChange(),
     onSuccess: invalidate,
   });

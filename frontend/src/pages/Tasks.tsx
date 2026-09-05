@@ -4,6 +4,7 @@ import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Tras
 import clsx from "clsx";
 import { Link } from "react-router-dom";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
+import { dismissTaskNotification } from "../lib/notify";
 import type { Task } from "../lib/types";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -175,7 +176,13 @@ export default function Tasks() {
       setEditing(null);
     },
   });
-  const remove = useMutation({ mutationFn: deleteTask, onSuccess: invalidate });
+  const remove = useMutation({
+    mutationFn: (id: string) => {
+      dismissTaskNotification(id);
+      return deleteTask(id);
+    },
+    onSuccess: invalidate,
+  });
 
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {

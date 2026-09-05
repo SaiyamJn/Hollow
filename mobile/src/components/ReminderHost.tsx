@@ -93,12 +93,13 @@ export function ReminderHost() {
     try {
       await completeTask(prompt.taskId);
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      setPrompt(null);
     } catch {
+      // Even if the API call fails, dismiss the notification so it doesn't linger.
+      await dismissTaskNotifications(prompt.taskId);
+    } finally {
+      setPrompt(null);
       setBusy(false);
-      return;
     }
-    setBusy(false);
   }
 
   async function onSnooze() {
@@ -106,8 +107,8 @@ export function ReminderHost() {
     setBusy(true);
     try {
       await snoozeTaskReminder(prompt.taskId, prompt.title, prompt.kind);
-      setPrompt(null);
     } finally {
+      setPrompt(null);
       setBusy(false);
     }
   }

@@ -75,12 +75,13 @@ const styles = StyleSheet.create({
   },
   side: {
     flex: 1,
-    minWidth: 72,
+    minWidth: 60,
     flexDirection: "row",
     alignItems: "center",
   },
   sideRight: {
     justifyContent: "flex-end",
+    overflow: "hidden",
   },
   iconBtn: {
     height: 40,
