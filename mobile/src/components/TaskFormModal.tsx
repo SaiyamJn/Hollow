@@ -135,6 +135,7 @@ export function TaskFormModal({
   onClose,
   onChange,
   onSubmit,
+  onDelete,
 }: {
   visible: boolean;
   title: string;
@@ -145,6 +146,7 @@ export function TaskFormModal({
   onClose: () => void;
   onChange: (next: TaskDraft | null) => void;
   onSubmit: () => void;
+  onDelete?: () => void;
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -308,9 +310,16 @@ export function TaskFormModal({
               </Pressable>
 
               <View style={styles.actions}>
-                <Pressable onPress={onClose}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Never mind</Text>
-                </Pressable>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+                  {onDelete && (
+                    <Pressable onPress={onDelete} hitSlop={8} accessibilityLabel="Delete task">
+                      <Feather name="trash-2" size={17} color={colors.danger} />
+                    </Pressable>
+                  )}
+                  <Pressable onPress={onClose}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Never mind</Text>
+                  </Pressable>
+                </View>
                 <Pressable disabled={!current.title.trim() || busy} onPress={onSubmit}>
                   <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>{submitLabel}</Text>
                 </Pressable>

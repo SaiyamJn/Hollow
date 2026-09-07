@@ -107,6 +107,7 @@ export default function Tasks() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [layout, setLayout] = useState<TasksLayout>("list");
   const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
+  const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
 
   /** Board fills the viewport — lock shell scroll so only columns scroll. */
   useEffect(() => {
@@ -596,8 +597,17 @@ export default function Tasks() {
                 onChange={(focus) => setEditing({ ...editing, focus })}
               />
               {editError && <p className="text-sm text-danger text-center">{editError}</p>}
-              <div className="flex gap-2 pt-1">
-                <Button className="flex-1" variant="ghost" onClick={() => setEditing(null)}>
+              <div className="flex items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  title="Delete task"
+                  className="p-1.5 rounded-md text-secondary hover:text-danger transition-colors"
+                  onClick={() => setConfirmDeleteTask(true)}
+                >
+                  <Trash2 size={14} />
+                </button>
+                <span className="flex-1" />
+                <Button className="flex-1 max-w-[10rem]" variant="ghost" onClick={() => setEditing(null)}>
                   Cancel
                 </Button>
                 <Button
@@ -611,6 +621,32 @@ export default function Tasks() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDeleteTask} onOpenChange={setConfirmDeleteTask}>
+        <DialogContent title="Move to recycle bin?">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary">
+              Move "{editing?.title}" to the recycle bin? You can restore it within 7 days.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="ghost" onClick={() => setConfirmDeleteTask(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (!editing) return;
+                  remove.mutate(editing.id);
+                  setConfirmDeleteTask(false);
+                  setEditing(null);
+                }}
+              >
+                <span className="text-danger">Move</span>
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -21,6 +21,7 @@ import EmptyState from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { formatDueLabel } from "../components/GlassDateTimePicker";
 import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { FocusDot } from "../components/FocusField";
 import { FocusBoardMobile } from "../components/TaskBoards";
 import { FOCUS_META, FOCUS_MATRIX, type TaskFocus } from "../lib/taskFocus";
@@ -99,6 +100,7 @@ export default function TasksScreen() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [layout, setLayout] = useState<TasksLayout>("list");
   const [reclassTask, setReclassTask] = useState<Task | null>(null);
+  const [confirmDeleteEdit, setConfirmDeleteEdit] = useState(false);
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
@@ -608,6 +610,20 @@ export default function TasksScreen() {
               ...repeatPayload(editing),
             },
           });
+        }}
+        onDelete={() => setConfirmDeleteEdit(true)}
+      />
+
+      <ConfirmModal
+        visible={confirmDeleteEdit}
+        title="Move to recycle bin?"
+        message="You can restore it within 7 days."
+        confirmLabel="Move"
+        onClose={() => setConfirmDeleteEdit(false)}
+        onConfirm={() => {
+          if (!editing) return;
+          remove.mutate(editing.id);
+          setEditing(null);
         }}
       />
 

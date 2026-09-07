@@ -374,11 +374,12 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
           style={{ flex: 1 }}
           contentStyle={[
             styles.editorCard,
+            { overflow: 'hidden' },
             color !== "gray" ? { backgroundColor: noteTint(colors, color) } : null,
           ]}
         >
           {isList ? (
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={{ flex: 1 }}>
+            <View style={{ flex: 1 }}>
               <TextInput
                 style={[styles.title, { color: colors.textPrimary }]}
                 placeholder="List title"
@@ -390,6 +391,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                   scheduleSave(next, content, color, items);
                 }}
               />
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={{ flex: 1 }}>
               {openItems.map((item) => (
                 <ChecklistRow
                   key={item.id}
@@ -425,6 +427,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                 </View>
               )}
             </ScrollView>
+            </View>
           ) : (
             <View style={{ flex: 1 }}>
               <TextInput

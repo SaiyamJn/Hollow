@@ -106,6 +106,7 @@ export default function QuickNotes() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmTrash, setConfirmTrash] = useState(false);
+  const [confirmDeleteEdit, setConfirmDeleteEdit] = useState(false);
   const [hoverNoteId, setHoverNoteId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -255,6 +256,26 @@ export default function QuickNotes() {
         // keep editor open? — still close; user can reopen
       }
     }
+    setEditing(null);
+  }
+
+  async function deleteFromEditor() {
+    if (!editing) return;
+    if (editSaveTimer.current) {
+      clearTimeout(editSaveTimer.current);
+      editSaveTimer.current = null;
+    }
+    if (emptyDeleteTimer.current) {
+      clearTimeout(emptyDeleteTimer.current);
+      emptyDeleteTimer.current = null;
+    }
+    try {
+      await deleteQuickNote(editing.id);
+      invalidate();
+    } catch {
+      // ignore
+    }
+    setConfirmDeleteEdit(false);
     setEditing(null);
   }
 
@@ -603,16 +624,16 @@ export default function QuickNotes() {
       >
         <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-5xl">
           {editing && (
-            <div className="space-y-4">
+            <div className="flex flex-col max-h-[70vh] overflow-hidden">
               <input
                 autoFocus={!!editing.isNew}
-                className="w-full bg-transparent text-xl font-semibold text-primary placeholder:text-secondary focus:outline-none"
+                className="w-full bg-transparent text-xl font-semibold text-primary placeholder:text-secondary focus:outline-none shrink-0 mb-3"
                 placeholder={editing.kind === "list" ? "List title" : "Title"}
                 value={editing.title}
                 onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
               />
               {editing.kind === "list" ? (
-                <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+                <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto">
                   {[...editing.items]
                     .sort((a, b) => Number(a.done) - Number(b.done))
                     .map((item, idx) => (
@@ -669,70 +690,88 @@ export default function QuickNotes() {
               ) : (
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full rounded-xl border border-border glass-input px-6 py-5 text-[15px] text-primary leading-[1.7]
-                             placeholder:text-secondary/70 focus:outline-none focus:border-accent resize-none
-                             min-h-[min(60vh,32rem)] max-h-[72vh] overflow-y-auto"
+                  className="w-full flex-1 min-h-0 rounded-xl border border-border glass-input px-6 py-5 text-[15px] text-primary leading-[1.7]
+                             placeholder:text-secondary/70 focus:outline-none focus:border-accent resize-none overflow-y-auto"
                   placeholder="Write your note…"
                   value={editing.content}
                   onChange={(e) => persistEdit({ ...editing, content: e.target.value })}
                   style={{ background: editing.color !== "gray" ? PALETTE[editing.color] : undefined }}
                 />
               )}
-              <ColorDots
-                value={editing.color}
-                onPick={(color) => persistEdit({ ...editing, color })}
-              />
-              <div className="flex items-center gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  title="Export as Markdown"
-                  className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
-                  onClick={exportNote}
-                >
-                  <FileDown size={14} />
-                </button>
-                <button
-                  type="button"
-                  title="Export as PDF"
-                  className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
-                  onClick={exportNotePdf}
-                >
-                  <Printer size={14} />
-                </button>
-                <span className="flex-1" />
-                <Button className="flex-1 max-w-[10rem]" variant="ghost" onClick={() => void closeEditor()}>
-                  Done
-                </Button>
-                <Button
-                  className="flex-1"
-                  variant="accent"
-                  disabled={saveEdit.isPending}
-                  onClick={() => {
-                    if (!editing) return;
-                    // An emptied note/list is deleted (new → permanent, existing → recycle bin)
-                    // instead of being saved as a blank note.
-                    if (isEmptyEdit(editing)) {
-                      void closeEditor();
-                      return;
-                    }
-                    saveEdit.mutate({
-                      id: editing.id,
-                      patch: {
-                        title: editing.title,
-                        content: editing.kind === "list" ? " " : editing.content || " ",
-                        color: editing.color,
-                        items: editing.kind === "list" ? editing.items : undefined,
-                      },
-                    });
-                  }}
-                >
-                  {saveEdit.isPending ? "Saving…" : "Save"}
-                </Button>
+              <div className="shrink-0 pt-3 space-y-3">
+                <ColorDots
+                  value={editing.color}
+                  onPick={(color) => persistEdit({ ...editing, color })}
+                />
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    title="Delete note"
+                    className="p-1.5 rounded-md text-secondary hover:text-danger transition-colors"
+                    onClick={() => setConfirmDeleteEdit(true)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Export as Markdown"
+                    className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
+                    onClick={exportNote}
+                  >
+                    <FileDown size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Export as PDF"
+                    className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
+                    onClick={exportNotePdf}
+                  >
+                    <Printer size={14} />
+                  </button>
+                  <span className="flex-1" />
+                  <Button className="flex-1 max-w-[10rem]" variant="ghost" onClick={() => void closeEditor()}>
+                    Done
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    variant="accent"
+                    disabled={saveEdit.isPending}
+                    onClick={() => {
+                      if (!editing) return;
+                      // An emptied note/list is deleted (new → permanent, existing → recycle bin)
+                      // instead of being saved as a blank note.
+                      if (isEmptyEdit(editing)) {
+                        void closeEditor();
+                        return;
+                      }
+                      saveEdit.mutate({
+                        id: editing.id,
+                        patch: {
+                          title: editing.title,
+                          content: editing.kind === "list" ? " " : editing.content || " ",
+                          color: editing.color,
+                          items: editing.kind === "list" ? editing.items : undefined,
+                        },
+                      });
+                    }}
+                  >
+                    {saveEdit.isPending ? "Saving…" : "Save"}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDeleteEdit}
+        onOpenChange={setConfirmDeleteEdit}
+        title="Move to recycle bin?"
+        message="You can restore it within 7 days."
+        confirmLabel="Move"
+        onConfirm={() => void deleteFromEditor()}
+      />
     </div>
   );
 }
