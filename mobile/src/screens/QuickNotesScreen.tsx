@@ -310,7 +310,9 @@ export default function QuickNotesScreen({ navigation }: any) {
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        decelerationRate="normal"
+        decelerationRate={0.96}
+        removeClippedSubviews
+        bounces={false}
         scrollEventThrottle={16}
         ListHeaderComponent={
           <View

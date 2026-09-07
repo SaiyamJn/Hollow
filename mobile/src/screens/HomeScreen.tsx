@@ -177,7 +177,9 @@ export default function HomeScreen({ navigation }: any) {
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
       showsVerticalScrollIndicator={false}
-      decelerationRate="normal"
+      decelerationRate={0.96}
+      removeClippedSubviews
+      bounces={false}
       scrollEventThrottle={16}
     >
       {/* greeting + daily note */}

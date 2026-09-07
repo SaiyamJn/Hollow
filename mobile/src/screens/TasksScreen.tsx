@@ -264,7 +264,9 @@ export default function TasksScreen() {
         }}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
-        decelerationRate="normal"
+        decelerationRate={0.96}
+        removeClippedSubviews
+        bounces={false}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={

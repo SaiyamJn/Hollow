@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
+import * as TaskManager from "expo-task-manager";
 import { AppState, Platform } from "react-native";
+import { setApiToken, updateTask } from "./api";
+import { getSecureItem } from "./secureStorage";
 import type { Task } from "./types";
 
 const PREF_KEY = "hollow-notifications-enabled";
@@ -15,6 +18,87 @@ export const ACTION_SNOOZE = "snooze";
 
 const ACCENT = "#0cb879";
 const SNOOZE_MS = 60 * 60 * 1000;
+
+const TOKEN_KEY = "hollow-token";
+const HANDLED_RESPONSE_KEY = "hollow-notif-handled-response";
+
+export const BACKGROUND_NOTIFICATION_TASK = "hollow-background-notification-task";
+
+// Dedup so Complete / Remind later is handled exactly once, whether it arrives
+// through the foreground listener, `getLastNotificationResponseAsync`, or the
+// background task. Shared across all three entry points.
+let lastHandledResponse = "";
+const inflightResponses = new Set<string>();
+
+/**
+ * Ensure the API has the stored auth token. The background task runs headless
+ * (no React tree / auth context), so the token isn't already set there.
+ */
+async function ensureApiToken() {
+  try {
+    const token = await getSecureItem(TOKEN_KEY);
+    if (token) setApiToken(token);
+    return Boolean(token);
+  } catch {
+    return false;
+  }
+}
+
+export async function completeTask(taskId: string) {
+  await ensureApiToken();
+  await updateTask(taskId, { done: true });
+  await dismissTaskNotifications(taskId);
+}
+
+/** Parse the response and run the right side effect once (Complete / Snooze / prompt). */
+export async function handleNotificationResponse(
+  response: Notifications.NotificationResponse,
+  onChanged?: () => void
+) {
+  const key = `${response.notification.request.identifier}:${response.actionIdentifier}:${response.notification.date}`;
+  if (inflightResponses.has(key) || lastHandledResponse === key) return;
+  inflightResponses.add(key);
+
+  try {
+    if (!lastHandledResponse) {
+      lastHandledResponse = (await AsyncStorage.getItem(HANDLED_RESPONSE_KEY)) ?? "";
+      if (lastHandledResponse === key) return;
+    }
+    lastHandledResponse = key;
+    await AsyncStorage.setItem(HANDLED_RESPONSE_KEY, key);
+
+    const prompt = promptFromNotification(response.notification.request.content);
+    if (!prompt) return;
+    const presentedId = response.notification.request.identifier;
+    const action = response.actionIdentifier;
+    if (action === ACTION_COMPLETE) {
+      await dismissTaskNotifications(prompt.taskId, presentedId);
+      await completeTask(prompt.taskId);
+      onChanged?.();
+      return;
+    }
+    if (action === ACTION_SNOOZE) {
+      await dismissTaskNotifications(prompt.taskId, presentedId);
+      await snoozeTaskReminder(prompt.taskId, prompt.title, prompt.kind);
+      return;
+    }
+    emitReminderPrompt(prompt);
+  } finally {
+    void Notifications.clearLastNotificationResponseAsync();
+  }
+}
+
+// Runs when the user taps a notification action while the app is backgrounded
+// or terminated (Android) — this is what makes Complete / Remind later work
+// from the shade without opening the app.
+TaskManager.defineTask<Notifications.NotificationTaskPayload>(
+  BACKGROUND_NOTIFICATION_TASK,
+  async ({ data, error }) => {
+    if (error) return;
+    if (!data || !("actionIdentifier" in data)) return;
+    await handleNotificationResponse(data as unknown as Notifications.NotificationResponse);
+  }
+);
 
 export type ReminderPrompt = {
   taskId: string;
@@ -83,6 +167,9 @@ export function initNotifications() {
       if (!prompt) return;
       void dismissTaskNotifications(prompt.taskId, response.notification.request.identifier);
     });
+    // Headless task — lets Complete / Remind later act from the shade even
+    // when the app is backgrounded or terminated (Android).
+    void Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch(() => undefined);
   }
 }
 

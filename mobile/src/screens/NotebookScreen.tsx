@@ -1,7 +1,19 @@
-import { useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, Modal } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Modal,
+  type View as ViewType,
+} from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import {
   createPage,
   createSection,
@@ -28,6 +40,12 @@ import { Fab, FabAction } from "../components/Fab";
 import { GlassCard } from "../components/GlassCard";
 import { truncateLabel, useLayout } from "../lib/layout";
 import { animateListChange } from "../lib/motion";
+import {
+  ACTIVATE_PX,
+  DraggableRow,
+  hitTestSlot,
+  type DragSlot,
+} from "../components/DraggableRow";
 
 type Prompt =
   | { kind: "new-section" }
@@ -47,6 +65,7 @@ type Confirm =
   | null;
 
 // Inside one notebook: sections as cards that drop down into their pages.
+// Reorder sections and pages by long-pressing a row and dragging it.
 export default function NotebookScreen({ route, navigation }: any) {
   const { notebookId, title } = route.params as { notebookId: string; title: string };
   const { colors } = useTheme();
@@ -55,62 +74,174 @@ export default function NotebookScreen({ route, navigation }: any) {
   const { screenPad, stackBottomClearance, fabBottomStack } = useLayout();
   const { data: notebooks, isLoading, refetch } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebook = notebooks?.find((nb) => nb.id === notebookId);
+  const notebookRef = useRef(notebook);
+  notebookRef.current = notebook;
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
-  const [reorderMode, setReorderMode] = useState(false);
   const [moveTarget, setMoveTarget] = useState<MovePageTarget>(null);
+
+  // ── Long-press drag reorder state ─────────────────────────────────────────
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [hoverTarget, setHoverTarget] = useState<string | null>(null);
+  const armedRef = useRef(false);
+  const dragSlotRef = useRef<string | null>(null);
+  const hoverSlotRef = useRef<string | null>(null);
+  const startPageX = useRef(0);
+  const startPageY = useRef(0);
+  const containerX = useRef(0);
+  const containerY = useRef(0);
+  const rowRefs = useRef<Map<string, ViewType | null>>(new Map());
+  const slotsRef = useRef<DragSlot[]>([]);
+  const ghostOrigin = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const dragX = useRef(new Animated.Value(0)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
+  const dragScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => rememberNotebook(notebookId, title), [notebookId, title]);
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          onPress={() => {
-            animateListChange();
-            setReorderMode((v) => !v);
-          }}
-          hitSlop={8}
-          style={{ paddingHorizontal: 4 }}
-          accessibilityLabel="Rearrange sections and pages"
-        >
-          <Feather name="sliders" size={18} color={reorderMode ? colors.accent : colors.textSecondary} />
-        </Pressable>
-      ),
+  const registerSlot = useCallback((slotKey: string, view: ViewType | null) => {
+    if (view) rowRefs.current.set(slotKey, view);
+    else rowRefs.current.delete(slotKey);
+  }, []);
+
+  function measureContainer() {
+    contentRef.current?.measureInWindow((x, y) => {
+      containerX.current = x;
+      containerY.current = y;
     });
-  }, [navigation, reorderMode, colors]);
-
-  useEffect(() => {
-    if (reorderMode && notebook) {
-      setExpanded(new Set(notebook.sections.filter((s) => !s.isLocked || unlock.sectionPasswords[s.id]).map((s) => s.id)));
-    }
-  }, [reorderMode, notebook, unlock.sectionPasswords]);
-
-  async function shiftSection(index: number, dir: -1 | 1) {
-    const sections = notebook?.sections ?? [];
-    const j = index + dir;
-    if (j < 0 || j >= sections.length) return;
-    const ids = sections.map((s) => s.id);
-    [ids[index], ids[j]] = [ids[j], ids[index]];
-    await reorderSections(notebookId, ids);
-    animateListChange();
-    invalidate();
   }
 
-  async function shiftPage(section: Section, index: number, dir: -1 | 1) {
-    const pages = section.pages;
-    const j = index + dir;
-    if (j < 0 || j >= pages.length) return;
-    const ids = pages.map((p) => p.id);
-    [ids[index], ids[j]] = [ids[j], ids[index]];
-    await reorderPages(section.id, ids);
-    animateListChange();
-    invalidate();
+  /** Measure every reorderable row's screen position once (rows are static during a drag). */
+  function measureAllSlots() {
+    measureContainer();
+    const slots: DragSlot[] = [];
+    let pending = 0;
+    rowRefs.current.forEach((view, key) => {
+      if (!view) return;
+      pending++;
+      view.measureInWindow((x, y, _w, h) => {
+        slots.push({ slotKey: key, top: y - containerY.current, height: h });
+        pending--;
+        if (pending === 0) slotsRef.current = slots;
+      });
+    });
+  }
+
+  function handleArm(slotKey: string) {
+    if (armedRef.current) return;
+    armedRef.current = true;
+    dragSlotRef.current = slotKey;
+    measureContainer();
+    const view = rowRefs.current.get(slotKey);
+    view?.measureInWindow((x, y, w, h) => {
+      ghostOrigin.current = { left: x - containerX.current, top: y - containerY.current, width: w, height: h };
+      dragX.setValue(0);
+      dragY.setValue(0);
+      Animated.spring(dragScale, { toValue: 1.03, useNativeDriver: true, friction: 7, tension: 120 }).start();
+    });
+    measureAllSlots();
+    setDragging(slotKey);
   }
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+
+  function doReorder(fromSlot: string, toSlot: string) {
+    const nb = notebookRef.current;
+    if (!nb) return;
+    const fromIsSec = fromSlot.startsWith("sec:");
+    const toIsSec = toSlot.startsWith("sec:");
+    if (fromIsSec && toIsSec) {
+      const i = nb.sections.findIndex((s) => `sec:${s.id}` === fromSlot);
+      const j = nb.sections.findIndex((s) => `sec:${s.id}` === toSlot);
+      if (i < 0 || j < 0) return;
+      const ids = nb.sections.map((s) => s.id);
+      const [m] = ids.splice(i, 1);
+      ids.splice(j, 0, m);
+      animateListChange();
+      void reorderSections(notebookId, ids).then(invalidate);
+    } else if (!fromIsSec && !toIsSec) {
+      const fromSec = nb.sections.find((s) => s.pages.some((p) => `page:${p.id}` === fromSlot));
+      const toSec = nb.sections.find((s) => s.pages.some((p) => `page:${p.id}` === toSlot));
+      if (!fromSec || !toSec || fromSec.id !== toSec.id) return;
+      const i = fromSec.pages.findIndex((p) => `page:${p.id}` === fromSlot);
+      const j = toSec.pages.findIndex((p) => `page:${p.id}` === toSlot);
+      if (i < 0 || j < 0) return;
+      const ids = fromSec.pages.map((p) => p.id);
+      const [m] = ids.splice(i, 1);
+      ids.splice(j, 0, m);
+      animateListChange();
+      void reorderPages(fromSec.id, ids).then(invalidate);
+    }
+    // Section ↔ page drags are ignored (no cross-level reorder).
+  }
+
+  function finishDrag() {
+    if (!armedRef.current) return;
+    Animated.parallel([
+      Animated.spring(dragX, { toValue: 0, useNativeDriver: true, friction: 8, tension: 90 }),
+      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, friction: 8, tension: 90 }),
+      Animated.spring(dragScale, { toValue: 1, useNativeDriver: true, friction: 8 }),
+    ]).start();
+    const from = dragSlotRef.current;
+    const to = hoverSlotRef.current;
+    armedRef.current = false;
+    dragSlotRef.current = null;
+    hoverSlotRef.current = null;
+    ghostOrigin.current = null;
+    slotsRef.current = [];
+    setDragging(null);
+    setHoverTarget(null);
+    if (from && to && from !== to) doReorder(from, to);
+  }
+
+  // PanResponder lives on the ScrollView. It only claims the responder once a
+  // row has been long-pressed (armedRef), so normal scrolling is untouched.
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => armedRef.current,
+      onStartShouldSetPanResponderCapture: () => armedRef.current,
+      onMoveShouldSetPanResponder: () => armedRef.current,
+      onMoveShouldSetPanResponderCapture: () => armedRef.current,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        startPageX.current = e.nativeEvent.pageX;
+        startPageY.current = e.nativeEvent.pageY;
+      },
+      onPanResponderMove: (e) => {
+        const { pageX, pageY } = e.nativeEvent;
+        const dx = pageX - startPageX.current;
+        const dy = pageY - startPageY.current;
+        dragX.setValue(dx);
+        dragY.setValue(dy);
+        if (!armedRef.current) {
+          if (Math.hypot(dx, dy) < ACTIVATE_PX) return;
+          armedRef.current = true;
+          void Haptics.selectionAsync();
+        }
+        if (slotsRef.current.length === 0) measureAllSlots();
+        const target = hitTestSlot(
+          pageX,
+          pageY,
+          containerX.current,
+          containerY.current,
+          slotsRef.current,
+          dragSlotRef.current
+        );
+        const key = target?.slotKey ?? null;
+        if (key !== hoverSlotRef.current) {
+          hoverSlotRef.current = key;
+          setHoverTarget(key);
+          if (key) void Haptics.selectionAsync();
+        }
+      },
+      onPanResponderRelease: finishDrag,
+      onPanResponderTerminate: finishDrag,
+    })
+  ).current;
 
   function toggleSection(sec: Section) {
     if (sec.isLocked && !unlock.sectionPasswords[sec.id]) {
@@ -198,7 +329,6 @@ export default function NotebookScreen({ route, navigation }: any) {
     const actions: FabAction[] = [
       { key: "section", label: "New section", icon: "layers", onPress: () => setPrompt({ kind: "new-section" }) },
     ];
-    // Target the section the user is working in (falls back to the first one).
     const memory = getNavMemory();
     const target =
       (memory.section?.notebookId === notebookId
@@ -221,212 +351,224 @@ export default function NotebookScreen({ route, navigation }: any) {
     return actions;
   }
 
+  const hoverBorder = { borderColor: colors.accent, borderWidth: 1.5 };
+
+  /** Body of a section row (shared between in-place render and the drag ghost). */
+  function renderSectionBody(sec: Section) {
+    const sealed = sec.isLocked && !unlock.sectionPasswords[sec.id];
+    const isOpen = expanded.has(sec.id) && !sealed;
+    return (
+      <>
+        <View style={styles.sectionRow}>
+          <Pressable
+            style={styles.sectionOpen}
+            onPress={() => !dragging && toggleSection(sec)}
+            onLongPress={() => handleArm(`sec:${sec.id}`)}
+            delayLongPress={400}
+          >
+            <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={16} color={colors.textSecondary} />
+            <Text
+              style={{
+                color: sealed ? colors.textSecondary : colors.textPrimary,
+                fontSize: 15,
+                fontWeight: "500",
+                flex: 1,
+                minWidth: 0,
+              }}
+              numberOfLines={1}
+            >
+              {sec.title}
+            </Text>
+            {sec.isLocked && sealed && (
+              <Feather name="lock" size={13} color={colors.textSecondary} style={{ flexShrink: 0 }} />
+            )}
+            <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{sec.pages.length}</Text>
+          </Pressable>
+          <Pressable
+            hitSlop={8}
+            onPress={() => setPrompt({ kind: "rename-section", section: sec })}
+            style={{ flexShrink: 0, padding: 4 }}
+            accessibilityLabel="Rename section"
+          >
+            <Feather name="edit-2" size={14} color={colors.textSecondary} />
+          </Pressable>
+          {!sec.isLocked && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => setPrompt({ kind: "lock-section", section: sec })}
+              style={{ flexShrink: 0, padding: 4 }}
+              accessibilityLabel="Lock section"
+            >
+              <Feather name="unlock" size={14} color={colors.textSecondary} />
+            </Pressable>
+          )}
+          {sec.isLocked && !sealed && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => unlock.relockSection(sec.id)}
+              style={{ flexShrink: 0, padding: 4 }}
+              accessibilityLabel="Re-lock for this session"
+            >
+              <Feather name="lock" size={14} color={colors.accent} />
+            </Pressable>
+          )}
+          {sec.isLocked && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => setPrompt({ kind: "remove-lock-section", section: sec })}
+              style={{ flexShrink: 0, padding: 4 }}
+              accessibilityLabel="Remove password"
+            >
+              <Feather name="shield-off" size={14} color={colors.textSecondary} />
+            </Pressable>
+          )}
+          <Pressable
+            hitSlop={8}
+            onPress={() => setConfirm({ kind: "section", section: sec })}
+            style={{ flexShrink: 0, padding: 4 }}
+            accessibilityLabel="Delete section"
+          >
+            <Feather name="trash-2" size={14} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        {isOpen && (
+          <View style={[styles.pages, { borderLeftColor: colors.border }]}>
+            {sec.pages.map((page) => renderPageRow(sec, page))}
+            <Pressable style={styles.pageRow} onPress={() => setPrompt({ kind: "new-page", section: sec })}>
+              <Feather name="plus" size={13} color={colors.textSecondary} />
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>New page</Text>
+            </Pressable>
+          </View>
+        )}
+      </>
+    );
+  }
+
+  /** Body of a page row (shared between in-place render and the drag ghost). */
+  function renderPageRow(sec: Section, page: { id: string; title: string }) {
+    return (
+      <View style={styles.pageRow}>
+        <Pressable
+          style={styles.pageOpen}
+          onPress={() => !dragging && openPage(sec, page.id, page.title)}
+          onLongPress={() => handleArm(`page:${page.id}`)}
+          delayLongPress={400}
+        >
+          <Feather name="file-text" size={13} color={colors.textSecondary} />
+          <Text
+            style={{ color: colors.textSecondary, fontSize: 14, flex: 1, minWidth: 0 }}
+            numberOfLines={1}
+          >
+            {page.title}
+          </Text>
+        </Pressable>
+        <Pressable
+          hitSlop={8}
+          onPress={() => setMoveTarget({ pageId: page.id, title: page.title, fromSectionId: sec.id })}
+          style={{ padding: 4 }}
+          accessibilityLabel="Move page"
+        >
+          <Feather name="shuffle" size={13} color={colors.textSecondary} />
+        </Pressable>
+        <Pressable
+          hitSlop={8}
+          onPress={() => setPrompt({ kind: "rename-page", pageId: page.id, title: page.title })}
+          style={{ padding: 4 }}
+          accessibilityLabel="Rename page"
+        >
+          <Feather name="edit-2" size={13} color={colors.textSecondary} />
+        </Pressable>
+        <Pressable
+          hitSlop={8}
+          onPress={() => setConfirm({ kind: "page", pageId: page.id, title: page.title })}
+          style={{ padding: 4 }}
+          accessibilityLabel="Delete page"
+        >
+          <Feather name="trash-2" size={13} color={colors.textSecondary} />
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
+        scrollEnabled={!dragging}
+        {...pan.panHandlers}
         contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
         showsVerticalScrollIndicator={false}
-        decelerationRate="normal"
+        decelerationRate={0.96}
+        removeClippedSubviews
+        bounces={false}
         scrollEventThrottle={16}
       >
-        <Pressable
-          onPress={() => navigation.navigate("RecycleBin", { tab: "pages" })}
-          style={[
-            styles.binChip,
-            { borderColor: colors.border, backgroundColor: colors.surface1, marginBottom: 12, alignSelf: "center" },
-          ]}
-        >
-          <Feather name="trash-2" size={14} color={colors.textSecondary} />
-          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
-            Recycle bin
-          </Text>
-          <Feather name="chevron-right" size={14} color={colors.textSecondary} />
-        </Pressable>
-        {reorderMode && (
-          <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center", marginBottom: 10 }}>
-            Use arrows to rearrange sections and pages.
-          </Text>
-        )}
-        {(notebook?.sections ?? []).map((sec, secIndex) => {
-          const sealed = sec.isLocked && !unlock.sectionPasswords[sec.id];
-          const isOpen = expanded.has(sec.id) && !sealed;
-          return (
-            <GlassCard key={sec.id} style={{ marginBottom: 10 }} contentStyle={styles.cardInner}>
-              <View style={styles.sectionRow}>
-                {reorderMode && (
-                  <View style={styles.reorderCol}>
-                    <Pressable hitSlop={6} onPress={() => void shiftSection(secIndex, -1)} disabled={secIndex === 0}>
-                      <Feather name="chevron-up" size={16} color={secIndex === 0 ? colors.border : colors.textSecondary} />
-                    </Pressable>
-                    <Pressable
-                      hitSlop={6}
-                      onPress={() => void shiftSection(secIndex, 1)}
-                      disabled={secIndex === (notebook?.sections.length ?? 0) - 1}
-                    >
-                      <Feather
-                        name="chevron-down"
-                        size={16}
-                        color={secIndex === (notebook?.sections.length ?? 0) - 1 ? colors.border : colors.textSecondary}
-                      />
-                    </Pressable>
-                  </View>
-                )}
-                <Pressable style={styles.sectionOpen} onPress={() => !reorderMode && toggleSection(sec)}>
-                  <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={16} color={colors.textSecondary} />
-                  <Text
-                    style={{
-                      color: sealed ? colors.textSecondary : colors.textPrimary,
-                      fontSize: 15,
-                      fontWeight: "500",
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {sec.title}
-                  </Text>
-                  {sec.isLocked && sealed && (
-                    <Feather name="lock" size={13} color={colors.textSecondary} style={{ flexShrink: 0 }} />
-                  )}
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{sec.pages.length}</Text>
-                </Pressable>
-                {!reorderMode && (
-                <>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => setPrompt({ kind: "rename-section", section: sec })}
-                  style={{ flexShrink: 0, padding: 4 }}
-                  accessibilityLabel="Rename section"
-                >
-                  <Feather name="edit-2" size={14} color={colors.textSecondary} />
-                </Pressable>
-                {!sec.isLocked && (
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => setPrompt({ kind: "lock-section", section: sec })}
-                    style={{ flexShrink: 0, padding: 4 }}
-                    accessibilityLabel="Lock section"
-                  >
-                    <Feather name="unlock" size={14} color={colors.textSecondary} />
-                  </Pressable>
-                )}
-                {sec.isLocked && !sealed && (
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => unlock.relockSection(sec.id)}
-                    style={{ flexShrink: 0, padding: 4 }}
-                    accessibilityLabel="Re-lock for this session"
-                  >
-                    <Feather name="lock" size={14} color={colors.accent} />
-                  </Pressable>
-                )}
-                {sec.isLocked && (
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => setPrompt({ kind: "remove-lock-section", section: sec })}
-                    style={{ flexShrink: 0, padding: 4 }}
-                    accessibilityLabel="Remove password"
-                  >
-                    <Feather name="shield-off" size={14} color={colors.textSecondary} />
-                  </Pressable>
-                )}
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => setConfirm({ kind: "section", section: sec })}
-                  style={{ flexShrink: 0, padding: 4 }}
-                  accessibilityLabel="Delete section"
-                >
-                  <Feather name="trash-2" size={14} color={colors.textSecondary} />
-                </Pressable>
-                </>
-                )}
+        <View ref={contentRef} onLayout={measureContainer}>
+          <Pressable
+            onPress={() => navigation.navigate("RecycleBin", { tab: "pages" })}
+            style={[
+              styles.binChip,
+              { borderColor: colors.border, backgroundColor: colors.surface1, marginBottom: 12, alignSelf: "center" },
+            ]}
+          >
+            <Feather name="trash-2" size={14} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
+              Recycle bin
+            </Text>
+            <Feather name="chevron-right" size={14} color={colors.textSecondary} />
+          </Pressable>
+
+          {(notebook?.sections ?? []).map((sec) => {
+            const slotKey = `sec:${sec.id}`;
+            return (
+              <DraggableRow
+                key={sec.id}
+                slotKey={slotKey}
+                registerSlot={registerSlot}
+                hovered={hoverTarget === slotKey}
+                style={{ marginBottom: 10, opacity: dragging === slotKey ? 0.35 : 1 }}
+              >
+                {renderSectionBody(sec)}
+              </DraggableRow>
+            );
+          })}
+
+          {notebook && notebook.sections.length === 0 && (
+            <EmptyState
+              icon="layers"
+              title="Empty notebook"
+              subtitle="Start a section, then fill it with pages — tap + whenever you're ready."
+            />
+          )}
+
+          {dragging && ghostOrigin.current && (
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                zIndex: 40,
+                elevation: 14,
+                left: ghostOrigin.current.left,
+                top: ghostOrigin.current.top,
+                width: ghostOrigin.current.width,
+                transform: [{ translateX: dragX }, { translateY: dragY }, { scale: dragScale }],
+                shadowColor: "#000",
+                shadowOpacity: 0.28,
+                shadowRadius: 18,
+                shadowOffset: { width: 0, height: 10 },
+                borderRadius: 14,
+                backgroundColor: colors.surface0,
+              }}
+            >
+              <View style={[hoverBorder, { borderRadius: 14 }]}>
+                {renderDraggedBody(dragging)}
               </View>
-
-              {isOpen && (
-                <View style={[styles.pages, { borderLeftColor: colors.border }]}>
-                  {sec.pages.map((page, pageIndex) => (
-                    <View key={page.id} style={styles.pageRow}>
-                      {reorderMode && (
-                        <View style={styles.reorderCol}>
-                          <Pressable hitSlop={6} onPress={() => void shiftPage(sec, pageIndex, -1)} disabled={pageIndex === 0}>
-                            <Feather name="chevron-up" size={14} color={pageIndex === 0 ? colors.border : colors.textSecondary} />
-                          </Pressable>
-                          <Pressable
-                            hitSlop={6}
-                            onPress={() => void shiftPage(sec, pageIndex, 1)}
-                            disabled={pageIndex === sec.pages.length - 1}
-                          >
-                            <Feather
-                              name="chevron-down"
-                              size={14}
-                              color={pageIndex === sec.pages.length - 1 ? colors.border : colors.textSecondary}
-                            />
-                          </Pressable>
-                        </View>
-                      )}
-                      <Pressable
-                        style={styles.pageOpen}
-                        onPress={() => !reorderMode && openPage(sec, page.id, page.title)}
-                      >
-                        <Feather name="file-text" size={13} color={colors.textSecondary} />
-                        <Text
-                          style={{ color: colors.textSecondary, fontSize: 14, flex: 1, minWidth: 0 }}
-                          numberOfLines={1}
-                        >
-                          {page.title}
-                        </Text>
-                      </Pressable>
-                      {!reorderMode && (
-                      <>
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() => setMoveTarget({ pageId: page.id, title: page.title, fromSectionId: sec.id })}
-                        style={{ padding: 4 }}
-                        accessibilityLabel="Move page"
-                      >
-                        <Feather name="shuffle" size={13} color={colors.textSecondary} />
-                      </Pressable>
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() => setPrompt({ kind: "rename-page", pageId: page.id, title: page.title })}
-                        style={{ padding: 4 }}
-                        accessibilityLabel="Rename page"
-                      >
-                        <Feather name="edit-2" size={13} color={colors.textSecondary} />
-                      </Pressable>
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() => setConfirm({ kind: "page", pageId: page.id, title: page.title })}
-                        style={{ padding: 4 }}
-                        accessibilityLabel="Delete page"
-                      >
-                        <Feather name="trash-2" size={13} color={colors.textSecondary} />
-                      </Pressable>
-                      </>
-                      )}
-                    </View>
-                  ))}
-                  {!reorderMode && (
-                  <Pressable style={styles.pageRow} onPress={() => setPrompt({ kind: "new-page", section: sec })}>
-                    <Feather name="plus" size={13} color={colors.textSecondary} />
-                    <Text style={{ color: colors.textSecondary, fontSize: 13 }}>New page</Text>
-                  </Pressable>
-                  )}
-                </View>
-              )}
-            </GlassCard>
-          );
-        })}
-
-        {notebook && notebook.sections.length === 0 && (
-          <EmptyState
-            icon="layers"
-            title="Empty notebook"
-            subtitle="Start a section, then fill it with pages — tap + whenever you're ready."
-          />
-        )}
+            </Animated.View>
+          )}
+        </View>
       </ScrollView>
 
       <Fab actions={fabActions()} bottom={fabBottomStack} />
@@ -552,6 +694,19 @@ export default function NotebookScreen({ route, navigation }: any) {
       />
     </View>
   );
+
+  /** Renders the currently-dragged row's content for the floating ghost. */
+  function renderDraggedBody(slotKey: string) {
+    if (slotKey.startsWith("sec:")) {
+      const sec = notebookRef.current?.sections.find((s) => `sec:${s.id}` === slotKey);
+      return sec ? renderSectionBody(sec) : null;
+    }
+    for (const sec of notebookRef.current?.sections ?? []) {
+      const page = sec.pages.find((p) => `page:${p.id}` === slotKey);
+      if (page) return renderPageRow(sec, page);
+    }
+    return null;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -573,7 +728,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  reorderCol: { alignItems: "center", justifyContent: "center", gap: 2, paddingHorizontal: 2 },
   moveOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",

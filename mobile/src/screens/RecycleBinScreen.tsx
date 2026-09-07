@@ -168,7 +168,8 @@ export default function RecycleBinScreen({
           paddingBottom: stackBottomClearance(false),
           flexGrow: 1,
         }}
-        decelerationRate="normal"
+        decelerationRate={0.96}
+        bounces={false}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ marginBottom: 12, gap: 10 }}>

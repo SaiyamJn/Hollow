@@ -140,10 +140,12 @@ export default function NotebooksScreen({ navigation }: any) {
         contentContainerStyle={{ padding: screenPad, paddingBottom: listBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
         showsVerticalScrollIndicator={false}
-        decelerationRate="normal"
+        decelerationRate={0.96}
+        removeClippedSubviews
+        bounces={false}
         scrollEventThrottle={16}
       >
-        <View style={{ marginBottom: 12, alignItems: "center" }}>
+        <View style={{ marginBottom: 20, alignItems: "center" }}>
           <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>
             Organize pages — rename anytime.
           </Text>
@@ -151,7 +153,7 @@ export default function NotebooksScreen({ navigation }: any) {
             onPress={() => navigation.navigate("RecycleBin", { tab: "pages" })}
             style={[
               styles.binChip,
-              { borderColor: colors.border, backgroundColor: colors.surface1, marginTop: 10 },
+              { borderColor: colors.border, backgroundColor: colors.surface1, marginTop: 14 },
             ]}
           >
             <Feather name="trash-2" size={14} color={colors.textSecondary} />

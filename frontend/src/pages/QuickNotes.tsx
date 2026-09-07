@@ -435,7 +435,7 @@ export default function QuickNotes() {
           </div>
 
           <div
-            className="rounded-xl border border-border glass p-5 mb-6 max-w-2xl mx-auto shadow-card text-center"
+            className="rounded-xl border border-border glass p-5 mb-6 max-w-3xl mx-auto shadow-card text-center"
             style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
           >
             <textarea
@@ -601,7 +601,7 @@ export default function QuickNotes() {
           if (!o) void closeEditor();
         }}
       >
-        <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-3xl">
+        <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-5xl">
           {editing && (
             <div className="space-y-3">
               <input

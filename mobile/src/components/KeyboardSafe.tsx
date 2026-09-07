@@ -47,7 +47,7 @@ export function KeyboardSafe({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           showsVerticalScrollIndicator={false}
-          decelerationRate="normal"
+          decelerationRate={0.96}
           scrollEventThrottle={16}
           nestedScrollEnabled
         >
