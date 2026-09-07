@@ -603,10 +603,10 @@ export default function QuickNotes() {
       >
         <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-5xl">
           {editing && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <input
                 autoFocus={!!editing.isNew}
-                className="w-full bg-transparent text-base font-medium text-primary placeholder:text-secondary focus:outline-none"
+                className="w-full bg-transparent text-xl font-semibold text-primary placeholder:text-secondary focus:outline-none"
                 placeholder={editing.kind === "list" ? "List title" : "Title"}
                 value={editing.title}
                 onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
@@ -669,8 +669,9 @@ export default function QuickNotes() {
               ) : (
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full rounded-xl border border-border glass-input px-5 py-4 text-base text-primary leading-relaxed
-                             placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[min(55vh,28rem)] max-h-[70vh] overflow-y-auto"
+                  className="w-full rounded-xl border border-border glass-input px-6 py-5 text-[15px] text-primary leading-[1.7]
+                             placeholder:text-secondary/70 focus:outline-none focus:border-accent resize-none
+                             min-h-[min(60vh,32rem)] max-h-[72vh] overflow-y-auto"
                   placeholder="Write your note…"
                   value={editing.content}
                   onChange={(e) => persistEdit({ ...editing, content: e.target.value })}
