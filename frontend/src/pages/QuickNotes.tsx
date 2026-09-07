@@ -624,7 +624,7 @@ export default function QuickNotes() {
       >
         <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-5xl">
           {editing && (
-            <div className="flex flex-col max-h-[70vh] overflow-hidden">
+            <div className="flex flex-col h-[calc(min(90dvh,44rem)_-_14rem)] overflow-hidden">
               <input
                 autoFocus={!!editing.isNew}
                 className="w-full bg-transparent text-xl font-semibold text-primary placeholder:text-secondary focus:outline-none shrink-0 mb-3"
@@ -633,7 +633,7 @@ export default function QuickNotes() {
                 onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
               />
               {editing.kind === "list" ? (
-                <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto">
+                <div className="space-y-1.5 flex-1 min-h-[12rem] overflow-y-auto">
                   {[...editing.items]
                     .sort((a, b) => Number(a.done) - Number(b.done))
                     .map((item, idx) => (
@@ -690,7 +690,7 @@ export default function QuickNotes() {
               ) : (
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full flex-1 min-h-0 rounded-xl border border-border glass-input px-6 py-5 text-[15px] text-primary leading-[1.7]
+                  className="w-full flex-1 min-h-[12rem] rounded-xl border border-border glass-input px-6 py-5 text-[15px] text-primary leading-[1.7]
                              placeholder:text-secondary/70 focus:outline-none focus:border-accent resize-none overflow-y-auto"
                   placeholder="Write your note…"
                   value={editing.content}
