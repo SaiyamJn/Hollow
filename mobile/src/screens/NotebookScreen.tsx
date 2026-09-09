@@ -434,7 +434,20 @@ export default function NotebookScreen({ route, navigation }: any) {
 
         {isOpen && (
           <View style={[styles.pages, { borderLeftColor: colors.border }]}>
-            {sec.pages.map((page) => renderPageRow(sec, page))}
+            {sec.pages.map((page) => {
+              const pageSlotKey = `page:${page.id}`;
+              return (
+                <DraggableRow
+                  key={page.id}
+                  slotKey={pageSlotKey}
+                  registerSlot={registerSlot}
+                  hovered={hoverTarget === pageSlotKey}
+                  hoverColor={colors.accent}
+                >
+                  {renderPageRow(sec, page)}
+                </DraggableRow>
+              );
+            })}
             <Pressable style={styles.pageRow} onPress={() => setPrompt({ kind: "new-page", section: sec })}>
               <Feather name="plus" size={13} color={colors.textSecondary} />
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>New page</Text>
@@ -502,9 +515,8 @@ export default function NotebookScreen({ route, navigation }: any) {
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
         showsVerticalScrollIndicator={false}
         decelerationRate={0.96}
-        removeClippedSubviews
         bounces={false}
-        scrollEventThrottle={16}
+        scrollEventThrottle={50}
       >
         <View ref={contentRef} onLayout={measureContainer}>
           <Pressable

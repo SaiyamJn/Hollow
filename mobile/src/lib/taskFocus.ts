@@ -63,7 +63,7 @@ function focusRank(focus: TaskFocus | string | null | undefined): number {
 
 export function focusColor(
   focus: TaskFocus,
-  palette: { accent: string; danger: string; textSecondary: string; warn?: string }
+  palette: { accent: string; danger: string; textSecondary: string; warn?: string; quiet?: string }
 ): string | null {
   switch (focus) {
     case "critical":
@@ -73,7 +73,7 @@ export function focusColor(
     case "swift":
       return palette.warn ?? "#b45309";
     case "quiet":
-      return palette.textSecondary;
+      return palette.quiet ?? palette.textSecondary;
     default:
       return null;
   }

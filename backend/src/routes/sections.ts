@@ -221,7 +221,7 @@ router.post("/sections/:id/pages/reorder", async (req: AuthedRequest, res) => {
     parsed.data.ids.map((id, index) =>
       prisma.page.update({
         where: { id },
-        data: { sortOrder: base - index },
+        data: { sortOrder: base + index },
       })
     )
   );

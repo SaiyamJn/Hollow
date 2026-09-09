@@ -417,7 +417,6 @@ export default function PageEditorScreen({ route, navigation }: any) {
           onSelectionChange={(e) => {
             const next = e.nativeEvent.selection;
             selectionRef.current = next;
-            if (selection) setSelection(undefined);
             if (posTimer.current) clearTimeout(posTimer.current);
             posTimer.current = setTimeout(() => {
               void savePagePosition(pageId, { selection: next.start, scrollOffset: scrollOffsetRef.current });

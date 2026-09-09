@@ -40,7 +40,7 @@ router.get("/", async (req: AuthedRequest, res) => {
           pages: {
             where: { deletedAt: null },
             select: { id: true, title: true, updatedAt: true },
-            orderBy: [{ sortOrder: "desc" }, { createdAt: "asc" }],
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           },
         },
         orderBy: [{ sortOrder: "desc" }, { createdAt: "asc" }],

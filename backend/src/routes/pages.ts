@@ -11,6 +11,38 @@ import { signUploadToken, verifyUploadToken } from "../lib/mediaToken";
 import { deletePageUploadDir, deleteUploadFiles, readUpload, writeUpload } from "../lib/uploadStorage";
 
 const router = Router();
+
+// ── Public upload serving (HMAC-signed token is the capability) ─────────────
+// Must live BEFORE requireAuth so <img src> can load private uploads without
+// an Authorization header — the signed token alone proves access.
+router.get("/uploads/:uploadId", async (req, res) => {
+  const pageId = String(req.query.pageId ?? "");
+  const token = String(req.query.token ?? "");
+  const uploadId = req.params.uploadId;
+
+  if (!pageId || !verifyUploadToken(uploadId, pageId, token)) {
+    return res.status(401).json({ error: "Invalid upload token" });
+  }
+
+  const upload = await prisma.pageUpload.findUnique({
+    where: { id: uploadId },
+    include: { page: true },
+  });
+  if (!upload || upload.pageId !== pageId || upload.page.deletedAt) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  try {
+    const data = await readUpload(upload.storageKey);
+    res.setHeader("Content-Type", upload.mimeType);
+    res.setHeader("Content-Disposition", `inline; filename="${upload.filename.replace(/"/g, "")}"`);
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.send(data);
+  } catch {
+    res.status(404).json({ error: "File missing" });
+  }
+});
+
 router.use(requireAuth);
 
 const TRASH_MS = 7 * 24 * 60 * 60 * 1000;
@@ -163,39 +195,6 @@ router.post("/:id/uploads", pageUpload.single("file"), async (req: AuthedRequest
   const token = signUploadToken(upload.id, page.id);
   const url = `/pages/uploads/${upload.id}?pageId=${page.id}&token=${token}`;
   res.status(201).json({ url, id: upload.id, filename: upload.filename, mimeType: upload.mimeType, size: upload.size });
-});
-
-router.get("/uploads/:uploadId", async (req: AuthedRequest, res) => {
-  const pageId = String(req.query.pageId ?? "");
-  const token = String(req.query.token ?? "");
-  const uploadId = req.params.uploadId;
-
-  if (!pageId || !verifyUploadToken(uploadId, pageId, token)) {
-    return res.status(401).json({ error: "Invalid upload token" });
-  }
-
-  const upload = await prisma.pageUpload.findUnique({
-    where: { id: uploadId },
-    include: { page: { include: { section: { include: { notebook: true } } } } },
-  });
-  if (
-    !upload ||
-    upload.pageId !== pageId ||
-    upload.page.deletedAt ||
-    upload.page.section.notebook.ownerId !== req.userId
-  ) {
-    return res.status(404).json({ error: "Not found" });
-  }
-
-  try {
-    const data = await readUpload(upload.storageKey);
-    res.setHeader("Content-Type", upload.mimeType);
-    res.setHeader("Content-Disposition", `inline; filename="${upload.filename.replace(/"/g, "")}"`);
-    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-    res.send(data);
-  } catch {
-    res.status(404).json({ error: "File missing" });
-  }
 });
 
 // Find-or-create today's daily note.

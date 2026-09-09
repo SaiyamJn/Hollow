@@ -178,9 +178,8 @@ export default function HomeScreen({ navigation }: any) {
       refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
       showsVerticalScrollIndicator={false}
       decelerationRate={0.96}
-      removeClippedSubviews
       bounces={false}
-      scrollEventThrottle={16}
+      scrollEventThrottle={50}
     >
       {/* greeting + daily note */}
       <View style={[styles.headerRow, isNarrow && styles.headerStacked]}>

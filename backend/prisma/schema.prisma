@@ -75,7 +75,7 @@ model Page {
   content       String        @default("")
   section       Section       @relation(fields: [sectionId], references: [id])
   sectionId     String
-  /// Higher = nearer the top within a section
+  /// Lower = nearer the top within a section (new pages append at the bottom)
   sortOrder     Int           @default(0)
   tags          Tag[]         @relation("PageTags")
   outgoingLinks PageLink[]    @relation("SourcePage")

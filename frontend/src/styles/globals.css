@@ -20,11 +20,11 @@
   --focus-critical-wash: rgba(239, 68, 68, 0.2);
   --focus-steady-wash: rgba(12, 184, 121, 0.2);
   --focus-swift-wash: rgba(245, 158, 11, 0.2);
-  --focus-quiet-wash: rgba(79, 138, 160, 0.16);
+  --focus-quiet-wash: rgba(79, 138, 160, 0.22);
   --focus-critical-pane: rgba(239, 68, 68, 0.12);
   --focus-steady-pane: rgba(12, 184, 121, 0.12);
   --focus-swift-pane: rgba(245, 158, 11, 0.12);
-  --focus-quiet-pane: rgba(79, 138, 160, 0.1);
+  --focus-quiet-pane: rgba(79, 138, 160, 0.14);
   --note-yellow: rgba(250, 184, 8, 0.5);
   --note-green: rgba(16, 185, 129, 0.38);
   --note-blue: rgba(59, 130, 246, 0.34);
@@ -55,11 +55,11 @@
   --focus-critical-wash: rgba(255, 138, 138, 0.3);
   --focus-steady-wash: rgba(94, 233, 181, 0.28);
   --focus-swift-wash: rgba(251, 191, 36, 0.26);
-  --focus-quiet-wash: rgba(158, 192, 212, 0.22);
+  --focus-quiet-wash: rgba(158, 192, 212, 0.28);
   --focus-critical-pane: rgba(255, 138, 138, 0.16);
   --focus-steady-pane: rgba(94, 233, 181, 0.15);
   --focus-swift-pane: rgba(251, 191, 36, 0.14);
-  --focus-quiet-pane: rgba(158, 192, 212, 0.12);
+  --focus-quiet-pane: rgba(158, 192, 212, 0.16);
   --note-yellow: rgba(250, 204, 21, 0.26);
   --note-green: rgba(52, 211, 153, 0.24);
   --note-blue: rgba(96, 165, 250, 0.24);
@@ -322,7 +322,7 @@ h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
 .focus-pane-quiet { --pane-accent: var(--focus-quiet); --pane-tint: var(--focus-quiet-pane); }
 .focus-pane-none { --pane-accent: var(--text-secondary); --pane-tint: transparent; }
 
-.focus-dot { background: var(--focus-quiet); }
+.focus-dot { background: var(--text-secondary); }
 .focus-dot-critical { background: var(--focus-critical); }
 .focus-dot-steady { background: var(--focus-steady); }
 .focus-dot-swift { background: var(--focus-swift); }

@@ -163,9 +163,10 @@ export function initNotifications() {
   if (!boundNotificationResponse) {
     boundNotificationResponse = true;
     Notifications.addNotificationResponseReceivedListener((response) => {
-      const prompt = promptFromNotification(response.notification.request.content);
-      if (!prompt) return;
-      void dismissTaskNotifications(prompt.taskId, response.notification.request.identifier);
+      // Delegate to the shared handler so Complete actually marks the task done
+      // and Snooze reschedules — the previous dismiss-only path left the
+      // notification in the shade and never called the API.
+      void handleNotificationResponse(response);
     });
     // Headless task — lets Complete / Remind later act from the shade even
     // when the app is backgrounded or terminated (Android).
