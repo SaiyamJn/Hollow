@@ -54,13 +54,7 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.web
     ports:
-      - "${HOST_PORT:-8080}:443"
-      - "${HTTP_PORT:-80}:80"
-    environment:
-      SSL_CERT: /etc/nginx/certs/fullchain.pem
-      SSL_KEY: /etc/nginx/certs/privkey.pem
-    volumes:
-      - certs:/etc/nginx/certs:ro
+      - "${HOST_PORT:-8080}:80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -68,4 +62,3 @@ services:
 volumes:
   pgdata:
   uploads:
-  certs:
