@@ -62,13 +62,35 @@ export function hitTestSlot(
   slots: DragSlot[],
   excludeSlotKey: string | null
 ): DragSlot | null {
+  if (!excludeSlotKey || slots.length === 0) return null;
+  const isPage = excludeSlotKey.startsWith("page:");
   const localY = pageY - containerY;
-  for (const s of slots) {
-    if (s.slotKey === excludeSlotKey) continue;
-    const inset = Math.max(10, s.height * 0.25);
-    if (localY >= s.top + inset && localY <= s.top + s.height - inset) {
+
+  // Filter slots to only those matching the dragged item's type
+  const matchingSlots = slots.filter((s) => {
+    if (s.slotKey === excludeSlotKey) return false;
+    return isPage ? s.slotKey.startsWith("page:") : s.slotKey.startsWith("sec:");
+  });
+
+  if (matchingSlots.length === 0) return null;
+
+  // First check if localY falls directly within a slot's vertical span
+  for (const s of matchingSlots) {
+    if (localY >= s.top && localY <= s.top + s.height) {
       return s;
     }
   }
-  return null;
+
+  // Otherwise, find the closest slot by midpoint distance
+  let best: DragSlot | null = null;
+  let bestDist = Infinity;
+  for (const s of matchingSlots) {
+    const mid = s.top + s.height / 2;
+    const dist = Math.abs(localY - mid);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = s;
+    }
+  }
+  return bestDist < 120 ? best : null;
 }

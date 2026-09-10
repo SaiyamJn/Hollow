@@ -221,15 +221,21 @@ router.post("/daily", async (req: AuthedRequest, res) => {
     const trashed = await prisma.page.findFirst({
       where: { sectionId: section.id, title: date, deletedAt: { not: null } },
     });
+    const maxOrder = await prisma.page.aggregate({
+      where: { sectionId: section.id, deletedAt: null },
+      _max: { sortOrder: true },
+    });
+    const sortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
+
     if (trashed) {
       page = await prisma.page.update({
         where: { id: trashed.id },
-        data: { deletedAt: null },
+        data: { deletedAt: null, sortOrder },
       });
     } else {
       if (section.isLocked) return res.status(423).json({ error: "Your daily notes section is locked" });
       page = await prisma.page.create({
-        data: { title: date, sectionId: section.id, content: sealAtRest("") },
+        data: { title: date, sectionId: section.id, content: sealAtRest(""), sortOrder },
       });
       created = true;
     }
@@ -484,9 +490,16 @@ router.post("/:id/restore", async (req: AuthedRequest, res) => {
   if (!page || page.section.notebook.ownerId !== req.userId || !page.deletedAt) {
     return res.status(404).json({ error: "Not found" });
   }
+
+  const maxOrder = await prisma.page.aggregate({
+    where: { sectionId: page.sectionId, deletedAt: null },
+    _max: { sortOrder: true },
+  });
+  const sortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
+
   const restored = await prisma.page.update({
     where: { id: page.id },
-    data: { deletedAt: null },
+    data: { deletedAt: null, sortOrder },
     select: {
       id: true,
       title: true,

@@ -102,11 +102,17 @@ html {
 }
 .app-shell main {
   -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
   scroll-padding-top: 4.25rem;
   scroll-padding-bottom: 32vh;
 }
 h1, h2, h3, h4, h5, h6, strong, b { font-weight: 500; }
+
+/* Smooth fluid transitions for buttons and cards */
+button, input, select, textarea, .glass, .glass-input {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 0.18s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 ::selection {
   background: var(--accent-soft);

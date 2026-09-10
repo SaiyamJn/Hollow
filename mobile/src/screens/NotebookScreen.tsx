@@ -117,16 +117,19 @@ export default function NotebookScreen({ route, navigation }: any) {
 
   /** Measure every reorderable row's screen position once (rows are static during a drag). */
   function measureAllSlots() {
-    measureContainer();
-    const slots: DragSlot[] = [];
-    let pending = 0;
-    rowRefs.current.forEach((view, key) => {
-      if (!view) return;
-      pending++;
-      view.measureInWindow((x, y, _w, h) => {
-        slots.push({ slotKey: key, top: y - containerY.current, height: h });
-        pending--;
-        if (pending === 0) slotsRef.current = slots;
+    contentRef.current?.measureInWindow((cx, cy) => {
+      containerX.current = cx;
+      containerY.current = cy;
+      const slots: DragSlot[] = [];
+      let pending = 0;
+      rowRefs.current.forEach((view, key) => {
+        if (!view) return;
+        pending++;
+        view.measureInWindow((x, y, _w, h) => {
+          slots.push({ slotKey: key, top: y - cy, height: h });
+          pending--;
+          if (pending === 0) slotsRef.current = slots;
+        });
       });
     });
   }
@@ -135,13 +138,19 @@ export default function NotebookScreen({ route, navigation }: any) {
     if (armedRef.current) return;
     armedRef.current = true;
     dragSlotRef.current = slotKey;
-    measureContainer();
-    const view = rowRefs.current.get(slotKey);
-    view?.measureInWindow((x, y, w, h) => {
-      ghostOrigin.current = { left: x - containerX.current, top: y - containerY.current, width: w, height: h };
-      dragX.setValue(0);
-      dragY.setValue(0);
-      Animated.spring(dragScale, { toValue: 1.03, useNativeDriver: true, friction: 7, tension: 120 }).start();
+    startPageX.current = 0;
+    startPageY.current = 0;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    contentRef.current?.measureInWindow((cx, cy) => {
+      containerX.current = cx;
+      containerY.current = cy;
+      const view = rowRefs.current.get(slotKey);
+      view?.measureInWindow((x, y, w, h) => {
+        ghostOrigin.current = { left: x - cx, top: y - cy, width: w, height: h };
+        dragX.setValue(0);
+        dragY.setValue(0);
+        Animated.spring(dragScale, { toValue: 1.03, useNativeDriver: true, friction: 9, tension: 110 }).start();
+      });
     });
     measureAllSlots();
     setDragging(slotKey);
@@ -180,11 +189,11 @@ export default function NotebookScreen({ route, navigation }: any) {
   }
 
   function finishDrag() {
-    if (!armedRef.current) return;
+    if (!armedRef.current && !dragSlotRef.current) return;
     Animated.parallel([
-      Animated.spring(dragX, { toValue: 0, useNativeDriver: true, friction: 8, tension: 90 }),
-      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, friction: 8, tension: 90 }),
-      Animated.spring(dragScale, { toValue: 1, useNativeDriver: true, friction: 8 }),
+      Animated.spring(dragX, { toValue: 0, useNativeDriver: true, friction: 9, tension: 100 }),
+      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, friction: 9, tension: 100 }),
+      Animated.spring(dragScale, { toValue: 1, useNativeDriver: true, friction: 9 }),
     ]).start();
     const from = dragSlotRef.current;
     const to = hoverSlotRef.current;
@@ -193,9 +202,14 @@ export default function NotebookScreen({ route, navigation }: any) {
     hoverSlotRef.current = null;
     ghostOrigin.current = null;
     slotsRef.current = [];
+    startPageX.current = 0;
+    startPageY.current = 0;
     setDragging(null);
     setHoverTarget(null);
-    if (from && to && from !== to) doReorder(from, to);
+    if (from && to && from !== to) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      doReorder(from, to);
+    }
   }
 
   // PanResponder lives on the ScrollView. It only claims the responder once a
@@ -213,6 +227,10 @@ export default function NotebookScreen({ route, navigation }: any) {
       },
       onPanResponderMove: (e) => {
         const { pageX, pageY } = e.nativeEvent;
+        if (startPageX.current === 0 && startPageY.current === 0) {
+          startPageX.current = pageX;
+          startPageY.current = pageY;
+        }
         const dx = pageX - startPageX.current;
         const dy = pageY - startPageY.current;
         dragX.setValue(dx);
@@ -364,7 +382,7 @@ export default function NotebookScreen({ route, navigation }: any) {
             style={styles.sectionOpen}
             onPress={() => !dragging && toggleSection(sec)}
             onLongPress={() => handleArm(`sec:${sec.id}`)}
-            delayLongPress={400}
+            delayLongPress={350}
           >
             <Feather name={isOpen ? "chevron-down" : "chevron-right"} size={16} color={colors.textSecondary} />
             <Text
@@ -466,7 +484,7 @@ export default function NotebookScreen({ route, navigation }: any) {
           style={styles.pageOpen}
           onPress={() => !dragging && openPage(sec, page.id, page.title)}
           onLongPress={() => handleArm(`page:${page.id}`)}
-          delayLongPress={400}
+          delayLongPress={350}
         >
           <Feather name="file-text" size={13} color={colors.textSecondary} />
           <Text
@@ -514,9 +532,9 @@ export default function NotebookScreen({ route, navigation }: any) {
         contentContainerStyle={{ padding: screenPad, paddingBottom: stackBottomClearance(true) }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent} />}
         showsVerticalScrollIndicator={false}
-        decelerationRate={0.96}
-        bounces={false}
-        scrollEventThrottle={50}
+        decelerationRate="normal"
+        bounces={true}
+        scrollEventThrottle={16}
       >
         <View ref={contentRef} onLayout={measureContainer}>
           <Pressable

@@ -23,11 +23,11 @@ module.exports = {
           to: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
         },
         "rise-in": {
-          from: { opacity: "0", transform: "translateY(4px)" },
+          from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "palette-in": {
-          from: { opacity: "0", transform: "translate(-50%, -8px)" },
+          from: { opacity: "0", transform: "translate(-50%, -10px)" },
           to: { opacity: "1", transform: "translate(-50%, 0)" },
         },
         "pulse-soft": {
@@ -36,11 +36,11 @@ module.exports = {
         },
       },
       animation: {
-        "fade-in": "fade-in 0.15s ease",
-        "pop-in": "pop-in 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
-        "rise-in": "rise-in 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-        "palette-in": "palette-in 0.16s cubic-bezier(0.16, 1, 0.3, 1)",
-        "pulse-soft": "pulse-soft 1.2s ease-in-out infinite",
+        "fade-in": "fade-in 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+        "pop-in": "pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
+        "rise-in": "rise-in 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
+        "palette-in": "palette-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        "pulse-soft": "pulse-soft 1.4s ease-in-out infinite",
       },
     },
   },

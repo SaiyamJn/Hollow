@@ -266,9 +266,9 @@ export default function TasksScreen() {
         }}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
-        decelerationRate={0.96}
-        bounces={false}
-        scrollEventThrottle={50}
+        decelerationRate="normal"
+        bounces={true}
+        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ marginBottom: 12 }}>

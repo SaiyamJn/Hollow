@@ -313,20 +313,30 @@ function Editor({
       if (saved && scrollParent) {
         scrollParent.scrollTop = saved.scrollTop;
       }
-      try {
-        if (saved?.blockId && editor.document.some((b) => b.id === saved.blockId)) {
-          editor.setTextCursorPosition(saved.blockId, saved.placement ?? "end");
-        }
-        // Only open the keyboard/caret focus for newly created pages.
-        if (shouldAutoFocus) editor.focus();
-      } catch {
+
+      // On mobile / touch devices, do not programmatically set cursor position or focus unless
+      // shouldAutoFocus is explicitly true (setting cursor inside contentEditable opens mobile software keyboard).
+      const isCoarseTouch =
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(pointer: coarse)").matches;
+
+      if (shouldAutoFocus || !isCoarseTouch) {
         try {
+          if (saved?.blockId && editor.document.some((b) => b.id === saved.blockId)) {
+            editor.setTextCursorPosition(saved.blockId, saved.placement ?? "end");
+          }
           if (shouldAutoFocus) editor.focus();
         } catch {
-          // Editor surface may not be mounted yet.
+          try {
+            if (shouldAutoFocus) editor.focus();
+          } catch {
+            // Editor surface may not be mounted yet.
+          }
         }
       }
-      // Re-apply scroll after focus (focus can nudge the viewport).
+
+      // Re-apply scroll after potential layout adjustment.
       if (saved && scrollParent) {
         scrollParent.scrollTop = saved.scrollTop;
       }

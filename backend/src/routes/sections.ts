@@ -127,7 +127,13 @@ router.post("/notebooks/:notebookId/sections", async (req: AuthedRequest, res) =
     await lockSectionWithPassword(section.id, password);
     const locked = await prisma.section.findUnique({
       where: { id: section.id },
-      include: { pages: { where: { deletedAt: null }, select: { id: true, title: true, updatedAt: true } } },
+      include: {
+        pages: {
+          where: { deletedAt: null },
+          select: { id: true, title: true, updatedAt: true },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        },
+      },
     });
     return res.status(201).json(publicSection(locked!));
   }

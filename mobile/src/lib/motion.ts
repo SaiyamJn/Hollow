@@ -15,21 +15,21 @@ export function configureMotion() {
 export function animateListChange() {
   configureMotion();
   LayoutAnimation.configureNext({
-    duration: 340,
+    duration: 300,
     create: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 280,
+      duration: 240,
     },
     update: {
       type: LayoutAnimation.Types.spring,
-      springDamping: 0.82,
-      duration: 340,
+      springDamping: 0.88,
+      duration: 300,
     },
     delete: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 220,
+      duration: 200,
     },
   });
 }
@@ -38,20 +38,20 @@ export function animateListChange() {
 export function animateTaskComplete() {
   configureMotion();
   LayoutAnimation.configureNext({
-    duration: 380,
+    duration: 320,
     create: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 220,
+      duration: 200,
     },
     update: {
       type: LayoutAnimation.Types.easeInEaseOut,
-      duration: 380,
+      duration: 320,
     },
     delete: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 320,
+      duration: 240,
     },
   });
 }
@@ -60,21 +60,21 @@ export function animateTaskComplete() {
 export function animateReorder() {
   configureMotion();
   LayoutAnimation.configureNext({
-    duration: 280,
+    duration: 260,
     create: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 180,
+      duration: 160,
     },
     update: {
       type: LayoutAnimation.Types.spring,
-      springDamping: 0.78,
-      duration: 280,
+      springDamping: 0.86,
+      duration: 260,
     },
     delete: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 160,
+      duration: 150,
     },
   });
 }
@@ -83,9 +83,9 @@ export function animateReorder() {
 export function animatePanel() {
   configureMotion();
   LayoutAnimation.configureNext({
-    duration: 380,
-    create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-    update: { type: LayoutAnimation.Types.easeInEaseOut, duration: 380 },
-    delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    duration: 300,
+    create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity, duration: 220 },
+    update: { type: LayoutAnimation.Types.easeInEaseOut, duration: 300 },
+    delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity, duration: 200 },
   });
 }
