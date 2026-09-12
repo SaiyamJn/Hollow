@@ -13,7 +13,7 @@ import {
   type RepeatEnd,
   type RepeatRule,
 } from "../lib/taskRepeat";
-import { normalizeFocus } from "../lib/taskFocus";
+import { normalizeFocus, compareTaskPriority } from "../lib/taskFocus";
 
 const router = Router();
 router.use(requireAuth);
@@ -184,7 +184,17 @@ router.get("/", async (req: AuthedRequest, res) => {
       ? [{ deletedAt: "desc" }]
       : [{ starred: "desc" }, { createdAt: "desc" }],
   });
-  res.json(tasks.map(publicTask));
+  const publicList = tasks.map((t) => {
+    const pub = publicTask(t);
+    if (pub.subtasks) {
+      pub.subtasks.sort(compareTaskPriority);
+    }
+    return pub;
+  });
+  if (!trashed) {
+    publicList.sort(compareTaskPriority);
+  }
+  res.json(publicList);
 });
 
 router.post("/", async (req: AuthedRequest, res) => {

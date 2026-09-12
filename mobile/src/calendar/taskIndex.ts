@@ -7,6 +7,7 @@ import {
   normalizeRepeatEnd,
   withinRepeatBounds,
 } from "../lib/taskRepeat";
+import { compareTaskPriority } from "../lib/taskFocus";
 
 export type CalendarTask = Task & {
   due: Date;
@@ -118,11 +119,7 @@ export function groupByDay(items: CalendarTask[]): Map<string, CalendarTask[]> {
     else map.set(key, [t]);
   }
   for (const list of map.values()) {
-    list.sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      if (!!a.virtual !== !!b.virtual) return a.virtual ? 1 : -1;
-      return a.due.getTime() - b.due.getTime() || a.title.localeCompare(b.title);
-    });
+    list.sort(compareTaskPriority);
   }
   return map;
 }

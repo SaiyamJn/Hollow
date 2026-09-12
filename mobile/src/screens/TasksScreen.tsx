@@ -24,7 +24,7 @@ import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from 
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FocusDot } from "../components/FocusField";
 import { FocusBoardMobile } from "../components/TaskBoards";
-import { FOCUS_META, FOCUS_MATRIX, type TaskFocus } from "../lib/taskFocus";
+import { FOCUS_META, FOCUS_MATRIX, sortByFocusPriority, type TaskFocus } from "../lib/taskFocus";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
@@ -72,14 +72,14 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
   }
 
   const sections: { title: GroupName; data: Task[]; completedCount?: number }[] = [];
-  if (starred.length) sections.push({ title: "Starred", data: starred });
+  if (starred.length) sections.push({ title: "Starred", data: sortByFocusPriority(starred) });
   for (const name of ["Overdue", "Today", "Upcoming", "No date"] as const) {
-    if (groups[name].length) sections.push({ title: name, data: groups[name] });
+    if (groups[name].length) sections.push({ title: name, data: sortByFocusPriority(groups[name]) });
   }
   if (completed.length) {
     sections.push({
       title: "Completed",
-      data: showCompleted ? completed : [],
+      data: showCompleted ? sortByFocusPriority(completed) : [],
       completedCount: completed.length,
     });
   }
@@ -387,7 +387,7 @@ export default function TasksScreen() {
         renderItem={({ item: task }) => {
           if (layout !== "list") return null;
           const isOpen = expanded.has(task.id);
-          const subtasks = task.subtasks ?? [];
+          const subtasks = sortByFocusPriority(task.subtasks ?? []);
           return (
             <GlassCard style={{ marginBottom: 8 }} contentStyle={styles.taskCard}>
               <View style={[styles.taskRow, isNarrow && { gap: 8 }]}>

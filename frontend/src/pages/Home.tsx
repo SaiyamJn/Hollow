@@ -31,7 +31,7 @@ import { formatCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { StatusChip } from "../components/StatusChip";
 import { Button } from "../components/ui/button";
 import { pickGreeting } from "../lib/greetings";
-import { focusRank, normalizeFocus, FOCUS_META } from "../lib/taskFocus";
+import { compareTaskPriority, normalizeFocus, sortTasksByPriority, FOCUS_META } from "../lib/taskFocus";
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -318,21 +318,14 @@ function TodayTasks() {
       new Date(t.dueAt) >= startOfToday &&
       new Date(t.dueAt) < endOfToday
   );
-  const scheduled = [
+  const scheduledRaw = [
     ...overdue.map((t) => ({ task: t, isOverdue: true, isNoDate: false })),
     ...dueToday.map((t) => ({ task: t, isOverdue: false, isNoDate: false })),
   ];
+  const scheduled = [...scheduledRaw].sort((a, b) => compareTaskPriority(a.task, b.task));
 
-  // Top priority "no date" tasks: starred first, then critical / steady / swift focus
-  const noDateSorted = open
-    .filter((t) => !completing[t.id] && !t.dueAt)
-    .sort((a, b) => {
-      const starDiff = (b.starred ? 1 : 0) - (a.starred ? 1 : 0);
-      if (starDiff !== 0) return starDiff;
-      const rankDiff = focusRank(b.focus) - focusRank(a.focus);
-      if (rankDiff !== 0) return rankDiff;
-      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
-    });
+  // Top priority "no date" tasks: sorted by priority
+  const noDateSorted = sortTasksByPriority(open.filter((t) => !completing[t.id] && !t.dueAt));
 
   const TARGET_TASKS = 5;
   const remainingSlots = Math.max(0, TARGET_TASKS - scheduled.length);

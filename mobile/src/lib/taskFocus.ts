@@ -137,7 +137,32 @@ export function focusBorder(focus: TaskFocus, accent = "#0cb879", fallback = "#b
   }
 }
 
-/** Sort for calendar / boards: open first, then focus priority, starred, time. */
+export function compareTaskPriority<
+  T extends {
+    done?: boolean;
+    starred?: boolean;
+    focus?: string | null;
+    dueAt?: string | null;
+    due?: Date;
+    createdAt?: string;
+  },
+>(a: T, b: T): number {
+  if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+  const starA = a.starred ? 1 : 0;
+  const starB = b.starred ? 1 : 0;
+  if (starA !== starB) return starB - starA;
+  const rankA = focusRank(a.focus);
+  const rankB = focusRank(b.focus);
+  if (rankA !== rankB) return rankB - rankA;
+  const ta = a.due ? a.due.getTime() : a.dueAt ? new Date(a.dueAt).getTime() : Infinity;
+  const tb = b.due ? b.due.getTime() : b.dueAt ? new Date(b.dueAt).getTime() : Infinity;
+  if (ta !== tb) return ta - tb;
+  const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return cb - ca;
+}
+
+/** Sort tasks by priority: open first, starred, focus rank, due time, created. */
 export function sortByFocusPriority<
   T extends {
     done?: boolean;
@@ -145,15 +170,11 @@ export function sortByFocusPriority<
     starred?: boolean;
     dueAt?: string | null;
     due?: Date;
+    createdAt?: string;
   },
 >(list: T[]): T[] {
-  return [...list].sort((a, b) => {
-    if (!!a.done !== !!b.done) return a.done ? 1 : -1;
-    const byFocus = focusRank(b.focus) - focusRank(a.focus);
-    if (byFocus !== 0) return byFocus;
-    if (!!a.starred !== !!b.starred) return a.starred ? -1 : 1;
-    const ta = a.due ? a.due.getTime() : a.dueAt ? new Date(a.dueAt).getTime() : 0;
-    const tb = b.due ? b.due.getTime() : b.dueAt ? new Date(b.dueAt).getTime() : 0;
-    return ta - tb;
-  });
+  return [...list].sort(compareTaskPriority);
 }
+
+export const sortTasksByPriority = sortByFocusPriority;
+

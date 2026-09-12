@@ -33,7 +33,7 @@ import { animateTaskComplete } from "../lib/motion";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 import { pickGreeting } from "../lib/greetings";
-import { focusRank, normalizeFocus, focusColor, withAlpha, FOCUS_META } from "../lib/taskFocus";
+import { focusRank, normalizeFocus, focusColor, withAlpha, FOCUS_META, compareTaskPriority, sortByFocusPriority } from "../lib/taskFocus";
 import { rememberSection } from "../lib/navMemory";
 
 function relativeTime(iso: string) {
@@ -167,21 +167,14 @@ export default function HomeScreen({ navigation }: any) {
       new Date(t.dueAt) < endOfToday
   );
   const completingRows = open.filter((t) => completing[t.id]);
-  const scheduled: { task: Task; overdue: boolean; isNoDate: boolean }[] = [
+  const scheduledRaw = [
     ...overdue.map((t) => ({ task: t, overdue: true, isNoDate: false })),
     ...dueToday.map((t) => ({ task: t, overdue: false, isNoDate: false })),
   ];
+  const scheduled = [...scheduledRaw].sort((a, b) => compareTaskPriority(a.task, b.task));
 
-  // Top priority "no date" tasks: starred first, then critical / steady / swift focus
-  const noDateSorted = open
-    .filter((t) => !completing[t.id] && !t.dueAt)
-    .sort((a, b) => {
-      const starDiff = (b.starred ? 1 : 0) - (a.starred ? 1 : 0);
-      if (starDiff !== 0) return starDiff;
-      const rankDiff = focusRank(b.focus) - focusRank(a.focus);
-      if (rankDiff !== 0) return rankDiff;
-      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
-    });
+  // Top priority "no date" tasks: sorted by priority
+  const noDateSorted = sortByFocusPriority(open.filter((t) => !completing[t.id] && !t.dueAt));
 
   const TARGET_TASKS = 3;
   const remainingSlots = Math.max(0, TARGET_TASKS - scheduled.length);

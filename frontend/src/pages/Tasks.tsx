@@ -10,15 +10,14 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { DateTimePicker } from "../components/DateTimePicker";
-import { formatRepeatLabel } from "../lib/taskRepeat";
+import { formatRepeatLabel, type RepeatEnd } from "../lib/taskRepeat";
 import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import { EisenhowerBoard, KanbanBoard } from "../components/TaskBoards";
 import { FocusChip, FocusDot, FocusField } from "../components/FocusField";
 import { DueChip } from "../components/StatusChip";
 import { EmptyState } from "../components/EmptyState";
-import type { RepeatEnd } from "../lib/taskRepeat";
-import { normalizeFocus, type TaskFocus } from "../lib/taskFocus";
+import { normalizeFocus, sortTasksByPriority, type TaskFocus } from "../lib/taskFocus";
 import { shouldHandleItemDelete } from "../lib/keys";
 
 type GroupName = "Starred" | "Overdue" | "Today" | "Upcoming" | "No date";
@@ -44,7 +43,7 @@ function groupOpenTasks(tasks: Task[]): [GroupName, Task[]][] {
   endOfToday.setDate(endOfToday.getDate() + 1);
 
   const open = tasks.filter((t) => !t.done && !isDeferredRepeat(t, endOfToday));
-  const starred = open.filter((t) => t.starred);
+  const starred = sortTasksByPriority(open.filter((t) => t.starred));
   const rest = open.filter((t) => !t.starred);
 
   const groups: Record<Exclude<GroupName, "Starred">, Task[]> = {
@@ -62,6 +61,11 @@ function groupOpenTasks(tasks: Task[]): [GroupName, Task[]][] {
       else groups.Upcoming.push(task);
     }
   }
+
+  groups.Overdue = sortTasksByPriority(groups.Overdue);
+  groups.Today = sortTasksByPriority(groups.Today);
+  groups.Upcoming = sortTasksByPriority(groups.Upcoming);
+  groups["No date"] = sortTasksByPriority(groups["No date"]);
 
   const ordered: [GroupName, Task[]][] = [];
   if (starred.length) ordered.push(["Starred", starred]);
@@ -246,7 +250,7 @@ export default function Tasks() {
     (saveEdit.error as any)?.response?.data?.error ?? (saveEdit.error ? "Couldn't save." : null);
 
   const openGroups = groupOpenTasks(tasks ?? []);
-  const completed = (tasks ?? []).filter((t) => t.done);
+  const completed = sortTasksByPriority((tasks ?? []).filter((t) => t.done));
   const boardTasks = useMemo(() => {
     const endOfToday = new Date();
     endOfToday.setHours(0, 0, 0, 0);
@@ -679,7 +683,7 @@ function TaskRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [subtaskDraft, setSubtaskDraft] = useState("");
-  const subtasks = task.subtasks ?? [];
+  const subtasks = sortTasksByPriority(task.subtasks ?? []);
 
   function onSubtaskKey(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" && subtaskDraft.trim()) {

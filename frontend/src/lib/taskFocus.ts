@@ -63,6 +63,47 @@ export function focusRank(focus: TaskFocus | string | null | undefined): number 
   }
 }
 
+export function compareTaskPriority<
+  T extends {
+    done?: boolean;
+    starred?: boolean;
+    focus?: string | null;
+    dueAt?: string | null;
+    due?: Date;
+    createdAt?: string;
+  },
+>(a: T, b: T): number {
+  if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+  const starA = a.starred ? 1 : 0;
+  const starB = b.starred ? 1 : 0;
+  if (starA !== starB) return starB - starA;
+  const rankA = focusRank(a.focus);
+  const rankB = focusRank(b.focus);
+  if (rankA !== rankB) return rankB - rankA;
+  const ta = a.due ? a.due.getTime() : a.dueAt ? new Date(a.dueAt).getTime() : Infinity;
+  const tb = b.due ? b.due.getTime() : b.dueAt ? new Date(b.dueAt).getTime() : Infinity;
+  if (ta !== tb) return ta - tb;
+  const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return cb - ca;
+}
+
+export function sortTasksByPriority<
+  T extends {
+    done?: boolean;
+    starred?: boolean;
+    focus?: string | null;
+    dueAt?: string | null;
+    due?: Date;
+    createdAt?: string;
+  },
+>(list: T[]): T[] {
+  return [...list].sort(compareTaskPriority);
+}
+
+export const sortByFocusPriority = sortTasksByPriority;
+
+
 /** Soft pill / card washes → CSS token classes. */
 export const FOCUS_SOFT_BG: Record<TaskFocus, string> = {
   none: "focus-pill-none",

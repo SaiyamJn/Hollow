@@ -16,9 +16,9 @@ import {
   FOCUS_META,
   FOCUS_SOFT_BG,
   FOCUS_TEXT,
-  focusRank,
   formatTaskTime,
   normalizeFocus,
+  sortTasksByPriority,
   type TaskFocus,
 } from "../lib/taskFocus";
 import {
@@ -258,13 +258,7 @@ export default function CalendarPage() {
         : formatMonthTitle(cursor);
 
   function sortDayTasks(list: CalendarTask[]) {
-    return [...list].sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      const byFocus = focusRank(b.focus) - focusRank(a.focus);
-      if (byFocus !== 0) return byFocus;
-      if (!!a.starred !== !!b.starred) return a.starred ? -1 : 1;
-      return a.due.getTime() - b.due.getTime();
-    });
+    return sortTasksByPriority(list);
   }
 
   const dayTasks = sortDayTasks(tasksOnDay(byDay, selected));

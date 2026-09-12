@@ -10,6 +10,7 @@ import {
   FOCUS_SOFT_BG,
   FOCUS_TEXT,
   normalizeFocus,
+  sortTasksByPriority,
   type TaskFocus,
 } from "../lib/taskFocus";
 import { formatDueLabel } from "./DateTimePicker";
@@ -198,7 +199,7 @@ export function EisenhowerBoard({
   onEdit: (t: Task) => void;
   onHover?: (t: Task) => void;
 }) {
-  const open = tasks.filter((t) => !t.done);
+  const open = sortTasksByPriority(tasks.filter((t) => !t.done));
   const byFocus = (f: TaskFocus) => open.filter((t) => normalizeFocus(t.focus) === f);
 
   function onDragStart(e: React.DragEvent, task: Task) {
@@ -290,7 +291,7 @@ export function KanbanBoard({
   onEdit: (t: Task) => void;
   onHover?: (t: Task) => void;
 }) {
-  const open = tasks.filter((t) => !t.done);
+  const open = sortTasksByPriority(tasks.filter((t) => !t.done));
   const columns: TaskFocus[] = ["critical", "steady", "swift", "quiet", "none"];
 
   function onDragStart(e: React.DragEvent, task: Task) {
