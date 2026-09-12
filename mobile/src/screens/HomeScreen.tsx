@@ -166,28 +166,26 @@ export default function HomeScreen({ navigation }: any) {
       new Date(t.dueAt) >= startOfToday &&
       new Date(t.dueAt) < endOfToday
   );
-  const completingRows = open.filter((t) => completing[t.id]);
-  const scheduledRaw = [
-    ...overdue.map((t) => ({ task: t, overdue: true, isNoDate: false })),
-    ...dueToday.map((t) => ({ task: t, overdue: false, isNoDate: false })),
-  ];
+  const scheduledRaw = open
+    .filter((t) => t.dueAt && new Date(t.dueAt) < endOfToday)
+    .map((t) => ({
+      task: t,
+      overdue: new Date(t.dueAt!) < startOfToday,
+      isNoDate: false,
+    }));
   const scheduled = [...scheduledRaw].sort((a, b) => compareTaskPriority(a.task, b.task));
-
-  // Top priority "no date" tasks: sorted by priority
-  const noDateSorted = sortByFocusPriority(open.filter((t) => !completing[t.id] && !t.dueAt));
 
   const TARGET_TASKS = 3;
   const remainingSlots = Math.max(0, TARGET_TASKS - scheduled.length);
 
+  const noDateSorted = sortByFocusPriority(open.filter((t) => !t.dueAt));
+
   const priorityNoDate = noDateSorted
-    .slice(0, remainingSlots)
+    .filter((t, idx) => idx < remainingSlots || completing[t.id])
     .map((t) => ({ task: t, overdue: false, isNoDate: true }));
 
-  const list = [
-    ...scheduled,
-    ...priorityNoDate,
-    ...completingRows.map((t) => ({ task: t, overdue: false as boolean, isNoDate: false })),
-  ];
+  const hasScheduled = scheduled.length > 0;
+  const hasNoDate = priorityNoDate.length > 0;
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
@@ -355,51 +353,124 @@ export default function HomeScreen({ navigation }: any) {
         );
       })}
 
-      {/* today's tasks */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        {scheduled.length > 0 && priorityNoDate.length > 0
-          ? "TODAY & PRIORITY"
-          : scheduled.length > 0
-            ? "TODAY"
-            : "TASKS"}
-      </Text>
-      {list.length === 0 && (
-        <View style={styles.quietEmpty}>
-          <Feather name="check" size={13} color={colors.accent} />
-          <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
-            All clear for now
+      {/* tasks separation */}
+      {!hasScheduled && !hasNoDate && (
+        <>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            TODAY
           </Text>
-        </View>
+          <View style={styles.quietEmpty}>
+            <Feather name="check" size={13} color={colors.accent} />
+            <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
+              All clear for now
+            </Text>
+          </View>
+        </>
       )}
-      {list.map(({ task, overdue: isOverdue, isNoDate }) => (
-        <HomeTaskRow
-          key={task.id}
-          task={task}
-          overdue={isOverdue}
-          isNoDate={isNoDate}
-          completing={!!completing[task.id]}
-          accent={colors.accent}
-          textPrimary={colors.textPrimary}
-          textSecondary={colors.textSecondary}
-          surface2={colors.surface2}
-          border={colors.border}
-          palette={colors}
-          danger={colors.danger}
-          onComplete={() => completeHomeTask(task.id)}
-          onFinished={() => {
-            animateTaskComplete();
-            toggleTask.mutate(task.id, {
-              onSettled: () => {
-                setCompleting((m) => {
-                  const next = { ...m };
-                  delete next[task.id];
-                  return next;
+
+      {hasScheduled && (
+        <>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 24, marginBottom: 8 }}>
+            <Text
+              style={{
+                color: overdue.length > 0 ? colors.danger : colors.accent,
+                fontSize: 11,
+                fontWeight: "700",
+                letterSpacing: 1,
+              }}
+            >
+              TODAY {overdue.length > 0 ? `(${overdue.length} OVERDUE)` : ""}
+            </Text>
+            {hasNoDate && (
+              <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+            )}
+          </View>
+          {scheduled.map(({ task, overdue: isOverdue }) => (
+            <HomeTaskRow
+              key={task.id}
+              task={task}
+              overdue={isOverdue}
+              isNoDate={false}
+              completing={!!completing[task.id]}
+              accent={colors.accent}
+              textPrimary={colors.textPrimary}
+              textSecondary={colors.textSecondary}
+              surface2={colors.surface2}
+              border={colors.border}
+              palette={colors}
+              danger={colors.danger}
+              onComplete={() => completeHomeTask(task.id)}
+              onFinished={() => {
+                animateTaskComplete();
+                toggleTask.mutate(task.id, {
+                  onSettled: () => {
+                    setCompleting((m) => {
+                      const next = { ...m };
+                      delete next[task.id];
+                      return next;
+                    });
+                  },
                 });
-              },
-            });
-          }}
-        />
-      ))}
+              }}
+            />
+          ))}
+        </>
+      )}
+
+      {hasNoDate && (
+        <>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginTop: hasScheduled ? 16 : 24,
+              marginBottom: 8,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 11,
+                fontWeight: "700",
+                letterSpacing: 1,
+              }}
+            >
+              NO DATE
+            </Text>
+            <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+          </View>
+          {priorityNoDate.map(({ task }) => (
+            <HomeTaskRow
+              key={task.id}
+              task={task}
+              overdue={false}
+              isNoDate={false}
+              completing={!!completing[task.id]}
+              accent={colors.accent}
+              textPrimary={colors.textPrimary}
+              textSecondary={colors.textSecondary}
+              surface2={colors.surface2}
+              border={colors.border}
+              palette={colors}
+              danger={colors.danger}
+              onComplete={() => completeHomeTask(task.id)}
+              onFinished={() => {
+                animateTaskComplete();
+                toggleTask.mutate(task.id, {
+                  onSettled: () => {
+                    setCompleting((m) => {
+                      const next = { ...m };
+                      delete next[task.id];
+                      return next;
+                    });
+                  },
+                });
+              }}
+            />
+          ))}
+        </>
+      )}
     </ScrollView>
 
     <Fab

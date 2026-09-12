@@ -310,35 +310,25 @@ function TodayTasks() {
     if (t.repeatRule && t.dueAt && new Date(t.dueAt) >= endOfToday) return false;
     return true;
   });
-  const overdue = open.filter((t) => !completing[t.id] && t.dueAt && new Date(t.dueAt) < startOfToday);
-  const dueToday = open.filter(
-    (t) =>
-      !completing[t.id] &&
-      t.dueAt &&
-      new Date(t.dueAt) >= startOfToday &&
-      new Date(t.dueAt) < endOfToday
-  );
-  const scheduledRaw = [
-    ...overdue.map((t) => ({ task: t, isOverdue: true, isNoDate: false })),
-    ...dueToday.map((t) => ({ task: t, isOverdue: false, isNoDate: false })),
-  ];
-  const scheduled = [...scheduledRaw].sort((a, b) => compareTaskPriority(a.task, b.task));
 
-  // Top priority "no date" tasks: sorted by priority
-  const noDateSorted = sortTasksByPriority(open.filter((t) => !completing[t.id] && !t.dueAt));
+  const overdue = open.filter((t) => !completing[t.id] && t.dueAt && new Date(t.dueAt) < startOfToday);
+
+  const scheduledRaw = open
+    .filter((t) => t.dueAt && new Date(t.dueAt) < endOfToday)
+    .map((t) => ({
+      task: t,
+      isOverdue: new Date(t.dueAt!) < startOfToday,
+      isNoDate: false,
+    }));
+  const scheduled = [...scheduledRaw].sort((a, b) => compareTaskPriority(a.task, b.task));
 
   const TARGET_TASKS = 5;
   const remainingSlots = Math.max(0, TARGET_TASKS - scheduled.length);
 
+  const noDateSorted = sortTasksByPriority(open.filter((t) => !t.dueAt));
   const priorityNoDate = noDateSorted
-    .slice(0, remainingSlots)
+    .filter((t, idx) => idx < remainingSlots || completing[t.id])
     .map((t) => ({ task: t, isOverdue: false, isNoDate: true }));
-
-  const completingRows = open
-    .filter((t) => completing[t.id])
-    .map((t) => ({ task: t, isOverdue: false, isNoDate: false }));
-
-  const list = [...scheduled, ...priorityNoDate, ...completingRows];
 
   function completeTask(id: string) {
     if (completing[id]) return;
@@ -356,21 +346,71 @@ function TodayTasks() {
     }, 320);
   }
 
+  function renderRow(
+    { task, isOverdue }: { task: Task; isOverdue: boolean; isNoDate: boolean },
+    index: number
+  ) {
+    const leaving = !!completing[task.id];
+    const focus = normalizeFocus(task.focus);
+    return (
+      <li
+        key={task.id}
+        style={{ animationDelay: `${index * 40}ms` }}
+        className={clsx(
+          "animate-rise-in",
+          "flex items-center gap-2.5 rounded-xl px-2.5 py-2 -mx-1 text-sm transition-all duration-300 border border-transparent",
+          leaving
+            ? "opacity-0 translate-x-2 pointer-events-none"
+            : isOverdue
+              ? "bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] border-[color-mix(in_srgb,var(--danger)_18%,transparent)]"
+              : "hover:bg-accent-soft/40"
+        )}
+      >
+        <button
+          className="shrink-0 text-secondary hover:text-accent transition-colors"
+          onClick={() => completeTask(task.id)}
+          title="Mark done"
+          disabled={leaving}
+        >
+          {leaving ? <CheckSquare size={14} className="text-accent" /> : <Square size={14} />}
+        </button>
+        <span className={clsx("truncate flex-1 transition-colors", leaving && "line-through text-secondary")}>
+          {task.title}
+        </span>
+        {task.starred && !leaving && (
+          <Star size={13} className="text-accent fill-accent shrink-0" />
+        )}
+        {focus !== "none" && !leaving && (
+          <span className={clsx("focus-chip text-[10px] py-0 px-1.5", `focus-chip-${focus}`)}>
+            {FOCUS_META[focus].label}
+          </span>
+        )}
+        {isOverdue && !leaving && <StatusChip tone="danger">Overdue</StatusChip>}
+      </li>
+    );
+  }
+
+  const hasScheduled = scheduled.length > 0;
+  const hasNoDate = priorityNoDate.length > 0;
+
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className={clsx("section-label", overdue.length > 0 && "section-label-danger")}>
-          {scheduled.length > 0 && priorityNoDate.length > 0
-            ? "Today & Priority"
-            : scheduled.length > 0
-              ? "Today"
-              : "Tasks"}
+        <h2
+          className={clsx(
+            "section-label",
+            hasScheduled && overdue.length > 0 && "section-label-danger",
+            !hasScheduled && hasNoDate && "section-label-muted"
+          )}
+        >
+          {hasScheduled && hasNoDate ? "Tasks" : hasScheduled ? "Today" : hasNoDate ? "No date" : "Tasks"}
         </h2>
         <Link to="/tasks" className="text-xs text-accent hover:underline font-medium">
           All
         </Link>
       </div>
-      {list.length === 0 && (
+
+      {!hasScheduled && !hasNoDate && (
         <p className="text-sm text-secondary">
           Nothing due.{" "}
           <Link to="/tasks" className="text-accent hover:underline">
@@ -378,50 +418,57 @@ function TodayTasks() {
           </Link>
         </p>
       )}
-      <ul className="space-y-1">
-        {list.map(({ task, isOverdue, isNoDate }, i) => {
-          const leaving = !!completing[task.id];
-          const focus = normalizeFocus(task.focus);
-          return (
-            <li
-              key={task.id}
-              style={{ animationDelay: `${i * 45}ms` }}
-              className={clsx("animate-rise-in",
-                "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm transition-all duration-300 border border-transparent",
-                leaving
-                  ? "opacity-0 translate-x-2 pointer-events-none"
-                  : isOverdue
-                    ? "bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] border-[color-mix(in_srgb,var(--danger)_18%,transparent)]"
-                    : "hover:bg-accent-soft/40"
-              )}
-            >
-              <button
-                className="shrink-0 text-secondary hover:text-accent transition-colors"
-                onClick={() => completeTask(task.id)}
-                title="Mark done"
-                disabled={leaving}
+
+      {hasScheduled && hasNoDate ? (
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5 px-1">
+              <span
+                className={clsx(
+                  "text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5",
+                  overdue.length > 0 ? "text-danger" : "text-secondary"
+                )}
               >
-                {leaving ? <CheckSquare size={14} className="text-accent" /> : <Square size={14} />}
-              </button>
-              <span className={clsx("truncate flex-1 transition-colors", leaving && "line-through text-secondary")}>
-                {task.title}
+                <span
+                  className={clsx(
+                    "w-1.5 h-1.5 rounded-full",
+                    overdue.length > 0 ? "bg-danger" : "bg-accent"
+                  )}
+                />
+                Today
+                {overdue.length > 0 && (
+                  <span className="font-normal opacity-85">({overdue.length} overdue)</span>
+                )}
               </span>
-              {task.starred && !leaving && (
-                <Star size={13} className="text-accent fill-accent shrink-0" />
-              )}
-              {focus !== "none" && !leaving && (
-                <span className={clsx("focus-chip text-[10px] py-0 px-1.5", `focus-chip-${focus}`)}>
-                  {FOCUS_META[focus].label}
-                </span>
-              )}
-              {isNoDate && !leaving && focus === "none" && !task.starred && (
-                <StatusChip tone="muted">No date</StatusChip>
-              )}
-              {isOverdue && !leaving && <StatusChip tone="danger">Overdue</StatusChip>}
-            </li>
-          );
-        })}
-      </ul>
+              <div className="flex-1 h-px bg-border/40" />
+            </div>
+            <ul className="space-y-1">
+              {scheduled.map((item, i) => renderRow(item, i))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-1.5 px-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-secondary flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40" />
+                No date
+              </span>
+              <div className="flex-1 h-px bg-border/40" />
+            </div>
+            <ul className="space-y-1">
+              {priorityNoDate.map((item, i) => renderRow(item, i + scheduled.length))}
+            </ul>
+          </div>
+        </div>
+      ) : hasScheduled ? (
+        <ul className="space-y-1">
+          {scheduled.map((item, i) => renderRow(item, i))}
+        </ul>
+      ) : hasNoDate ? (
+        <ul className="space-y-1">
+          {priorityNoDate.map((item, i) => renderRow(item, i))}
+        </ul>
+      ) : null}
     </section>
   );
 }
