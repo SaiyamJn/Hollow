@@ -35,7 +35,7 @@ import { datedTasks, expandForRange, groupByDay, tasksOnDay, type CalendarTask }
 import { CollapsibleMonth, ensureSelectedInMonth } from "./CollapsibleMonth";
 import EmptyState from "../components/EmptyState";
 import { animatePanel } from "../lib/motion";
-import { normalizeFocus, sortByFocusPriority } from "../lib/taskFocus";
+import { FOCUS_META, normalizeFocus, sortByFocusPriority, withAlpha } from "../lib/taskFocus";
 import { useFocusColors } from "../contexts/focusColors";
 
 type EditDraft = TaskDraft & { id: string };
@@ -699,8 +699,9 @@ function TaskRow({
         styles.taskRow,
         {
           backgroundColor: wash !== "transparent" ? wash : colors.glass,
-          borderColor: colors.glassBorder,
-          borderLeftWidth: 3,
+          borderColor: tint ? withAlpha(tint, 0.4) : colors.glassBorder,
+          borderWidth: 1,
+          borderLeftWidth: 4,
           borderLeftColor: tint,
         },
       ]}
@@ -731,7 +732,27 @@ function TaskRow({
         >
           {task.title}
         </Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+          {focus !== "none" && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 6,
+                paddingVertical: 1.5,
+                borderRadius: 999,
+                backgroundColor: withAlpha(tint, 0.22),
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: withAlpha(tint, 0.45),
+              }}
+            >
+              <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: tint }} />
+              <Text style={{ color: tint, fontSize: 10, fontWeight: "700", textTransform: "uppercase" }}>
+                {FOCUS_META[focus].label}
+              </Text>
+            </View>
+          )}
           {!!time && (
             <Text style={{ color: tint, fontSize: 12, fontWeight: "600" }}>{time}</Text>
           )}

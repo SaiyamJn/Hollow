@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Pressable,
   ScrollView,
   Share,
@@ -62,23 +63,27 @@ function VaultSeal({ color, background }: { color: string; background: string })
 // simple editor instead of a native block editor for v1). Saving from mobile
 // stores plain text; the web app renders it as paragraphs.
 export default function PageEditorScreen({ route, navigation }: any) {
-  const { pageId, sectionId, notebookId: routeNotebookId, autoFocus: autoFocusParam } = route.params as {
+  const { pageId, sectionId, notebookId: routeNotebookId, title: titleParam, autoFocus: autoFocusParam } = route.params as {
     pageId: string;
     sectionId: string;
     notebookId?: string;
+    title?: string;
     autoFocus?: boolean;
   };
   const shouldAutoFocus = Boolean(autoFocusParam);
   const { colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
-  const password = unlock.sectionPasswords[sectionId];
+  const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
+  const notebookId = routeNotebookId ?? notebooks?.find((nb) => nb.sections.some((s) => s.id === sectionId))?.id;
+  const password = unlock.sectionPasswords[sectionId] ?? (notebookId ? unlock.notebookPasswords[notebookId] : undefined);
   const { stackBottomClearance, insets } = useLayout();
 
   const [text, setText] = useState<string | null>(null);
   const [wasRich, setWasRich] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error" | "queued">("saved");
   const [unlockVisible, setUnlockVisible] = useState(false);
+  const [actionsMenuVisible, setActionsMenuVisible] = useState(false);
   const [prompt, setPrompt] = useState<"rename" | "lock" | "remove-lock" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const skipSave = useRef(false);
@@ -99,10 +104,14 @@ export default function PageEditorScreen({ route, navigation }: any) {
     queryKey: ["page", pageId, password ?? null],
     queryFn: () => fetchPage(pageId, password),
   });
-  const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
-  const notebookId = routeNotebookId ?? page?.section.notebookId;
   const sectionMeta = notebooks?.flatMap((nb) => nb.sections).find((s) => s.id === sectionId);
   const sectionLocked = Boolean(sectionMeta?.isLocked);
+
+  useEffect(() => {
+    if (sectionId && notebookId) {
+      rememberSection(sectionId, sectionMeta?.title ?? "", notebookId, titleParam ?? "");
+    }
+  }, [sectionId, notebookId, sectionMeta?.title, titleParam]);
 
   useEffect(() => {
     if (page && text === null) {
@@ -241,7 +250,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
     navigation.setOptions({
       headerShown: !focus,
       headerRight: () => (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Text
             numberOfLines={1}
             style={{
@@ -257,32 +266,20 @@ export default function PageEditorScreen({ route, navigation }: any) {
                   ? "Error"
                   : ""}
           </Text>
-          <Pressable onPress={() => void exportPage()} hitSlop={8} accessibilityLabel="Export page">
-            <Feather name="share-2" size={15} color={colors.textSecondary} />
+          <Pressable onPress={() => setFocus(true)} hitSlop={8} accessibilityLabel="Focus mode">
+            <Feather name="maximize-2" size={16} color={colors.textSecondary} />
           </Pressable>
-          <Pressable onPress={() => setPrompt("rename")} hitSlop={8} accessibilityLabel="Rename page">
-            <Feather name="edit-2" size={15} color={colors.textSecondary} />
-          </Pressable>
-          {!sectionLocked && (
-            <Pressable onPress={() => setPrompt("lock")} hitSlop={8} accessibilityLabel="Lock section">
-              <Feather name="unlock" size={15} color={colors.textSecondary} />
-            </Pressable>
-          )}
-          {sectionLocked && password && (
-            <Pressable onPress={() => setPrompt("remove-lock")} hitSlop={8} accessibilityLabel="Remove password">
-              <Feather name="shield-off" size={15} color={colors.textSecondary} />
-            </Pressable>
-          )}
-          <Pressable onPress={() => setConfirmDelete(true)} hitSlop={8} accessibilityLabel="Delete page">
-            <Feather name="trash-2" size={15} color={colors.textSecondary} />
-          </Pressable>
-          <Pressable onPress={() => setFocus(true)} hitSlop={8}>
-            <Feather name="maximize-2" size={15} color={colors.textSecondary} />
+          <Pressable
+            onPress={() => setActionsMenuVisible(true)}
+            hitSlop={8}
+            accessibilityLabel="Page options"
+          >
+            <Feather name="more-vertical" size={17} color={colors.textSecondary} />
           </Pressable>
         </View>
       ),
     });
-  }, [navigation, saveState, colors, focus, sectionLocked, password]);
+  }, [navigation, saveState, colors, focus]);
 
   const status = (error as any)?.response?.status;
   if (status === 423 || status === 401) {
@@ -322,6 +319,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
             try {
               await unlockSection(sectionId, pw);
               unlock.setSectionPassword(sectionId, pw);
+              if (notebookId) {
+                unlock.unlockNotebook(notebookId, [sectionId], pw);
+              }
               return null;
             } catch (err: any) {
               return err.response?.data?.error ?? "Incorrect password";
@@ -548,6 +548,92 @@ export default function PageEditorScreen({ route, navigation }: any) {
           }
         }}
       />
+      <Modal
+        visible={actionsMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionsMenuVisible(false)}
+      >
+        <Pressable
+          style={styles.actionModalBackdrop}
+          onPress={() => setActionsMenuVisible(false)}
+        >
+          <GlassCard style={styles.actionModalCard}>
+            <Text style={[styles.actionModalTitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              {page?.title || "Page options"}
+            </Text>
+
+            <Pressable
+              style={styles.actionModalItem}
+              onPress={() => {
+                setActionsMenuVisible(false);
+                void exportPage();
+              }}
+            >
+              <Feather name="share-2" size={18} color={colors.accent} />
+              <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
+                Share / Export page
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionModalItem}
+              onPress={() => {
+                setActionsMenuVisible(false);
+                setPrompt("rename");
+              }}
+            >
+              <Feather name="edit-2" size={18} color={colors.textSecondary} />
+              <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
+                Rename page
+              </Text>
+            </Pressable>
+
+            {!sectionLocked ? (
+              <Pressable
+                style={styles.actionModalItem}
+                onPress={() => {
+                  setActionsMenuVisible(false);
+                  setPrompt("lock");
+                }}
+              >
+                <Feather name="unlock" size={18} color={colors.textSecondary} />
+                <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
+                  Lock section
+                </Text>
+              </Pressable>
+            ) : password ? (
+              <Pressable
+                style={styles.actionModalItem}
+                onPress={() => {
+                  setActionsMenuVisible(false);
+                  setPrompt("remove-lock");
+                }}
+              >
+                <Feather name="shield-off" size={18} color={colors.textSecondary} />
+                <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
+                  Remove password
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <View style={[styles.actionModalDivider, { backgroundColor: colors.glassBorder }]} />
+
+            <Pressable
+              style={styles.actionModalItem}
+              onPress={() => {
+                setActionsMenuVisible(false);
+                setConfirmDelete(true);
+              }}
+            >
+              <Feather name="trash-2" size={18} color={colors.danger} />
+              <Text style={[styles.actionModalItemText, { color: colors.danger }]}>
+                Delete page
+              </Text>
+            </Pressable>
+          </GlassCard>
+        </Pressable>
+      </Modal>
     </KeyboardSafe>
   );
 }
@@ -604,5 +690,41 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
+  },
+  actionModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+    padding: 16,
+    paddingBottom: 32,
+  },
+  actionModalCard: {
+    padding: 18,
+    borderRadius: 20,
+    gap: 4,
+  },
+  actionModalTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    paddingHorizontal: 6,
+  },
+  actionModalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  actionModalItemText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  actionModalDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
   },
 });

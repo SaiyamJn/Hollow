@@ -13,6 +13,7 @@ import { FocusField } from "../components/FocusField";
 import type { RepeatEnd } from "../lib/taskRepeat";
 import {
   FOCUS_DOT,
+  FOCUS_META,
   FOCUS_SOFT_BG,
   FOCUS_TEXT,
   focusRank,
@@ -414,14 +415,14 @@ export default function CalendarPage() {
         >
           {day.getDate()}
         </span>
-        <div className="mt-1 w-[70%] min-h-[10px] max-h-[12px] space-y-0.5 overflow-hidden flex flex-col items-stretch">
+        <div className="mt-1 w-[75%] min-h-[12px] max-h-[14px] space-y-1 overflow-hidden flex flex-col items-stretch">
           {open.slice(0, 3).map((t) => {
             const focus = normalizeFocus(t.focus);
             return (
               <div
                 key={t.id}
                 className={clsx(
-                  "h-[3px] w-full rounded-full",
+                  "h-[3.5px] w-full rounded-full shadow-sm",
                   FOCUS_DOT[focus],
                   t.virtual && "opacity-40"
                 )}
@@ -936,13 +937,19 @@ function TaskRow({
   onToggle: () => void;
   onEdit: () => void;
 }) {
+  const focus = normalizeFocus(task.focus);
+  const meta = FOCUS_META[focus];
+  const time = formatTaskTime(task.dueAt);
+
   return (
     <div
       draggable={!task.virtual}
       onDragStart={(e) => onDragStart(e, task)}
       className={clsx(
-        "flex items-center gap-3 rounded-xl border border-border glass px-3 py-2.5 transition-colors duration-200",
-        task.virtual ? "cursor-pointer opacity-90" : "cursor-grab active:cursor-grabbing"
+        "flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-all duration-200 focus-pill",
+        FOCUS_SOFT_BG[focus],
+        task.virtual ? "cursor-pointer opacity-85" : "cursor-grab active:cursor-grabbing",
+        task.done && "opacity-60"
       )}
     >
       <button
@@ -950,17 +957,28 @@ function TaskRow({
         onClick={onToggle}
         disabled={!!task.virtual}
         className={clsx(
-          "h-4 w-4 shrink-0 rounded border flex items-center justify-center",
-          task.done ? "bg-accent border-accent text-surface-0" : "border-border",
+          "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors",
+          task.done ? "bg-accent border-accent text-surface-0" : "border-border hover:border-accent bg-surface-1/60",
           task.virtual && "opacity-40"
         )}
       >
         {task.done && <Check size={11} strokeWidth={3} />}
       </button>
-      <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
-        <span className={clsx("text-sm text-primary", task.done && "line-through text-secondary")}>
+      <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left flex items-center gap-2">
+        <span className={clsx("text-sm text-primary font-medium truncate flex-1", task.done && "line-through text-secondary")}>
           {task.title}
         </span>
+        {focus !== "none" && (
+          <span className={clsx("focus-chip", `focus-chip-${focus}`)}>
+            <span className={clsx("h-1.5 w-1.5 rounded-full", FOCUS_DOT[focus])} />
+            {meta.label}
+          </span>
+        )}
+        {time && (
+          <span className={clsx("text-xs font-semibold shrink-0", FOCUS_TEXT[focus])}>
+            {time}
+          </span>
+        )}
       </button>
       {task.repeatRule && <Repeat size={12} className="text-secondary shrink-0" />}
     </div>

@@ -77,7 +77,14 @@ export default function NotebookScreen({ route, navigation }: any) {
   const notebookRef = useRef(notebook);
   notebookRef.current = notebook;
 
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const mem = getNavMemory();
+    return mem.section?.notebookId === notebookId && mem.section?.id ? new Set([mem.section.id]) : new Set();
+  });
+  const isSecUnlocked = useCallback(
+    (secId: string) => !!(unlock.sectionPasswords[secId] || (notebookId && unlock.notebookPasswords[notebookId])),
+    [unlock.sectionPasswords, unlock.notebookPasswords, notebookId]
+  );
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [moveTarget, setMoveTarget] = useState<MovePageTarget>(null);
@@ -262,7 +269,7 @@ export default function NotebookScreen({ route, navigation }: any) {
   ).current;
 
   function toggleSection(sec: Section) {
-    if (sec.isLocked && !unlock.sectionPasswords[sec.id]) {
+    if (sec.isLocked && !isSecUnlocked(sec.id)) {
       setPrompt({ kind: "unlock-section", section: sec });
       return;
     }
@@ -276,7 +283,7 @@ export default function NotebookScreen({ route, navigation }: any) {
   }
 
   function openPage(sec: Section, pageId: string, pageTitle: string) {
-    if (sec.isLocked && !unlock.sectionPasswords[sec.id]) {
+    if (sec.isLocked && !isSecUnlocked(sec.id)) {
       setPrompt({ kind: "unlock-section", section: sec, thenOpenPage: { pageId, title: pageTitle } });
       return;
     }
@@ -297,7 +304,11 @@ export default function NotebookScreen({ route, navigation }: any) {
         setExpanded((s) => new Set(s).add(sec.id));
         invalidate();
       } else if (prompt.kind === "new-page") {
-        const page = await createPage(prompt.section.id, value, unlock.sectionPasswords[prompt.section.id]);
+        const page = await createPage(
+          prompt.section.id,
+          value,
+          unlock.sectionPasswords[prompt.section.id] ?? unlock.notebookPasswords[notebookId]
+        );
         rememberSection(prompt.section.id, prompt.section.title, notebookId, title);
         invalidate();
         navigation.navigate("Page", {
@@ -358,7 +369,7 @@ export default function NotebookScreen({ route, navigation }: any) {
         label: `New page in "${truncateLabel(target.title)}"`,
         icon: "file-text",
         onPress: () => {
-          if (target.isLocked && !unlock.sectionPasswords[target.id]) {
+          if (target.isLocked && !isSecUnlocked(target.id)) {
             setPrompt({ kind: "unlock-section", section: target });
           } else {
             setPrompt({ kind: "new-page", section: target });
@@ -373,7 +384,7 @@ export default function NotebookScreen({ route, navigation }: any) {
 
   /** Body of a section row (shared between in-place render and the drag ghost). */
   function renderSectionBody(sec: Section) {
-    const sealed = sec.isLocked && !unlock.sectionPasswords[sec.id];
+    const sealed = sec.isLocked && !isSecUnlocked(sec.id);
     const isOpen = expanded.has(sec.id) && !sealed;
     return (
       <>

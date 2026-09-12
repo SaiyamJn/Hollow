@@ -70,6 +70,16 @@ export async function handleNotificationResponse(
     const prompt = promptFromNotification(response.notification.request.content);
     if (!prompt) return;
     const presentedId = response.notification.request.identifier;
+
+    // Immediately clear from shade first so user sees instant feedback
+    if (presentedId) {
+      try {
+        await Notifications.dismissNotificationAsync(presentedId);
+      } catch {
+        // ignore
+      }
+    }
+
     const action = response.actionIdentifier;
     if (action === ACTION_COMPLETE) {
       await dismissTaskNotifications(prompt.taskId, presentedId);
@@ -99,6 +109,8 @@ TaskManager.defineTask<Notifications.NotificationTaskPayload>(
     await handleNotificationResponse(data as unknown as Notifications.NotificationResponse);
   }
 );
+// Register immediately at module load time so headless tasks work reliably
+void Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch(() => undefined);
 
 export type ReminderPrompt = {
   taskId: string;
@@ -265,8 +277,7 @@ function contentFor(kind: ReminderPrompt["kind"], title: string, taskId: string)
     sound: "default",
     categoryIdentifier: TASK_CATEGORY,
     color: ACCENT,
-    // Stay in the shade until Complete / Remind later / the task is checked off in-app.
-    autoDismiss: false,
+    autoDismiss: true,
     ...(Platform.OS === "ios" ? { interruptionLevel: "timeSensitive" as const } : {}),
   };
 }

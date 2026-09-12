@@ -13,18 +13,18 @@
   --accent-soft: rgba(12, 184, 121, 0.2);
   --danger: #ef4444;
   --warn: #f59e0b;
-  --focus-critical: #ef4444;
-  --focus-steady: #0cb879;
+  --focus-critical: #f43f5e;
+  --focus-steady: #0284c7;
   --focus-swift: #f59e0b;
-  --focus-quiet: #4f8aa0;
-  --focus-critical-wash: rgba(239, 68, 68, 0.2);
-  --focus-steady-wash: rgba(12, 184, 121, 0.2);
-  --focus-swift-wash: rgba(245, 158, 11, 0.2);
-  --focus-quiet-wash: rgba(79, 138, 160, 0.22);
-  --focus-critical-pane: rgba(239, 68, 68, 0.12);
-  --focus-steady-pane: rgba(12, 184, 121, 0.12);
-  --focus-swift-pane: rgba(245, 158, 11, 0.12);
-  --focus-quiet-pane: rgba(79, 138, 160, 0.14);
+  --focus-quiet: #8b5cf6;
+  --focus-critical-wash: rgba(244, 63, 94, 0.22);
+  --focus-steady-wash: rgba(2, 132, 199, 0.20);
+  --focus-swift-wash: rgba(245, 158, 11, 0.22);
+  --focus-quiet-wash: rgba(139, 92, 246, 0.22);
+  --focus-critical-pane: rgba(244, 63, 94, 0.14);
+  --focus-steady-pane: rgba(2, 132, 199, 0.14);
+  --focus-swift-pane: rgba(245, 158, 11, 0.14);
+  --focus-quiet-pane: rgba(139, 92, 246, 0.14);
   --note-yellow: rgba(250, 184, 8, 0.5);
   --note-green: rgba(16, 185, 129, 0.38);
   --note-blue: rgba(59, 130, 246, 0.34);
@@ -48,18 +48,18 @@
   --accent-soft: rgba(94, 233, 181, 0.18);
   --danger: #ff8a8a;
   --warn: #fbbf24;
-  --focus-critical: #ff8a8a;
-  --focus-steady: #5ee9b5;
+  --focus-critical: #ff4d6d;
+  --focus-steady: #38bdf8;
   --focus-swift: #fbbf24;
-  --focus-quiet: #9ec0d4;
-  --focus-critical-wash: rgba(255, 138, 138, 0.3);
-  --focus-steady-wash: rgba(94, 233, 181, 0.28);
-  --focus-swift-wash: rgba(251, 191, 36, 0.26);
-  --focus-quiet-wash: rgba(158, 192, 212, 0.28);
-  --focus-critical-pane: rgba(255, 138, 138, 0.16);
-  --focus-steady-pane: rgba(94, 233, 181, 0.15);
-  --focus-swift-pane: rgba(251, 191, 36, 0.14);
-  --focus-quiet-pane: rgba(158, 192, 212, 0.16);
+  --focus-quiet: #a78bfa;
+  --focus-critical-wash: rgba(255, 77, 109, 0.32);
+  --focus-steady-wash: rgba(56, 189, 248, 0.28);
+  --focus-swift-wash: rgba(251, 191, 36, 0.28);
+  --focus-quiet-wash: rgba(167, 139, 250, 0.28);
+  --focus-critical-pane: rgba(255, 77, 109, 0.18);
+  --focus-steady-pane: rgba(56, 189, 248, 0.18);
+  --focus-swift-pane: rgba(251, 191, 36, 0.16);
+  --focus-quiet-pane: rgba(167, 139, 250, 0.18);
   --note-yellow: rgba(250, 204, 21, 0.26);
   --note-green: rgba(52, 211, 153, 0.24);
   --note-blue: rgba(96, 165, 250, 0.24);
@@ -271,47 +271,66 @@ button, input, select, textarea, .glass, .glass-input {
 /* Focus-class surfaces — calendar pills, matrix panes, kanban columns. */
 .focus-pill {
   position: relative;
-  border-radius: 0.4rem;
+  border-radius: 0.45rem;
   border: 1px solid transparent;
-  /* Accent rail via padding + border so text never sits under the stripe. */
-  border-left-width: 3px;
+  /* Vivid 4px accent rail */
+  border-left-width: 4px;
   border-left-color: var(--pill-accent, transparent);
-  padding-left: 0.35rem;
-  padding-right: 0.4rem;
-  box-shadow: none;
-  transition: filter 0.12s ease;
+  padding-left: 0.4rem;
+  padding-right: 0.45rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: filter 0.12s ease, transform 0.12s ease;
   overflow: visible;
   max-width: 100%;
   box-sizing: border-box;
 }
 .focus-pill:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
+  transform: translateY(-0.5px);
 }
 .focus-pill-critical {
   --pill-accent: var(--focus-critical);
   background: var(--focus-critical-wash);
-  border-color: color-mix(in srgb, var(--focus-critical) 28%, transparent);
+  border-color: color-mix(in srgb, var(--focus-critical) 45%, transparent);
 }
 .focus-pill-steady {
   --pill-accent: var(--focus-steady);
   background: var(--focus-steady-wash);
-  border-color: color-mix(in srgb, var(--focus-steady) 28%, transparent);
+  border-color: color-mix(in srgb, var(--focus-steady) 45%, transparent);
 }
 .focus-pill-swift {
   --pill-accent: var(--focus-swift);
   background: var(--focus-swift-wash);
-  border-color: color-mix(in srgb, var(--focus-swift) 30%, transparent);
+  border-color: color-mix(in srgb, var(--focus-swift) 45%, transparent);
 }
 .focus-pill-quiet {
   --pill-accent: var(--focus-quiet);
   background: var(--focus-quiet-wash);
-  border-color: color-mix(in srgb, var(--focus-quiet) 26%, transparent);
+  border-color: color-mix(in srgb, var(--focus-quiet) 45%, transparent);
 }
 .focus-pill-none {
   --pill-accent: var(--text-secondary);
   background: color-mix(in srgb, var(--surface-2) 85%, transparent);
   border-color: var(--border);
 }
+
+.focus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.focus-chip-critical { background: var(--focus-critical-wash); color: var(--focus-critical); border: 1px solid color-mix(in srgb, var(--focus-critical) 40%, transparent); }
+.focus-chip-steady { background: var(--focus-steady-wash); color: var(--focus-steady); border: 1px solid color-mix(in srgb, var(--focus-steady) 40%, transparent); }
+.focus-chip-swift { background: var(--focus-swift-wash); color: var(--focus-swift); border: 1px solid color-mix(in srgb, var(--focus-swift) 40%, transparent); }
+.focus-chip-quiet { background: var(--focus-quiet-wash); color: var(--focus-quiet); border: 1px solid color-mix(in srgb, var(--focus-quiet) 40%, transparent); }
+.focus-chip-none { background: color-mix(in srgb, var(--surface-2) 80%, transparent); color: var(--text-secondary); border: 1px solid var(--border); }
 
 .focus-pane {
   background:

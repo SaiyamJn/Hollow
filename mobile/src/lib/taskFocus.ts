@@ -46,7 +46,7 @@ export function normalizeFocus(value: string | null | undefined): TaskFocus {
   return "none";
 }
 
-function focusRank(focus: TaskFocus | string | null | undefined): number {
+export function focusRank(focus: TaskFocus | string | null | undefined): number {
   switch (normalizeFocus(focus)) {
     case "critical":
       return 4;
@@ -63,17 +63,27 @@ function focusRank(focus: TaskFocus | string | null | undefined): number {
 
 export function focusColor(
   focus: TaskFocus,
-  palette: { accent: string; danger: string; textSecondary: string; warn?: string; quiet?: string }
+  palette: {
+    accent: string;
+    danger: string;
+    textSecondary: string;
+    warn?: string;
+    quiet?: string;
+    focusCritical?: string;
+    focusSteady?: string;
+    focusSwift?: string;
+    focusQuiet?: string;
+  }
 ): string | null {
   switch (focus) {
     case "critical":
-      return palette.danger;
+      return palette.focusCritical ?? palette.danger ?? "#f43f5e";
     case "steady":
-      return palette.accent;
+      return palette.focusSteady ?? "#0284c7";
     case "swift":
-      return palette.warn ?? "#b45309";
+      return palette.focusSwift ?? palette.warn ?? "#f59e0b";
     case "quiet":
-      return palette.quiet ?? palette.textSecondary;
+      return palette.focusQuiet ?? palette.quiet ?? "#8b5cf6";
     default:
       return null;
   }

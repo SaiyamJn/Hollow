@@ -33,6 +33,8 @@ import { animateTaskComplete } from "../lib/motion";
 import { useKeyboardBottomInset } from "../hooks/useKeyboardBottomInset";
 import { useLayout } from "../lib/layout";
 import { pickGreeting } from "../lib/greetings";
+import { focusRank, normalizeFocus, focusColor, withAlpha, FOCUS_META } from "../lib/taskFocus";
+import { rememberSection } from "../lib/navMemory";
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -81,6 +83,11 @@ export default function HomeScreen({ navigation }: any) {
     mutationFn: openDailyNote,
     onSuccess: (note) => {
       queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+      rememberSection(note.sectionId, note.title, note.notebookId, "Daily Notes");
+      navigation.navigate("Notebook", {
+        notebookId: note.notebookId,
+        title: "Daily Notes",
+      });
       navigation.navigate("Page", {
         pageId: note.id,
         sectionId: note.sectionId,
@@ -125,6 +132,11 @@ export default function HomeScreen({ navigation }: any) {
   }
 
   function openRecent(p: RecentPage) {
+    rememberSection(p.section.id, p.section.title, p.section.notebookId, p.section.notebook?.title ?? "Notebook");
+    navigation.navigate("Notebook", {
+      notebookId: p.section.notebookId,
+      title: p.section.notebook?.title ?? "Notebook",
+    });
     navigation.navigate("Page", {
       pageId: p.id,
       sectionId: p.section.id,
@@ -155,19 +167,31 @@ export default function HomeScreen({ navigation }: any) {
       new Date(t.dueAt) < endOfToday
   );
   const completingRows = open.filter((t) => completing[t.id]);
-  const liveOpen = open.filter((t) => !completing[t.id]);
-  const scheduled: { task: Task; overdue: boolean }[] = [
-    ...overdue.map((t) => ({ task: t, overdue: true })),
-    ...dueToday.map((t) => ({ task: t, overdue: false })),
+  const scheduled: { task: Task; overdue: boolean; isNoDate: boolean }[] = [
+    ...overdue.map((t) => ({ task: t, overdue: true, isNoDate: false })),
+    ...dueToday.map((t) => ({ task: t, overdue: false, isNoDate: false })),
   ];
-  const list = (
-    scheduled.length > 0
-      ? [...scheduled, ...completingRows.map((t) => ({ task: t, overdue: false as boolean }))]
-      : [
-          ...liveOpen.slice(0, 5).map((t) => ({ task: t, overdue: false as boolean })),
-          ...completingRows.map((t) => ({ task: t, overdue: false as boolean })),
-        ]
-  ).slice(0, 8);
+
+  // Top priority "no date" tasks: starred first, then critical / steady / swift focus
+  const noDateSorted = open
+    .filter((t) => !completing[t.id] && !t.dueAt)
+    .sort((a, b) => {
+      const starDiff = (b.starred ? 1 : 0) - (a.starred ? 1 : 0);
+      if (starDiff !== 0) return starDiff;
+      const rankDiff = focusRank(b.focus) - focusRank(a.focus);
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
+
+  const priorityNoDate = noDateSorted
+    .slice(0, Math.max(2, 6 - scheduled.length))
+    .map((t) => ({ task: t, overdue: false, isNoDate: true }));
+
+  const list = [
+    ...scheduled,
+    ...priorityNoDate,
+    ...completingRows.map((t) => ({ task: t, overdue: false as boolean, isNoDate: false })),
+  ].slice(0, 8);
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
@@ -337,7 +361,11 @@ export default function HomeScreen({ navigation }: any) {
 
       {/* today's tasks */}
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        {scheduled.length > 0 ? "TODAY" : "OPEN TASKS"}
+        {scheduled.length > 0 && priorityNoDate.length > 0
+          ? "TODAY & PRIORITY"
+          : scheduled.length > 0
+            ? "TODAY"
+            : "TASKS"}
       </Text>
       {list.length === 0 && (
         <View style={styles.quietEmpty}>
@@ -347,15 +375,19 @@ export default function HomeScreen({ navigation }: any) {
           </Text>
         </View>
       )}
-      {list.map(({ task, overdue: isOverdue }) => (
+      {list.map(({ task, overdue: isOverdue, isNoDate }) => (
         <HomeTaskRow
           key={task.id}
-          title={task.title}
+          task={task}
           overdue={isOverdue}
+          isNoDate={isNoDate}
           completing={!!completing[task.id]}
           accent={colors.accent}
           textPrimary={colors.textPrimary}
           textSecondary={colors.textSecondary}
+          surface2={colors.surface2}
+          border={colors.border}
+          palette={colors}
           danger={colors.danger}
           onComplete={() => completeHomeTask(task.id)}
           onFinished={() => {
@@ -448,22 +480,30 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 function HomeTaskRow({
-  title,
+  task,
   overdue,
+  isNoDate,
   completing,
   accent,
   textPrimary,
   textSecondary,
+  surface2,
+  border,
+  palette,
   danger,
   onComplete,
   onFinished,
 }: {
-  title: string;
+  task: Task;
   overdue: boolean;
+  isNoDate: boolean;
   completing: boolean;
   accent: string;
   textPrimary: string;
   textSecondary: string;
+  surface2: string;
+  border: string;
+  palette: any;
   danger: string;
   onComplete: () => void;
   onFinished: () => void;
@@ -489,9 +529,22 @@ function HomeTaskRow({
     return () => anim.stop();
   }, [completing, opacity, translateX]);
 
+  const focusNorm = normalizeFocus(task.focus);
+  const color = focusColor(focusNorm, palette);
+
   return (
     <Animated.View
-      style={[styles.taskRow, { opacity, transform: [{ translateX }] }]}
+      style={[
+        styles.taskRow,
+        { opacity, transform: [{ translateX }] },
+        overdue && !completing && {
+          backgroundColor: "rgba(220, 38, 38, 0.08)",
+          borderRadius: 10,
+          paddingHorizontal: 8,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: "rgba(220, 38, 38, 0.22)",
+        },
+      ]}
     >
       <Pressable onPress={onComplete} hitSlop={8} disabled={completing}>
         <Feather
@@ -510,8 +563,43 @@ function HomeTaskRow({
         }}
         numberOfLines={1}
       >
-        {title}
+        {task.title}
       </Text>
+      {task.starred && !completing && (
+        <Feather name="star" size={13} color={accent} style={{ flexShrink: 0 }} />
+      )}
+      {focusNorm !== "none" && !completing && !!color && (
+        <View
+          style={{
+            paddingHorizontal: 7,
+            paddingVertical: 2,
+            borderRadius: 999,
+            backgroundColor: withAlpha(color, 0.22),
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: withAlpha(color, 0.45),
+            flexShrink: 0,
+          }}
+        >
+          <Text style={{ color, fontSize: 10, fontWeight: "700" }}>
+            {FOCUS_META[focusNorm].label}
+          </Text>
+        </View>
+      )}
+      {isNoDate && !completing && focusNorm === "none" && !task.starred && (
+        <View
+          style={{
+            paddingHorizontal: 7,
+            paddingVertical: 2,
+            borderRadius: 999,
+            backgroundColor: surface2,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: border,
+            flexShrink: 0,
+          }}
+        >
+          <Text style={{ color: textSecondary, fontSize: 10, fontWeight: "500" }}>No date</Text>
+        </View>
+      )}
       {overdue && !completing && (
         <View
           style={{
@@ -521,9 +609,10 @@ function HomeTaskRow({
             backgroundColor: "rgba(220, 38, 38, 0.12)",
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: "rgba(220, 38, 38, 0.28)",
+            flexShrink: 0,
           }}
         >
-          <Text style={{ color: danger, fontSize: 11, fontWeight: "700", flexShrink: 0 }}>Overdue</Text>
+          <Text style={{ color: danger, fontSize: 11, fontWeight: "700" }}>Overdue</Text>
         </View>
       )}
     </Animated.View>

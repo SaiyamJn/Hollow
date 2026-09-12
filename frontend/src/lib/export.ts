@@ -1,15 +1,36 @@
 /** Client-side export helpers — no extra dependencies. */
 
-function downloadText(filename: string, text: string, mimeType: string) {
+async function downloadText(filename: string, text: string, mimeType: string) {
   const blob = new Blob([text], { type: mimeType });
+
+  // On mobile browsers, try Web Share API if available for smooth native saving/sharing
+  if (typeof navigator !== "undefined" && navigator.share) {
+    try {
+      const file = new File([blob], filename, { type: mimeType });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: filename,
+        });
+        return;
+      }
+    } catch {
+      // User cancelled share or file sharing unsupported, fall back to standard download
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Delay revoking object URL so mobile Safari / Android Chrome can complete download
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 60000);
 }
 
 /** Download the given content as a `.md` markdown file. */

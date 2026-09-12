@@ -10,6 +10,7 @@ import {
   NotebookPen,
   Send,
   Square,
+  Star,
   StickyNote,
   Waypoints,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import { formatCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { StatusChip } from "../components/StatusChip";
 import { Button } from "../components/ui/button";
 import { pickGreeting } from "../lib/greetings";
+import { focusRank, normalizeFocus, FOCUS_META } from "../lib/taskFocus";
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -68,6 +70,7 @@ export default function Home() {
     mutationFn: openDailyNote,
     onSuccess: (note) => {
       queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+      window.history.pushState(null, "", `/notebooks/${note.notebookId}`);
       navigate(`/notebooks/${note.notebookId}/sections/${note.sectionId}/pages/${note.id}`);
     },
   });
@@ -229,8 +232,17 @@ function QuickCapture() {
 }
 
 function RecentPages({ recent }: { recent?: RecentPage[] }) {
+  const navigate = useNavigate();
   const sectionPasswords = useUnlockStore((s) => s.sectionPasswords);
   const list = (recent ?? []).slice(0, 5);
+
+  const openRecentPage = (p: RecentPage, e: React.MouseEvent) => {
+    if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      window.history.pushState(null, "", `/notebooks/${p.section.notebookId}`);
+      navigate(pageRoute(p));
+    }
+  };
 
   return (
     <section>
@@ -241,6 +253,7 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
           <li key={p.id} className="animate-rise-in" style={{ animationDelay: `${i * 45}ms` }}>
             <Link
               to={pageRoute(p)}
+              onClick={(e) => openRecentPage(p, e)}
               className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
                          text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
             >
@@ -305,20 +318,31 @@ function TodayTasks() {
       new Date(t.dueAt) >= startOfToday &&
       new Date(t.dueAt) < endOfToday
   );
-  const completingRows = open.filter((t) => completing[t.id]);
-  const liveOpen = open.filter((t) => !completing[t.id]);
-  const shown: { task: Task; overdue: boolean }[] = [
-    ...overdue.map((t) => ({ task: t, overdue: true })),
-    ...dueToday.map((t) => ({ task: t, overdue: false })),
+  const scheduled = [
+    ...overdue.map((t) => ({ task: t, isOverdue: true, isNoDate: false })),
+    ...dueToday.map((t) => ({ task: t, isOverdue: false, isNoDate: false })),
   ];
-  const list = (
-    shown.length > 0
-      ? [...shown, ...completingRows.map((t) => ({ task: t, overdue: false as boolean }))]
-      : [
-          ...liveOpen.slice(0, 5).map((t) => ({ task: t, overdue: false as boolean })),
-          ...completingRows.map((t) => ({ task: t, overdue: false as boolean })),
-        ]
-  ).slice(0, 6);
+
+  // Top priority "no date" tasks: starred first, then critical / steady / swift focus
+  const noDateSorted = open
+    .filter((t) => !completing[t.id] && !t.dueAt)
+    .sort((a, b) => {
+      const starDiff = (b.starred ? 1 : 0) - (a.starred ? 1 : 0);
+      if (starDiff !== 0) return starDiff;
+      const rankDiff = focusRank(b.focus) - focusRank(a.focus);
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
+
+  const priorityNoDate = noDateSorted
+    .slice(0, Math.max(2, 6 - scheduled.length))
+    .map((t) => ({ task: t, isOverdue: false, isNoDate: true }));
+
+  const completingRows = open
+    .filter((t) => completing[t.id])
+    .map((t) => ({ task: t, isOverdue: false, isNoDate: false }));
+
+  const list = [...scheduled, ...priorityNoDate, ...completingRows].slice(0, 8);
 
   function completeTask(id: string) {
     if (completing[id]) return;
@@ -340,7 +364,11 @@ function TodayTasks() {
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className={clsx("section-label", overdue.length > 0 && "section-label-danger")}>
-          {shown.length > 0 ? "Today" : "Tasks"}
+          {scheduled.length > 0 && priorityNoDate.length > 0
+            ? "Today & Priority"
+            : scheduled.length > 0
+              ? "Today"
+              : "Tasks"}
         </h2>
         <Link to="/tasks" className="text-xs text-accent hover:underline font-medium">
           All
@@ -355,8 +383,9 @@ function TodayTasks() {
         </p>
       )}
       <ul className="space-y-1">
-        {list.map(({ task, overdue: isOverdue }, i) => {
+        {list.map(({ task, isOverdue, isNoDate }, i) => {
           const leaving = !!completing[task.id];
+          const focus = normalizeFocus(task.focus);
           return (
             <li
               key={task.id}
@@ -381,6 +410,17 @@ function TodayTasks() {
               <span className={clsx("truncate flex-1 transition-colors", leaving && "line-through text-secondary")}>
                 {task.title}
               </span>
+              {task.starred && !leaving && (
+                <Star size={13} className="text-accent fill-accent shrink-0" />
+              )}
+              {focus !== "none" && !leaving && (
+                <span className={clsx("focus-chip text-[10px] py-0 px-1.5", `focus-chip-${focus}`)}>
+                  {FOCUS_META[focus].label}
+                </span>
+              )}
+              {isNoDate && !leaving && focus === "none" && !task.starred && (
+                <StatusChip tone="muted">No date</StatusChip>
+              )}
               {isOverdue && !leaving && <StatusChip tone="danger">Overdue</StatusChip>}
             </li>
           );

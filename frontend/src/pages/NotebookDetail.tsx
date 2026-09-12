@@ -6,9 +6,7 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   FileText,
-  GripVertical,
   Layers,
   Lock,
   LockOpen,
@@ -91,7 +89,6 @@ export default function NotebookDetail() {
     | { kind: "page"; id: string; title: string }
     | null
   >(null);
-  const [reorderMode, setReorderMode] = useState(false);
   const [moveSectionId, setMoveSectionId] = useState("");
 
   useEffect(() => {
@@ -324,14 +321,6 @@ export default function NotebookDetail() {
             <Trash2 size={13} />
             Recycle bin
           </Link>
-          <Button
-            variant={reorderMode ? "accent" : "default"}
-            title="Rearrange sections and pages"
-            onClick={() => setReorderMode((v) => !v)}
-            disabled={sealed}
-          >
-            <GripVertical size={14} />
-          </Button>
         </div>
       </div>
 
@@ -345,11 +334,6 @@ export default function NotebookDetail() {
         </div>
       ) : (
         <div className="space-y-2">
-          {reorderMode && (
-            <p className="text-xs text-secondary px-1">
-              Drag sections or pages by the grip handle to rearrange. Use the move icon to shift a page to another section.
-            </p>
-          )}
           {notebook.sections.length === 0 && (
             <p className="text-sm text-secondary py-8 text-center">
               No sections yet — add one and start writing.
@@ -357,13 +341,13 @@ export default function NotebookDetail() {
           )}
           <SortableVerticalList
             items={notebook.sections}
-            enabled={reorderMode}
+            enabled={true}
             className="space-y-2"
             onReorder={async (ids) => {
               await reorderSections(notebook.id, ids);
               void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
             }}
-            renderItem={(sec, { grip, moveUp, moveDown }) => {
+            renderItem={(sec, { grip }) => {
             const secSealed = sec.isLocked && !sectionPasswords[sec.id];
             const open = expanded.has(sec.id) && !secSealed;
             return (
@@ -379,7 +363,7 @@ export default function NotebookDetail() {
                   <button
                     type="button"
                     className="flex-1 flex items-center gap-2.5 px-1.5 py-1.5 text-left min-w-0"
-                    onClick={() => !reorderMode && toggleSection(sec)}
+                    onClick={() => toggleSection(sec)}
                   >
                     {open ? (
                       <ChevronDown size={15} className="text-secondary shrink-0" />
@@ -393,7 +377,6 @@ export default function NotebookDetail() {
                     )}
                     <span className="text-xs text-secondary">{sec.pages.length}</span>
                   </button>
-                  {!reorderMode && (
                   <div className="row-actions flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
@@ -450,25 +433,18 @@ export default function NotebookDetail() {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  )}
-                  {reorderMode && (
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <button type="button" onClick={moveUp} disabled={!moveUp} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move up"><ChevronUp size={14} /></button>
-                      <button type="button" onClick={moveDown} disabled={!moveDown} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move down"><ChevronDown size={14} /></button>
-                    </div>
-                  )}
                 </div>
 
                 {open && (
                   <div className="border-t border-border px-3.5 py-2 space-y-0.5">
                     <SortableVerticalList
                       items={sec.pages}
-                      enabled={reorderMode}
+                      enabled={true}
                       onReorder={async (ids) => {
                         await reorderPages(sec.id, ids);
                         void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
                       }}
-                      renderItem={(page, { grip: pageGrip, moveUp: pageMoveUp, moveDown: pageMoveDown }) => (
+                      renderItem={(page, { grip: pageGrip }) => (
                       <div
                         className="group/page flex items-center gap-1 rounded-md hover:bg-surface-2 transition-colors"
                         onMouseEnter={() => setActiveItem({ kind: "page", id: page.id, title: page.title })}
@@ -478,52 +454,43 @@ export default function NotebookDetail() {
                           type="button"
                           className="flex-1 flex items-center gap-2 px-2 py-2 text-sm text-secondary
                                      hover:text-primary text-left min-w-0"
-                          onClick={() => !reorderMode && openPage(sec, page.id, page.title)}
+                          onClick={() => openPage(sec, page.id, page.title)}
                         >
                           <FileText size={13} className="shrink-0" />
                           <span className="truncate flex-1">{page.title}</span>
                         </button>
-                        {!reorderMode && (
-                        <>
-                        <button
-                          type="button"
-                          title="Move to section"
-                          className="p-1.5 rounded-md text-secondary hover:text-primary shrink-0"
-                          onClick={() => {
-                            setMoveSectionId("");
-                            setDialog({ kind: "move-page", pageId: page.id, pageTitle: page.title, fromSectionId: sec.id });
-                          }}
-                        >
-                          <ArrowRightLeft size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Rename page"
-                          className="p-1.5 rounded-md text-secondary hover:text-primary shrink-0"
-                          onClick={() => setEditTarget({ kind: "page", id: page.id, title: page.title })}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Delete page"
-                          className="p-1.5 rounded-md text-secondary hover:text-danger shrink-0"
-                          onClick={() => setDeletePageTarget({ id: page.id, title: page.title })}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                        </>
-                        )}
-                        {reorderMode && (
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button type="button" onClick={pageMoveUp} disabled={!pageMoveUp} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move up"><ChevronUp size={13} /></button>
-                            <button type="button" onClick={pageMoveDown} disabled={!pageMoveDown} className="p-1.5 rounded-md text-secondary hover:text-primary disabled:opacity-30" title="Move down"><ChevronDown size={13} /></button>
-                          </div>
-                        )}
+                        <div className="row-actions flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            title="Move to section"
+                            className="p-1.5 rounded-md text-secondary hover:text-primary shrink-0"
+                            onClick={() => {
+                              setMoveSectionId("");
+                              setDialog({ kind: "move-page", pageId: page.id, pageTitle: page.title, fromSectionId: sec.id });
+                            }}
+                          >
+                            <ArrowRightLeft size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Rename page"
+                            className="p-1.5 rounded-md text-secondary hover:text-primary shrink-0"
+                            onClick={() => setEditTarget({ kind: "page", id: page.id, title: page.title })}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete page"
+                            className="p-1.5 rounded-md text-secondary hover:text-danger shrink-0"
+                            onClick={() => setDeletePageTarget({ id: page.id, title: page.title })}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                       )}
                     />
-                    {!reorderMode && (
                     <button
                       type="button"
                       className="w-full flex items-center gap-2 rounded-md px-2 py-2 text-sm text-secondary
@@ -532,7 +499,6 @@ export default function NotebookDetail() {
                     >
                       <Plus size={13} /> New page
                     </button>
-                    )}
                   </div>
                 )}
               </div>

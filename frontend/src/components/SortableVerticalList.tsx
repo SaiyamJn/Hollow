@@ -234,10 +234,13 @@ export function SortableVerticalList<T extends { id: string }>({
 
         const grip = enabled ? (
           <div
-            className="cursor-grab active:cursor-grabbing rounded-md p-1 text-secondary hover:text-primary hover:bg-surface-2/80 shrink-0 touch-none"
+            className="cursor-grab active:cursor-grabbing rounded-md p-1 text-secondary/40 hover:text-primary hover:bg-surface-2/80 shrink-0 touch-none transition-colors"
             title="Drag to rearrange"
             draggable
-            onDragStart={(e) => onDragStart(item.id, index, e)}
+            onDragStart={(e) => {
+              e.stopPropagation();
+              onDragStart(item.id, index, e);
+            }}
             onDragEnd={onDragEnd}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => onTouchStart(item.id, e)}
@@ -253,16 +256,12 @@ export function SortableVerticalList<T extends { id: string }>({
               if (el) itemRefs.current.set(item.id, el);
               else itemRefs.current.delete(item.id);
             }}
-            draggable={enabled}
-            onDragStart={(e) => onDragStart(item.id, index, e)}
-            onDragEnd={onDragEnd}
             onDragOver={(e) => onDragOver(item.id, index, e)}
             onDrop={(e) => e.preventDefault()}
-            onTouchStart={(e) => onTouchStart(item.id, e)}
             className={clsx(
-              "transition-transform duration-200 ease-out select-none",
+              "transition-transform duration-150 ease-out",
               dragging &&
-                "opacity-90 scale-[1.02] shadow-pop border border-accent/40 bg-surface-1/90 rounded-xl z-20"
+                "opacity-60 scale-[1.01] shadow-pop border border-accent/40 bg-surface-1/90 rounded-xl z-20"
             )}
           >
             {renderItem(item, { dragging, grip, moveUp, moveDown, isFirst, isLast })}

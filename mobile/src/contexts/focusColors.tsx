@@ -97,7 +97,7 @@ export function FocusColorsProvider({ children }: { children: ReactNode }) {
   const washFor = useCallback(
     (focus: TaskFocus) => {
       const c = colorFor(focus);
-      return c ? withAlpha(c, 0.18) : "transparent";
+      return c ? withAlpha(c, 0.28) : "transparent";
     },
     [colorFor]
   );
@@ -105,7 +105,7 @@ export function FocusColorsProvider({ children }: { children: ReactNode }) {
   const borderFor = useCallback(
     (focus: TaskFocus, fallback = colors.border) => {
       const c = colorFor(focus);
-      return c ? withAlpha(c, 0.32) : fallback;
+      return c ? withAlpha(c, 0.45) : fallback;
     },
     [colorFor, colors.border]
   );

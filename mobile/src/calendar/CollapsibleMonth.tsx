@@ -269,12 +269,12 @@ const styles = StyleSheet.create({
   },
   bars: {
     marginTop: 2,
-    width: "70%",
-    gap: 2,
+    width: "75%",
+    gap: 2.5,
     alignItems: "stretch",
   },
   bar: {
-    height: 3,
+    height: 4,
     borderRadius: 2,
   },
   handle: {

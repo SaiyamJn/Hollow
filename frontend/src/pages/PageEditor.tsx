@@ -5,7 +5,7 @@ import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { PartialBlock } from "@blocknote/core";
 import { withCollaboration } from "@blocknote/core/yjs";
-import { Download, FileDown, Lock, LockOpen, Maximize2, Minimize2, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
+import { ArrowLeft, Download, FileDown, Lock, LockOpen, Maximize2, Minimize2, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -73,6 +73,7 @@ export default function PageEditor() {
   const setActiveNotebook = useUiStore((s) => s.setActiveNotebook);
   const password = useUnlockStore((s) => s.sectionPasswords[sectionId]);
   const setSectionPassword = useUnlockStore((s) => s.setSectionPassword);
+  const unlockNotebook = useUnlockStore((s) => s.unlockNotebook);
   const [unlockOpen, setUnlockOpen] = useState(false);
 
   useEffect(() => setActiveNotebook(notebookId), [notebookId, setActiveNotebook]);
@@ -117,6 +118,7 @@ export default function PageEditor() {
             try {
               await unlockSection(sectionId, pw);
               setSectionPassword(sectionId, pw);
+              unlockNotebook(notebookId, [sectionId], pw);
               return null;
             } catch (err: any) {
               return err.response?.data?.error ?? "Incorrect password";
@@ -557,7 +559,7 @@ function Editor({
     if (!exportOpen) return;
     const close = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest("[data-export-menu]")) return;
+      if (target?.closest("[data-actions-menu]")) return;
       setExportOpen(false);
     };
     window.addEventListener("mousedown", close);
@@ -589,16 +591,28 @@ function Editor({
           Editing offline from saved content — realtime sync will resume when connected.
         </p>
       )}
-      <div className="page-sticky-title sticky top-0 z-10 flex items-baseline justify-between gap-4 pt-3 pb-2.5 mb-1 border-b border-border/50">
-        <input
-          className="flex-1 min-w-0 bg-transparent text-lg sm:text-xl font-medium focus:outline-none"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={commitTitle}
-          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-          aria-label="Page title"
-        />
-        <span className="flex items-center gap-2 shrink-0">
+      <div className="page-sticky-title sticky top-0 z-10 flex items-center justify-between gap-3 pt-3 pb-2.5 mb-1 border-b border-border/50">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {!focusMode && (
+            <Link
+              to={`/notebooks/${notebookId}`}
+              className="p-1 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors shrink-0"
+              title="Back to notebook"
+              aria-label="Back to notebook"
+            >
+              <ArrowLeft size={17} />
+            </Link>
+          )}
+          <input
+            className="flex-1 min-w-0 bg-transparent text-lg sm:text-xl font-medium focus:outline-none"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            aria-label="Page title"
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <span
             key={saveState}
             className={clsx(
@@ -615,80 +629,92 @@ function Editor({
             />
             {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save" : "Saved"}
           </span>
-          {!focusMode && !password && (
-            <button
-              title="Lock this section (encrypts all pages in it)"
-              className="text-secondary hover:text-primary transition-colors"
-              onClick={() => setLockOpen(true)}
-            >
-              <LockOpen size={14} />
-            </button>
-          )}
-          {!focusMode && password && (
-            <button
-              title="Remove password from this section"
-              className="text-secondary hover:text-primary transition-colors"
-              onClick={() => setRemoveLockOpen(true)}
-            >
-              <ShieldOff size={14} />
-            </button>
-          )}
-          {!focusMode && (
-            <button
-              title="Delete page"
-              className="text-secondary hover:text-danger transition-colors"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-          <span className="relative" data-export-menu>
-            <button
-              title="Export page"
-              className="text-secondary hover:text-primary transition-colors"
-              onClick={() => setExportOpen((v) => !v)}
-            >
-              <Download size={14} />
-            </button>
-            {exportOpen && (
-              <span
-                className="absolute right-0 top-full mt-1 z-30 flex flex-col rounded-xl border border-border glass-strong shadow-pop py-1 min-w-[160px] animate-fade-in"
-              >
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
-                  onClick={() => {
-                    exportMarkdown();
-                    setExportOpen(false);
-                  }}
-                >
-                  <FileDown size={13} /> Markdown (.md)
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
-                  onClick={() => {
-                    exportPdf();
-                    setExportOpen(false);
-                  }}
-                >
-                  <FileDown size={13} /> PDF (print)
-                </button>
-              </span>
-            )}
-          </span>
+
           <button
             title={
               focusMode
                 ? `Exit focus mode (${formatCombo(escapeBind)})`
                 : `Focus mode (${formatCombo(focusBind)})`
             }
-            className="text-secondary hover:text-primary transition-colors"
+            className="p-1.5 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
             onClick={() => setFocusMode(!focusMode)}
           >
-            {focusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            {focusMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
           </button>
-        </span>
+
+          {!focusMode && (
+            <div className="relative" data-actions-menu>
+              <button
+                title="Page options"
+                className="p-1.5 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+                onClick={() => setExportOpen((v) => !v)}
+                aria-label="More options"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+              {exportOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-30 flex flex-col rounded-xl border border-border glass-strong shadow-pop py-1.5 min-w-[190px] animate-fade-in"
+                >
+                  <button
+                    type="button"
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors text-left"
+                    onClick={() => {
+                      exportMarkdown();
+                      setExportOpen(false);
+                    }}
+                  >
+                    <FileDown size={14} className="text-accent shrink-0" /> Export as Markdown (.md)
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors text-left"
+                    onClick={() => {
+                      exportPdf();
+                      setExportOpen(false);
+                    }}
+                  >
+                    <Download size={14} className="text-accent shrink-0" /> Export as PDF (print)
+                  </button>
+                  <div className="h-px bg-border/60 my-1" />
+                  {!password ? (
+                    <button
+                      type="button"
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors text-left"
+                      onClick={() => {
+                        setLockOpen(true);
+                        setExportOpen(false);
+                      }}
+                    >
+                      <LockOpen size={14} className="shrink-0" /> Lock section
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-xs text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors text-left"
+                      onClick={() => {
+                        setRemoveLockOpen(true);
+                        setExportOpen(false);
+                      }}
+                    >
+                      <ShieldOff size={14} className="shrink-0" /> Remove section password
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs text-danger hover:bg-danger/10 transition-colors text-left"
+                    onClick={() => {
+                      setConfirmDelete(true);
+                      setExportOpen(false);
+                    }}
+                  >
+                    <Trash2 size={14} className="shrink-0" /> Delete page
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {!focusMode && <PageTags page={page} password={password} />}
