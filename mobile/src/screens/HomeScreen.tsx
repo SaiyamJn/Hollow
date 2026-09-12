@@ -183,15 +183,18 @@ export default function HomeScreen({ navigation }: any) {
       return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
     });
 
+  const TARGET_TASKS = 3;
+  const remainingSlots = Math.max(0, TARGET_TASKS - scheduled.length);
+
   const priorityNoDate = noDateSorted
-    .slice(0, Math.max(2, 6 - scheduled.length))
+    .slice(0, remainingSlots)
     .map((t) => ({ task: t, overdue: false, isNoDate: true }));
 
   const list = [
     ...scheduled,
     ...priorityNoDate,
     ...completingRows.map((t) => ({ task: t, overdue: false as boolean, isNoDate: false })),
-  ].slice(0, 8);
+  ];
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>

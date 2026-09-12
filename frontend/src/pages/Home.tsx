@@ -334,15 +334,18 @@ function TodayTasks() {
       return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
     });
 
+  const TARGET_TASKS = 5;
+  const remainingSlots = Math.max(0, TARGET_TASKS - scheduled.length);
+
   const priorityNoDate = noDateSorted
-    .slice(0, Math.max(2, 6 - scheduled.length))
+    .slice(0, remainingSlots)
     .map((t) => ({ task: t, isOverdue: false, isNoDate: true }));
 
   const completingRows = open
     .filter((t) => completing[t.id])
     .map((t) => ({ task: t, isOverdue: false, isNoDate: false }));
 
-  const list = [...scheduled, ...priorityNoDate, ...completingRows].slice(0, 8);
+  const list = [...scheduled, ...priorityNoDate, ...completingRows];
 
   function completeTask(id: string) {
     if (completing[id]) return;
