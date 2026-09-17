@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { FontProvider } from "./theme/FontProvider";
+import { FocusColorsProvider } from "./theme/FocusColorsProvider";
 import "./styles/globals.css";
 
 // retry:false matters here — a 423 (locked section) or 401 must surface
@@ -25,9 +26,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <FontProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <FocusColorsProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </FocusColorsProvider>
         </FontProvider>
       </ThemeProvider>
     </QueryClientProvider>

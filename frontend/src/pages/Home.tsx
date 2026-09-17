@@ -234,13 +234,18 @@ function QuickCapture() {
 function RecentPages({ recent }: { recent?: RecentPage[] }) {
   const navigate = useNavigate();
   const sectionPasswords = useUnlockStore((s) => s.sectionPasswords);
+  const notebookPasswords = useUnlockStore((s) => s.notebookPasswords);
   const list = (recent ?? []).slice(0, 5);
 
-  const openRecentPage = (p: RecentPage, e: React.MouseEvent) => {
+  const openRecentPage = (p: RecentPage, e: React.MouseEvent, isSealed: boolean) => {
     if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
       e.preventDefault();
-      window.history.pushState(null, "", `/notebooks/${p.section.notebookId}`);
-      navigate(pageRoute(p));
+      if (isSealed) {
+        navigate(`/notebooks/${p.section.notebookId}`);
+      } else {
+        window.history.pushState(null, "", `/notebooks/${p.section.notebookId}`);
+        navigate(pageRoute(p));
+      }
     }
   };
 
@@ -249,30 +254,51 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
       <h2 className="section-label mb-3">Continue writing</h2>
       {list.length === 0 && <p className="text-sm text-secondary">Pages you edit will show up here.</p>}
       <ul className="space-y-0.5">
-        {list.map((p, i) => (
-          <li key={p.id} className="animate-rise-in" style={{ animationDelay: `${i * 45}ms` }}>
-            <Link
-              to={pageRoute(p)}
-              onClick={(e) => openRecentPage(p, e)}
-              className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
-                         text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
-            >
-              <span className="icon-well h-7 w-7 rounded-lg shrink-0 mt-0.5">
-                <FileText size={12} />
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="block truncate text-primary">{p.title}</span>
-                <span className="block truncate text-xs text-secondary">
-                  {p.section.notebook.title} / {p.section.title}
+        {list.map((p, i) => {
+          const isSealed =
+            (p.section.isLocked && !sectionPasswords[p.section.id]) ||
+            Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
+
+          return (
+            <li key={p.id} className="animate-rise-in" style={{ animationDelay: `${i * 45}ms` }}>
+              <Link
+                to={isSealed ? `/notebooks/${p.section.notebookId}` : pageRoute(p)}
+                onClick={(e) => openRecentPage(p, e, isSealed)}
+                className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
+                           text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
+              >
+                <span className="icon-well h-7 w-7 rounded-lg shrink-0 mt-0.5">
+                  {isSealed ? <Lock size={12} className="text-accent" /> : <FileText size={12} />}
                 </span>
-              </span>
-              {p.section.isLocked && !sectionPasswords[p.section.id] && (
-                <Lock size={11} className="shrink-0 mt-1 text-secondary" />
-              )}
-              <span className="status-chip status-chip-muted shrink-0 mt-0.5">{relativeTime(p.updatedAt)}</span>
-            </Link>
-          </li>
-        ))}
+                <span className="flex-1 min-w-0">
+                  {isSealed ? (
+                    <>
+                      <span className="block truncate text-primary font-medium">
+                        {p.section.notebook.title}
+                      </span>
+                      <span className="block truncate text-xs text-secondary/70">
+                        Encrypted notebook
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="block truncate text-primary">{p.title}</span>
+                      <span className="block truncate text-xs text-secondary">
+                        {p.section.notebook.title} / {p.section.title}
+                      </span>
+                    </>
+                  )}
+                </span>
+                {isSealed && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-accent/90 shrink-0 mt-1">
+                    <Lock size={11} /> Sealed
+                  </span>
+                )}
+                <span className="status-chip status-chip-muted shrink-0 mt-0.5">{relativeTime(p.updatedAt)}</span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

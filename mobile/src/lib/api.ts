@@ -82,7 +82,45 @@ function resolveBaseUrl(): string {
   return "http://localhost:4000";
 }
 
-const API_URL = resolveBaseUrl();
+export const API_URL = resolveBaseUrl();
+
+/**
+ * Resolves full media/upload URLs for mobile devices.
+ * Converts relative upload paths (e.g. /pages/uploads/...) and rewrites localhost to active LAN host.
+ */
+export function resolveMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith("/")) {
+    const base = API_URL.replace(/\/$/, "");
+    if (trimmed.startsWith("/api/")) {
+      const rootBase = base.endsWith("/api") ? base.slice(0, -4) : base;
+      return `${rootBase}${trimmed}`;
+    }
+    const path = trimmed.startsWith("/pages/") ? `/api${trimmed}` : trimmed;
+    const rootBase = base.endsWith("/api") ? base.slice(0, -4) : base;
+    return `${rootBase}${path}`;
+  }
+
+  if (Platform.OS !== "web") {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        const baseParsed = new URL(API_URL);
+        parsed.hostname = baseParsed.hostname;
+        parsed.port = baseParsed.port;
+        parsed.protocol = baseParsed.protocol;
+        return parsed.toString();
+      }
+    } catch {
+      // not a standard URL, return unchanged
+    }
+  }
+
+  return trimmed;
+}
 
 // Release APKs on cellular / flaky Wi‑Fi need more headroom than Expo Go on LAN.
 export const api = axios.create({

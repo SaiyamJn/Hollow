@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, KeyRound, Moon, Pencil, Sun } from "lucide-react";
+import { Bell, BellOff, KeyRound, Moon, Pencil, RotateCcw, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "../theme/ThemeProvider";
 import { useFont } from "../theme/FontProvider";
+import {
+  useFocusColors,
+  FOCUS_COLOR_PRESETS,
+  DEFAULT_FOCUS_COLORS,
+  normalizeHex,
+  type FocusCategory,
+} from "../theme/FocusColorsProvider";
+import { FOCUS_MATRIX, FOCUS_META } from "../lib/taskFocus";
+import { Dialog, DialogContent } from "../components/ui/dialog";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { disconnectSocket } from "../lib/socket";
@@ -274,6 +283,8 @@ export default function Settings() {
         </select>
       </section>
 
+      <FocusColorsSettingsSection />
+
       <section className="rounded-2xl border border-border glass-strong p-5 shadow-card text-center space-y-3">
         <div>
           <h2 className="section-label justify-center mb-1">Task reminders</h2>
@@ -460,3 +471,150 @@ export default function Settings() {
     </div>
   );
 }
+
+function FocusColorsSettingsSection() {
+  const { theme } = useTheme();
+  const { overrides, setCategoryColor, resetAll, isCustom } = useFocusColors();
+  const [editing, setEditing] = useState<FocusCategory | null>(null);
+  const [hexDraft, setHexDraft] = useState("");
+
+  const categories = (FOCUS_MATRIX as FocusCategory[]).filter((c) => c !== ("none" as any));
+
+  function openPicker(cat: FocusCategory) {
+    const current = overrides[cat] ?? DEFAULT_FOCUS_COLORS[cat][theme];
+    setHexDraft(current);
+    setEditing(cat);
+  }
+
+  const activeColor = editing
+    ? (normalizeHex(hexDraft) ?? overrides[editing] ?? DEFAULT_FOCUS_COLORS[editing][theme])
+    : "#888";
+
+  const hasAnyCustom = categories.some((c) => isCustom(c));
+
+  return (
+    <section className="rounded-2xl border border-border glass-strong p-5 shadow-card space-y-4">
+      <div className="text-center">
+        <h2 className="section-label justify-center mb-1">Focus colors</h2>
+        <p className="text-sm text-secondary mt-0.5">Customize priority hues for your task boards and calendar</p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {categories.map((cat) => {
+          const meta = FOCUS_META[cat];
+          const color = overrides[cat] ?? DEFAULT_FOCUS_COLORS[cat][theme];
+          const custom = isCustom(cat);
+
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => openPicker(cat)}
+              className="flex flex-col items-center gap-2 p-3 rounded-xl border border-border hover:border-accent/60 glass transition-all hover:scale-[1.02] text-center group"
+            >
+              <div
+                className="w-8 h-8 rounded-full border-2 border-white/20 shadow-sm transition-transform group-hover:scale-110 flex items-center justify-center"
+                style={{ backgroundColor: color }}
+              >
+                {custom && <span className="w-1.5 h-1.5 rounded-full bg-white shadow" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-primary">{meta.label}</p>
+                <p className="text-[10px] text-secondary truncate">{meta.hint}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {hasAnyCustom && (
+        <div className="flex justify-center pt-1">
+          <Button variant="ghost" className="text-xs text-secondary hover:text-danger" onClick={resetAll}>
+            <RotateCcw size={13} />
+            Reset all focus colors
+          </Button>
+        </div>
+      )}
+
+      {editing && (
+        <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+          <DialogContent title={`${FOCUS_META[editing].label} color (${FOCUS_META[editing].hint})`}>
+            <div className="space-y-4 pt-1">
+              {/* Preview swatch */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-surface-0/60">
+                <div
+                  className="w-10 h-10 rounded-xl border border-border shadow-sm shrink-0"
+                  style={{ backgroundColor: activeColor }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-primary">{FOCUS_META[editing].label}</p>
+                  <p className="text-[11px] text-secondary font-mono uppercase">{activeColor}</p>
+                </div>
+                {isCustom(editing) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryColor(editing, null);
+                      setEditing(null);
+                    }}
+                    className="text-xs text-secondary hover:text-danger transition-colors"
+                  >
+                    Reset default
+                  </button>
+                )}
+              </div>
+
+              {/* Swatch palette */}
+              <div>
+                <p className="text-xs text-secondary mb-2">Preset swatches</p>
+                <div className="flex flex-wrap gap-2">
+                  {FOCUS_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setHexDraft(preset)}
+                      className={`w-7 h-7 rounded-lg border transition-transform hover:scale-110 ${
+                        activeColor.toLowerCase() === preset.toLowerCase()
+                          ? "ring-2 ring-accent scale-110 border-white"
+                          : "border-border"
+                      }`}
+                      style={{ backgroundColor: preset }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Hex input */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-secondary">Hex color code</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={hexDraft}
+                    onChange={(e) => setHexDraft(e.target.value)}
+                    placeholder="#RRGGBB"
+                    maxLength={9}
+                    className="flex-1 rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary font-mono focus:outline-none focus:border-accent"
+                  />
+                  <Button
+                    variant="accent"
+                    onClick={() => {
+                      const norm = normalizeHex(hexDraft);
+                      if (norm) {
+                        setCategoryColor(editing, norm);
+                        setEditing(null);
+                      }
+                    }}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </section>
+  );
+}
+

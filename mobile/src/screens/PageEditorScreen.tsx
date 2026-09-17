@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -13,8 +14,8 @@ import {
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { deletePage, fetchNotebooks, fetchPage, lockSection, renamePage, removeSectionLock, savePageContent, unlockSection } from "../lib/api";
-import { contentToText, isRichContent } from "../lib/content";
+import { deletePage, fetchNotebooks, fetchPage, lockSection, renamePage, removeSectionLock, resolveMediaUrl, savePageContent, unlockSection } from "../lib/api";
+import { contentToText, extractPageSegments, isRichContent } from "../lib/content";
 import { rememberSection } from "../lib/navMemory";
 import { PAGE_TEMPLATES } from "../lib/templates";
 import { loadPagePosition, savePagePosition } from "../lib/pagePosition";
@@ -144,9 +145,8 @@ export default function PageEditorScreen({ route, navigation }: any) {
   useEffect(() => {
     if (!positionReady) return;
     if (!shouldAutoFocus) {
-      // Do not programmatically focus or set native selection on mount when viewing an existing page.
-      // This keeps the soft keyboard completely closed until the user taps to edit.
-      return;
+      const t = setTimeout(() => setSelection(undefined), 300);
+      return () => clearTimeout(t);
     }
     const t = setTimeout(() => {
       inputRef.current?.focus();
@@ -156,7 +156,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
       }
     }, 50);
     return () => clearTimeout(t);
-  }, [positionReady, pageId, shouldAutoFocus, selection]);
+  }, [positionReady, pageId, shouldAutoFocus]);
 
   // Restore scroll position once the ScrollView has laid out.
   useEffect(() => {
@@ -178,11 +178,29 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   const saveNow = useCallback(async () => {
     if (pendingText.current === null) return;
-    const content = pendingText.current;
+    const body = pendingText.current;
     pendingText.current = null;
     setSaveState("saving");
+
+    let payload = body;
     try {
-      await savePageContent(pageId, content, password);
+      if (page?.content && isRichContent(page.content)) {
+        const parsed = JSON.parse(page.content);
+        if (Array.isArray(parsed)) {
+          const mediaBlocks = parsed.filter((b) => b.type === "image" || b.type === "annotation");
+          const paragraphs = body.split("\n").map((line) => ({
+            type: "paragraph",
+            content: line ? [{ type: "text", text: line, styles: {} }] : [],
+          }));
+          payload = JSON.stringify([...paragraphs, ...mediaBlocks]);
+        }
+      }
+    } catch {
+      payload = body;
+    }
+
+    try {
+      await savePageContent(pageId, payload, password);
       setSaveState("saved");
       void queryClient.invalidateQueries({ queryKey: ["backlinks"] });
       void queryClient.invalidateQueries({ queryKey: ["outlinks"] });
@@ -190,9 +208,10 @@ export default function PageEditorScreen({ route, navigation }: any) {
     } catch (err: any) {
       setSaveState(err.queued ? "queued" : "error");
     }
-  }, [pageId, password, queryClient, notebookId]);
+  }, [pageId, password, queryClient, notebookId, page?.content]);
 
   function onChangeText(next: string) {
+    if (selection !== undefined) setSelection(undefined);
     setText(next);
     textRef.current = next;
     pendingText.current = next;
@@ -361,6 +380,11 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   const showTemplates = !templatesDismissed && !page?.content && text.trim() === "";
 
+  const mediaSegments = useMemo(() => {
+    const all = extractPageSegments(page?.content ?? "");
+    return all.filter((s) => s.type !== "text");
+  }, [page?.content]);
+
   return (
     <KeyboardSafe style={{ flex: 1, backgroundColor: colors.surface0 }}>
       {wasRich && !focus && (
@@ -423,6 +447,42 @@ export default function PageEditorScreen({ route, navigation }: any) {
             }, 250);
           }}
         >
+          {mediaSegments.map((seg) => {
+            if (seg.type === "image") {
+              const uri = resolveMediaUrl(seg.url);
+              if (!uri) return null;
+              return (
+                <View key={seg.id} style={[styles.imageBlockWrapper, { borderColor: colors.border }]}>
+                  <Image source={{ uri }} style={styles.imageBlock} resizeMode="cover" />
+                  {seg.caption ? (
+                    <Text style={[styles.imageCaption, { color: colors.textSecondary }]}>
+                      {seg.caption}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            }
+            if (seg.type === "annotation") {
+              return (
+                <View
+                  key={seg.id}
+                  style={[
+                    styles.annotationBlockWrapper,
+                    { borderColor: colors.border, backgroundColor: colors.surface1 },
+                  ]}
+                >
+                  <View style={styles.annotationHeader}>
+                    <Feather name="edit-3" size={13} color={colors.accent} />
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500", marginLeft: 6 }}>
+                      Handwritten Annotation {seg.caption ? `· ${seg.caption}` : ""}
+                    </Text>
+                  </View>
+                </View>
+              );
+            }
+            return null;
+          })}
+
           <TextInput
             ref={inputRef}
             style={[
@@ -434,6 +494,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
             scrollEnabled={false}
             textAlignVertical="top"
             value={text}
+            onFocus={() => {
+              if (selection !== undefined) setSelection(undefined);
+            }}
             onChangeText={onChangeText}
             {...(selection ? { selection } : {})}
             onSelectionChange={(e) => {
@@ -726,5 +789,31 @@ const styles = StyleSheet.create({
   actionModalDivider: {
     height: StyleSheet.hairlineWidth,
     marginVertical: 4,
+  },
+  imageBlockWrapper: {
+    marginVertical: 10,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  imageBlock: {
+    width: "100%",
+    height: 220,
+  },
+  imageCaption: {
+    fontSize: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    textAlign: "center",
+  },
+  annotationBlockWrapper: {
+    marginVertical: 10,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+  },
+  annotationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 });

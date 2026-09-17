@@ -4,6 +4,7 @@ import { useAdminStore } from "../stores/admin";
 import { useUnlockStore } from "../stores/unlock";
 import { deviceAuthMeta } from "./deviceInfo";
 import { disconnectSocket } from "./socket";
+import { enqueueRequest, initWebOfflineSync, type QueuedRequest } from "./offlineQueue";
 import type {
   AdminStats,
   AuthSession,
@@ -72,8 +73,43 @@ api.interceptors.response.use(undefined, (error) => {
     useUnlockStore.getState().clearAll();
     disconnectSocket();
   }
+
+  const config = error.config;
+  const isNetworkError = !error.response;
+  const method = config?.method?.toLowerCase();
+  const isWrite = method && method !== "get";
+  const url = String(config?.url ?? "");
+  const isAuth = url.includes("/auth/");
+
+  if (isNetworkError && isWrite && !isAuth && config && !(config as any).__queued) {
+    try {
+      enqueueRequest({
+        method: config.method!,
+        url: config.url!,
+        data: config.data ? (typeof config.data === "string" ? JSON.parse(config.data) : config.data) : undefined,
+        headers: config.headers?.["x-section-password"]
+          ? { "x-section-password": String(config.headers["x-section-password"]) }
+          : undefined,
+      });
+      (error as any).queued = true;
+    } catch {
+      // ignore JSON parse failure
+    }
+  }
+
   return Promise.reject(error);
 });
+
+export function initOfflineSync(onSuccess?: () => void) {
+  return initWebOfflineSync((req: QueuedRequest) => {
+    return api.request({
+      method: req.method,
+      url: req.url,
+      data: req.data,
+      headers: req.headers,
+    });
+  }, onSuccess);
+}
 
 function sectionHeaders(password?: string) {
   return password ? { "x-section-password": password } : {};

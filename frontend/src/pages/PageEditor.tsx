@@ -1,11 +1,11 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
+import { useCreateBlockNote, SuggestionMenuController, getDefaultReactSlashMenuItems } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { PartialBlock } from "@blocknote/core";
 import { withCollaboration } from "@blocknote/core/yjs";
-import { ArrowLeft, Download, FileDown, Lock, LockOpen, Maximize2, Minimize2, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
+import { ArrowLeft, Download, Edit3, FileDown, Lock, LockOpen, Maximize2, Minimize2, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -31,7 +31,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { formatCombo, useKeybindsStore } from "../lib/keybinds";
-import { hollowEditorSchema, newBlockOnShiftEnter } from "../lib/editorSchema";
+import { hollowEditorSchema } from "../lib/editorSchema";
 import { usePageCollab, CollabSession } from "../hooks/usePageCollab";
 import { PasswordDialog } from "../components/PasswordDialog";
 import { Button } from "../components/ui/button";
@@ -236,10 +236,11 @@ function Editor({
   const [deleting, setDeleting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
+  const seededRef = useRef(false);
+
   const editor = useCreateBlockNote(
     withCollaboration({
       schema: hollowEditorSchema,
-      extensions: [newBlockOnShiftEnter],
       // Focus after we restore the last caret/scroll — autofocus would jump to top.
       autofocus: false,
       uploadFile: async (file: File) => {
@@ -256,14 +257,15 @@ function Editor({
   );
 
   // First client on a page with no CRDT state yet: seed the shared doc from
-  // the content column saved by the REST autosave path.
+  // the content column saved by the REST autosave path. Only runs once on mount.
   useEffect(() => {
-    if (session.seed && page.content) {
+    if (session.seed && page.content && !seededRef.current) {
+      seededRef.current = true;
       const blocks = parseContent(page.content);
       if (blocks) editor.replaceBlocks(editor.document, blocks);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, page.content, editor]);
 
   function persistPosition() {
     const scrollParent = findEditorScrollParent(editorShellRef.current);
@@ -719,6 +721,30 @@ function Editor({
 
       {!focusMode && <PageTags page={page} password={password} />}
 
+      {!focusMode && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                const { block } = editor.getTextCursorPosition();
+                editor.insertBlocks([{ type: "annotation" } as any], block, "after");
+              } catch {
+                editor.insertBlocks(
+                  [{ type: "annotation" } as any],
+                  editor.document[editor.document.length - 1],
+                  "after"
+                );
+              }
+            }}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-secondary hover:text-accent hover:border-accent transition-colors flex items-center gap-1.5"
+          >
+            <Edit3 size={12} />
+            Add annotation
+          </button>
+        </div>
+      )}
+
       {showTemplates && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 animate-fade-in">
           <span className="text-xs text-secondary mr-1">Start with</span>
@@ -743,6 +769,41 @@ function Editor({
 
       <div className="mt-3">
         <BlockNoteView editor={editor} theme={theme}>
+          {/* Slash menu: headings, lists, media, and handwriting / stylus annotation */}
+          <SuggestionMenuController
+            triggerCharacter="/"
+            getItems={async (query) => {
+              const defaultItems = getDefaultReactSlashMenuItems(editor);
+              const annotationItem = {
+                title: "Annotation",
+                onItemClick: () => {
+                  try {
+                    const { block } = editor.getTextCursorPosition();
+                    editor.insertBlocks([{ type: "annotation" } as any], block, "after");
+                  } catch {
+                    editor.insertBlocks(
+                      [{ type: "annotation" } as any],
+                      editor.document[editor.document.length - 1],
+                      "after"
+                    );
+                  }
+                },
+                aliases: ["draw", "sketch", "pen", "stylus", "handwriting", "canvas"],
+                group: "Media",
+                icon: <Edit3 size={16} />,
+                subtext: "Handwrite or sketch with stylus, pen, or touch",
+              };
+              const all = [annotationItem, ...defaultItems];
+              if (!query) return all;
+              const q = query.toLowerCase();
+              return all.filter(
+                (item) =>
+                  item.title.toLowerCase().includes(q) ||
+                  item.aliases?.some((a) => a.toLowerCase().includes(q))
+              );
+            }}
+          />
+
           {/* Wiki-link autocomplete: type `[[` to search pages in this notebook.
               Picking one inserts a clickable `[[Title]]` link. */}
           <SuggestionMenuController
@@ -771,8 +832,8 @@ function Editor({
         </BlockNoteView>
         {!focusMode && (
           <p className="mt-3 text-xs text-secondary text-center">
-            Enter for a new line · Shift+Enter for a new block ·{" "}
-            <span className="text-primary">/</span> for headings & lists ·{" "}
+            Enter for a new block · Shift+Enter for a new line ·{" "}
+            <span className="text-primary">/</span> for blocks & annotations ·{" "}
             <span className="text-primary">[[</span> to link pages
           </p>
         )}

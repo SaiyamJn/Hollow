@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Minimize2, Moon, Search, Settings as SettingsIcon, Sun, LogOut } from "lucide-react";
+import { Minimize2, Moon, Search, Settings as SettingsIcon, Sun, LogOut, WifiOff, RefreshCw } from "lucide-react";
 import { useTheme } from "../theme/ThemeProvider";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
 import { disconnectSocket } from "../lib/socket";
-import { fetchNotebooks, fetchTasks, logoutAuthSession, openDailyNote } from "../lib/api";
+import { fetchNotebooks, fetchTasks, logoutAuthSession, openDailyNote, initOfflineSync } from "../lib/api";
+import { subscribeOfflineStatus } from "../lib/offlineQueue";
 import { notifyDueTasks } from "../lib/notify";
 import { TaskReminderDialog } from "../components/TaskReminderDialog";
 import { formatCombo, matchesCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
@@ -56,6 +57,34 @@ export default function AppShell() {
   const setFocusMode = useUiStore((s) => s.setFocusMode);
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   const binds = useKeybindsStore((s) => s.binds);
+
+  const [offlineInfo, setOfflineInfo] = useState<{ isOnline: boolean; pendingCount: number; isSyncing: boolean }>({
+    isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+    pendingCount: 0,
+    isSyncing: false,
+  });
+
+  useEffect(() => {
+    const unsubSync = initOfflineSync();
+    const unsubStatus = subscribeOfflineStatus((count, syncing) => {
+      setOfflineInfo((prev) => ({
+        ...prev,
+        isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+        pendingCount: count,
+        isSyncing: syncing,
+      }));
+    });
+    const handleOnline = () => setOfflineInfo((prev) => ({ ...prev, isOnline: true }));
+    const handleOffline = () => setOfflineInfo((prev) => ({ ...prev, isOnline: false }));
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      unsubSync();
+      unsubStatus();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Don't compete with Home/notebooks on first paint — start task polling after idle.
   const [taskPollReady, setTaskPollReady] = useState(false);
@@ -227,20 +256,58 @@ export default function AppShell() {
                 </kbd>
               </button>
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" onClick={toggle} title={`Toggle theme (${formatCombo(binds.theme)})`}>
-                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/settings")}
-                title={`Settings (${formatCombo(binds.settings)})`}
-              >
-                <SettingsIcon size={16} />
-              </Button>
-              <Button variant="ghost" onClick={onLogout} title="Log out">
-                <LogOut size={16} />
-              </Button>
+            <div className="flex items-center gap-2">
+              {(!offlineInfo.isOnline || offlineInfo.pendingCount > 0 || offlineInfo.isSyncing) && (
+                <div
+                  className={clsx(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+                    !offlineInfo.isOnline
+                      ? "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                      : offlineInfo.isSyncing
+                      ? "bg-sky-500/15 border-sky-500/30 text-sky-600 dark:text-sky-400"
+                      : "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                  )}
+                  title={
+                    !offlineInfo.isOnline
+                      ? `Offline mode: ${offlineInfo.pendingCount} action(s) queued locally`
+                      : offlineInfo.isSyncing
+                      ? "Syncing queued changes to server..."
+                      : `${offlineInfo.pendingCount} action(s) queued`
+                  }
+                >
+                  {!offlineInfo.isOnline ? (
+                    <WifiOff size={13} className="animate-pulse" />
+                  ) : offlineInfo.isSyncing ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={13} />
+                  )}
+                  <span>
+                    {!offlineInfo.isOnline
+                      ? offlineInfo.pendingCount > 0
+                        ? `Offline (${offlineInfo.pendingCount})`
+                        : "Offline"
+                      : offlineInfo.isSyncing
+                      ? "Syncing…"
+                      : `${offlineInfo.pendingCount} queued`}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" onClick={toggle} title={`Toggle theme (${formatCombo(binds.theme)})`}>
+                  {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate("/settings")}
+                  title={`Settings (${formatCombo(binds.settings)})`}
+                >
+                  <SettingsIcon size={16} />
+                </Button>
+                <Button variant="ghost" onClick={onLogout} title="Log out">
+                  <LogOut size={16} />
+                </Button>
+              </div>
             </div>
           </header>
         )}

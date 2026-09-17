@@ -312,19 +312,36 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       )}
       {(recent ?? []).map((p, i) => {
-        const sealed = p.section.isLocked && !unlock.sectionPasswords[p.section.id];
+        const sealed =
+          (p.section.isLocked && !unlock.sectionPasswords[p.section.id]) ||
+          Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
+
+        const displayName = sealed ? p.section.notebook.title : p.title;
+        const displaySub = sealed ? "Encrypted notebook" : `${p.section.notebook.title} / ${p.section.title}`;
+
+        const handlePress = () => {
+          if (sealed) {
+            navigation.navigate("Notebook", {
+              notebookId: p.section.notebookId,
+              title: p.section.notebook.title,
+            });
+          } else {
+            openRecent(p);
+          }
+        };
+
         if (i === 0) {
           return (
-            <Pressable key={p.id} onPress={() => openRecent(p)} style={{ marginBottom: 4 }}>
+            <Pressable key={p.id} onPress={handlePress} style={{ marginBottom: 4 }}>
               <GlassCard contentStyle={styles.recentFeatured}>
                 <View style={styles.recentRow}>
-                  <Feather name={sealed ? "lock" : "file-text"} size={14} color={colors.textSecondary} />
+                  <Feather name={sealed ? "lock" : "file-text"} size={14} color={sealed ? colors.accent : colors.textSecondary} />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }} numberOfLines={1}>
-                      {p.title}
+                      {displayName}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-                      {p.section.notebook.title} / {p.section.title}
+                      {displaySub}
                     </Text>
                   </View>
                   <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
@@ -336,14 +353,14 @@ export default function HomeScreen({ navigation }: any) {
           );
         }
         return (
-          <Pressable key={p.id} style={styles.recentRow} onPress={() => openRecent(p)}>
-            <Feather name={sealed ? "lock" : "file-text"} size={14} color={colors.textSecondary} />
+          <Pressable key={p.id} style={styles.recentRow} onPress={handlePress}>
+            <Feather name={sealed ? "lock" : "file-text"} size={14} color={sealed ? colors.accent : colors.textSecondary} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>
-                {p.title}
+                {displayName}
               </Text>
               <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 1 }} numberOfLines={1}>
-                {p.section.notebook.title} / {p.section.title}
+                {displaySub}
               </Text>
             </View>
             <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
