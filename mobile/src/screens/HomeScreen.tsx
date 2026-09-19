@@ -76,7 +76,7 @@ export default function HomeScreen({ navigation }: any) {
     data: recent,
     isLoading,
     refetch,
-  } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(3) });
+  } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(8) });
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
 
   const daily = useMutation({
@@ -303,72 +303,128 @@ export default function HomeScreen({ navigation }: any) {
 
       {/* recent pages */}
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CONTINUE WRITING</Text>
-      {(recent ?? []).length === 0 && (
-        <View style={styles.quietEmpty}>
-          <Feather name="edit-3" size={13} color={colors.textSecondary} />
-          <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
-            Pages you edit will show up here
-          </Text>
-        </View>
-      )}
-      {(recent ?? []).map((p, i) => {
-        const sealed =
-          (p.section.isLocked && !unlock.sectionPasswords[p.section.id]) ||
-          Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
+      {(() => {
+        const sealedNotebookStats = new Map<string, { count: number; newestDate: string; sample: RecentPage }>();
+        const consolidatedRecent: (RecentPage & { sealed: boolean; sealedCount?: number })[] = [];
+        const seenSealedNotebooks = new Set<string>();
 
-        const displayName = sealed ? p.section.notebook.title : p.title;
-        const displaySub = sealed ? "Encrypted notebook" : `${p.section.notebook.title} / ${p.section.title}`;
+        for (const p of recent ?? []) {
+          const isSealed =
+            (p.section.isLocked && !unlock.sectionPasswords[p.section.id]) ||
+            Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
 
-        const handlePress = () => {
-          if (sealed) {
-            navigation.navigate("Notebook", {
-              notebookId: p.section.notebookId,
-              title: p.section.notebook.title,
-            });
-          } else {
-            openRecent(p);
+          if (isSealed) {
+            const nid = p.section.notebookId;
+            const existing = sealedNotebookStats.get(nid);
+            if (!existing) {
+              sealedNotebookStats.set(nid, { count: 1, newestDate: p.updatedAt, sample: p });
+            } else {
+              existing.count += 1;
+              if (new Date(p.updatedAt).getTime() > new Date(existing.newestDate).getTime()) {
+                existing.newestDate = p.updatedAt;
+              }
+            }
           }
-        };
-
-        if (i === 0) {
-          return (
-            <Pressable key={p.id} onPress={handlePress} style={{ marginBottom: 4 }}>
-              <GlassCard contentStyle={styles.recentFeatured}>
-                <View style={styles.recentRow}>
-                  <Feather name={sealed ? "lock" : "file-text"} size={14} color={sealed ? colors.accent : colors.textSecondary} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }} numberOfLines={1}>
-                      {displayName}
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
-                      {displaySub}
-                    </Text>
-                  </View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
-                    {relativeTime(p.updatedAt)}
-                  </Text>
-                </View>
-              </GlassCard>
-            </Pressable>
-          );
         }
-        return (
-          <Pressable key={p.id} style={styles.recentRow} onPress={handlePress}>
-            <Feather name={sealed ? "lock" : "file-text"} size={14} color={sealed ? colors.accent : colors.textSecondary} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>
-                {displayName}
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 1 }} numberOfLines={1}>
-                {displaySub}
+
+        for (const p of recent ?? []) {
+          const isSealed =
+            (p.section.isLocked && !unlock.sectionPasswords[p.section.id]) ||
+            Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
+
+          if (isSealed) {
+            const nid = p.section.notebookId;
+            if (!seenSealedNotebooks.has(nid)) {
+              seenSealedNotebooks.add(nid);
+              const stats = sealedNotebookStats.get(nid);
+              consolidatedRecent.push({
+                ...p,
+                updatedAt: stats?.newestDate ?? p.updatedAt,
+                sealed: true,
+                sealedCount: stats?.count ?? 1,
+              });
+            }
+          } else {
+            consolidatedRecent.push({
+              ...p,
+              sealed: false,
+            });
+          }
+        }
+
+        const recentDisplay = consolidatedRecent.slice(0, 3);
+
+        if (recentDisplay.length === 0) {
+          return (
+            <View style={styles.quietEmpty}>
+              <Feather name="edit-3" size={13} color={colors.textSecondary} />
+              <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>
+                Pages you edit will show up here
               </Text>
             </View>
-            <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
-              {relativeTime(p.updatedAt)}
-            </Text>
-          </Pressable>
-        );
-      })}
+          );
+        }
+
+        return recentDisplay.map((p, i) => {
+          const sealed = p.sealed;
+          const displayName = sealed ? p.section.notebook.title : p.title;
+          const displaySub = sealed
+            ? p.sealedCount && p.sealedCount > 1
+              ? `Encrypted notebook · ${p.sealedCount} recent pages`
+              : "Encrypted notebook"
+            : `${p.section.notebook.title} / ${p.section.title}`;
+
+          const handlePress = () => {
+            if (sealed) {
+              navigation.navigate("Notebook", {
+                notebookId: p.section.notebookId,
+                title: p.section.notebook.title,
+              });
+            } else {
+              openRecent(p);
+            }
+          };
+
+          if (i === 0) {
+            return (
+              <Pressable key={p.id} onPress={handlePress} style={{ marginBottom: 4 }}>
+                <GlassCard contentStyle={styles.recentFeatured}>
+                  <View style={styles.recentRow}>
+                    <Feather name={sealed ? "lock" : "file-text"} size={14} color={sealed ? colors.accent : colors.textSecondary} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }} numberOfLines={1}>
+                        {displayName}
+                      </Text>
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                        {displaySub}
+                      </Text>
+                    </View>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
+                      {relativeTime(p.updatedAt)}
+                    </Text>
+                  </View>
+                </GlassCard>
+              </Pressable>
+            );
+          }
+          return (
+            <Pressable key={p.id} style={styles.recentRow} onPress={handlePress}>
+              <Feather name={sealed ? "lock" : "file-text"} size={14} color={sealed ? colors.accent : colors.textSecondary} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>
+                  {displayName}
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 1 }} numberOfLines={1}>
+                  {displaySub}
+                </Text>
+              </View>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>
+                {relativeTime(p.updatedAt)}
+              </Text>
+            </Pressable>
+          );
+        });
+      })()}
 
       {/* tasks separation */}
       {!hasScheduled && !hasNoDate && (

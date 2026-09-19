@@ -45,9 +45,14 @@ async function ensureApiToken() {
 }
 
 export async function completeTask(taskId: string) {
-  await ensureApiToken();
-  await updateTask(taskId, { done: true });
+  // Always dismiss locally first so user sees instant feedback in the notification shade
   await dismissTaskNotifications(taskId);
+  try {
+    await ensureApiToken();
+    await updateTask(taskId, { done: true });
+  } catch {
+    // If offline or network error, updateTask has queued it for sync
+  }
 }
 
 /** Parse the response and run the right side effect once (Complete / Snooze / prompt). */
@@ -55,46 +60,79 @@ export async function handleNotificationResponse(
   response: Notifications.NotificationResponse,
   onChanged?: () => void
 ) {
-  const key = `${response.notification.request.identifier}:${response.actionIdentifier}:${response.notification.date}`;
-  if (inflightResponses.has(key) || lastHandledResponse === key) return;
+  const presentedId = response.notification?.request?.identifier;
+  const action = response.actionIdentifier ?? "";
+  const isComplete =
+    action === ACTION_COMPLETE ||
+    action.toLowerCase().includes("complete") ||
+    action.endsWith(".complete");
+  const isSnooze =
+    action === ACTION_SNOOZE ||
+    action.toLowerCase().includes("snooze") ||
+    action.toLowerCase().includes("remind") ||
+    action.endsWith(".snooze");
+
+  // 1. Immediately clear the tapped notification from shade first so user sees instant feedback
+  if (presentedId) {
+    try {
+      await Notifications.dismissNotificationAsync(presentedId);
+    } catch {
+      // ignore
+    }
+  }
+
+  const key = `${presentedId}:${action}:${response.notification?.date ?? ""}`;
+  if (inflightResponses.has(key) || (lastHandledResponse && lastHandledResponse === key)) {
+    return;
+  }
   inflightResponses.add(key);
 
   try {
-    if (!lastHandledResponse) {
-      lastHandledResponse = (await AsyncStorage.getItem(HANDLED_RESPONSE_KEY)) ?? "";
-      if (lastHandledResponse === key) return;
+    const storedLast = (await AsyncStorage.getItem(HANDLED_RESPONSE_KEY)) ?? "";
+    if (storedLast === key) return;
+
+    const prompt = promptFromNotification(
+      response.notification?.request?.content as any,
+      presentedId
+    );
+
+    const effectiveTaskId = prompt?.taskId ?? (presentedId ? presentedId.replace(/^hollowtask_/, "") : null);
+
+    if (effectiveTaskId) {
+      await dismissTaskNotifications(effectiveTaskId, presentedId);
     }
-    lastHandledResponse = key;
-    await AsyncStorage.setItem(HANDLED_RESPONSE_KEY, key);
 
-    const prompt = promptFromNotification(response.notification.request.content);
-    if (!prompt) return;
-    const presentedId = response.notification.request.identifier;
-
-    // Immediately clear from shade first so user sees instant feedback
-    if (presentedId) {
-      try {
-        await Notifications.dismissNotificationAsync(presentedId);
-      } catch {
-        // ignore
+    if (isComplete) {
+      if (effectiveTaskId) {
+        await completeTask(effectiveTaskId);
       }
-    }
-
-    const action = response.actionIdentifier;
-    if (action === ACTION_COMPLETE) {
-      await dismissTaskNotifications(prompt.taskId, presentedId);
-      await completeTask(prompt.taskId);
+      lastHandledResponse = key;
+      await AsyncStorage.setItem(HANDLED_RESPONSE_KEY, key);
       onChanged?.();
       return;
     }
-    if (action === ACTION_SNOOZE) {
-      await dismissTaskNotifications(prompt.taskId, presentedId);
-      await snoozeTaskReminder(prompt.taskId, prompt.title, prompt.kind);
+
+    if (isSnooze) {
+      if (effectiveTaskId) {
+        await snoozeTaskReminder(
+          effectiveTaskId,
+          prompt?.title ?? "Task",
+          prompt?.kind ?? "reminder"
+        );
+      }
+      lastHandledResponse = key;
+      await AsyncStorage.setItem(HANDLED_RESPONSE_KEY, key);
+      onChanged?.();
       return;
     }
-    emitReminderPrompt(prompt);
+
+    // Tapping the card itself (default action) opens the in-app reminder prompt modal
+    if (prompt) {
+      emitReminderPrompt(prompt);
+    }
   } finally {
-    void Notifications.clearLastNotificationResponseAsync();
+    inflightResponses.delete(key);
+    void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
   }
 }
 
@@ -104,9 +142,16 @@ export async function handleNotificationResponse(
 TaskManager.defineTask<Notifications.NotificationTaskPayload>(
   BACKGROUND_NOTIFICATION_TASK,
   async ({ data, error }) => {
-    if (error) return;
-    if (!data || !("actionIdentifier" in data)) return;
-    await handleNotificationResponse(data as unknown as Notifications.NotificationResponse);
+    if (error || !data) return;
+    let response: Notifications.NotificationResponse | null = null;
+    if ("actionIdentifier" in data) {
+      response = data as unknown as Notifications.NotificationResponse;
+    } else if ("notification" in data && data.notification && "actionIdentifier" in (data.notification as any)) {
+      response = data.notification as unknown as Notifications.NotificationResponse;
+    }
+    if (response) {
+      await handleNotificationResponse(response);
+    }
   }
 );
 // Register immediately at module load time so headless tasks work reliably
@@ -327,11 +372,20 @@ export async function dismissTaskNotifications(taskId: string, extraIdentifier?:
     await Promise.all(
       presented
         .filter((n) => {
-          const data = n.request.content.data as { taskId?: string } | undefined;
+          const content = n.request.content as any;
+          const data = (content?.data ?? {}) as { taskId?: string };
+          let dataTaskId = data.taskId;
+          if (!dataTaskId && content?.dataString) {
+            try {
+              dataTaskId = JSON.parse(content.dataString)?.taskId;
+            } catch {
+              // ignore
+            }
+          }
           const ident = n.request.identifier;
           const blob = JSON.stringify(n.request.content ?? {});
           return (
-            data?.taskId === taskId ||
+            dataTaskId === taskId ||
             ident === id ||
             (extraIdentifier && ident === extraIdentifier) ||
             ident.includes(taskId) ||
@@ -442,20 +496,57 @@ export async function syncTaskReminders(tasks: Task[] | undefined) {
   await setSnoozes(snoozes);
 }
 
-export function promptFromNotification(content: {
-  title?: string | null;
-  body?: string | null;
-  data?: Record<string, unknown>;
-}): ReminderPrompt | null {
-  const data = content.data ?? {};
-  const taskId = typeof data.taskId === "string" ? data.taskId : null;
+export function promptFromNotification(
+  content: {
+    title?: string | null;
+    body?: string | null;
+    data?: Record<string, unknown> | string;
+    dataString?: string;
+  } | undefined | null,
+  identifier?: string
+): ReminderPrompt | null {
+  if (!content && !identifier) return null;
+
+  let data: Record<string, unknown> = {};
+
+  if (content?.data && typeof content.data === "object") {
+    data = content.data as Record<string, unknown>;
+  } else if (typeof content?.data === "string") {
+    try {
+      data = JSON.parse(content.data);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Android background/headless tasks deliver stringified JSON in dataString
+  if (!data.taskId && content?.dataString && typeof content.dataString === "string") {
+    try {
+      const parsed = JSON.parse(content.dataString);
+      if (parsed && typeof parsed === "object") {
+        data = { ...data, ...parsed };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  let taskId = typeof data.taskId === "string" ? data.taskId : null;
+
+  // Fallback: extract taskId from identifier (hollowtask_<taskId>)
+  if (!taskId && identifier) {
+    const match = identifier.match(/^hollowtask_(.+)$/);
+    if (match) taskId = match[1];
+  }
+
   if (!taskId) return null;
+
   const kind: ReminderPrompt["kind"] =
     data.kind === "due" || data.kind === "overdue" || data.kind === "reminder" ? data.kind : "reminder";
   const title =
     (typeof data.title === "string" && data.title) ||
-    content.body ||
-    content.title ||
+    content?.body ||
+    content?.title ||
     "Task";
   return { taskId, title, kind };
 }

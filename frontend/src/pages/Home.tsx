@@ -63,7 +63,7 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  const { data: recent } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(5) });
+  const { data: recent } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(10) });
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
 
   const daily = useMutation({
@@ -235,7 +235,58 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
   const navigate = useNavigate();
   const sectionPasswords = useUnlockStore((s) => s.sectionPasswords);
   const notebookPasswords = useUnlockStore((s) => s.notebookPasswords);
-  const list = (recent ?? []).slice(0, 5);
+
+  // Consolidate multiple sealed pages belonging to the same encrypted notebook
+  // into a single entry with a page count so the list isn't cluttered with duplicates.
+  const sealedNotebookStats = new Map<string, { count: number; newestDate: string; sample: RecentPage }>();
+  const consolidated: (RecentPage & { isSealed: boolean; sealedCount?: number })[] = [];
+  const seenSealedNotebooks = new Set<string>();
+
+  for (const p of recent ?? []) {
+    const isSealed =
+      (p.section.isLocked && !sectionPasswords[p.section.id]) ||
+      Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
+
+    if (isSealed) {
+      const nid = p.section.notebookId;
+      const existing = sealedNotebookStats.get(nid);
+      if (!existing) {
+        sealedNotebookStats.set(nid, { count: 1, newestDate: p.updatedAt, sample: p });
+      } else {
+        existing.count += 1;
+        if (new Date(p.updatedAt).getTime() > new Date(existing.newestDate).getTime()) {
+          existing.newestDate = p.updatedAt;
+        }
+      }
+    }
+  }
+
+  for (const p of recent ?? []) {
+    const isSealed =
+      (p.section.isLocked && !sectionPasswords[p.section.id]) ||
+      Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
+
+    if (isSealed) {
+      const nid = p.section.notebookId;
+      if (!seenSealedNotebooks.has(nid)) {
+        seenSealedNotebooks.add(nid);
+        const stats = sealedNotebookStats.get(nid);
+        consolidated.push({
+          ...p,
+          updatedAt: stats?.newestDate ?? p.updatedAt,
+          isSealed: true,
+          sealedCount: stats?.count ?? 1,
+        });
+      }
+    } else {
+      consolidated.push({
+        ...p,
+        isSealed: false,
+      });
+    }
+  }
+
+  const list = consolidated.slice(0, 5);
 
   const openRecentPage = (p: RecentPage, e: React.MouseEvent, isSealed: boolean) => {
     if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
@@ -255,29 +306,25 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
       {list.length === 0 && <p className="text-sm text-secondary">Pages you edit will show up here.</p>}
       <ul className="space-y-0.5">
         {list.map((p, i) => {
-          const isSealed =
-            (p.section.isLocked && !sectionPasswords[p.section.id]) ||
-            Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
-
           return (
             <li key={p.id} className="animate-rise-in" style={{ animationDelay: `${i * 45}ms` }}>
               <Link
-                to={isSealed ? `/notebooks/${p.section.notebookId}` : pageRoute(p)}
-                onClick={(e) => openRecentPage(p, e, isSealed)}
+                to={p.isSealed ? `/notebooks/${p.section.notebookId}` : pageRoute(p)}
+                onClick={(e) => openRecentPage(p, e, p.isSealed)}
                 className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
                            text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
               >
                 <span className="icon-well h-7 w-7 rounded-lg shrink-0 mt-0.5">
-                  {isSealed ? <Lock size={12} className="text-accent" /> : <FileText size={12} />}
+                  {p.isSealed ? <Lock size={12} className="text-accent" /> : <FileText size={12} />}
                 </span>
                 <span className="flex-1 min-w-0">
-                  {isSealed ? (
+                  {p.isSealed ? (
                     <>
                       <span className="block truncate text-primary font-medium">
                         {p.section.notebook.title}
                       </span>
                       <span className="block truncate text-xs text-secondary/70">
-                        Encrypted notebook
+                        Encrypted notebook{p.sealedCount && p.sealedCount > 1 ? ` · ${p.sealedCount} recent pages` : ""}
                       </span>
                     </>
                   ) : (
@@ -289,7 +336,7 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
                     </>
                   )}
                 </span>
-                {isSealed && (
+                {p.isSealed && (
                   <span className="inline-flex items-center gap-1 text-[11px] text-accent/90 shrink-0 mt-1">
                     <Lock size={11} /> Sealed
                   </span>

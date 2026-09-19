@@ -10,6 +10,7 @@ import {
   Trash2,
   Maximize2,
   Minimize2,
+  Plus,
 } from "lucide-react";
 
 export interface Point {
@@ -76,11 +77,89 @@ export const AnnotationBlockSpec = createReactBlockSpec(
       const [selectedWidthIndex, setSelectedWidthIndex] = useState(1);
       const [isExpanded, setIsExpanded] = useState(false);
 
+      const [dynamicHeight, setDynamicHeight] = useState<number>(() => {
+        const initial = Number(block.props.canvasHeight) || 360;
+        let maxY = 0;
+        try {
+          if (block.props.drawing) {
+            const parsed = JSON.parse(block.props.drawing);
+            if (Array.isArray(parsed)) {
+              for (const s of parsed) {
+                if (s?.points) {
+                  for (const p of s.points) {
+                    if (p.y > maxY) maxY = p.y;
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+        return Math.max(initial, maxY > 0 ? Math.ceil(maxY + 90) : initial);
+      });
+
       const canvasRef = useRef<HTMLCanvasElement>(null);
       const currentStroke = useRef<Stroke | null>(null);
       const isDrawing = useRef(false);
 
-      const canvasHeight = isExpanded ? 560 : Number(block.props.canvasHeight || 360);
+      const canvasHeight = isExpanded ? Math.max(dynamicHeight, 720) : dynamicHeight;
+      const canvasHeightRef = useRef(canvasHeight);
+      canvasHeightRef.current = canvasHeight;
+
+      // Auto-expand canvas if stroke approaches or passes the bottom edge
+      const checkAutoExpand = useCallback(
+        (y: number) => {
+          const currentH = canvasHeightRef.current;
+          if (y > currentH - 50) {
+            const nextH = Math.max(currentH + 160, Math.ceil(y + 120));
+            setDynamicHeight(nextH);
+            editor.updateBlock(block, {
+              props: {
+                ...block.props,
+                canvasHeight: nextH,
+              },
+            });
+          }
+        },
+        [block, editor]
+      );
+
+      // Bottom resize drag handler
+      const isResizing = useRef(false);
+      const startY = useRef(0);
+      const startHeight = useRef(0);
+
+      const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        isResizing.current = true;
+        startY.current = e.clientY;
+        startHeight.current = canvasHeightRef.current;
+      };
+
+      const handleResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isResizing.current) return;
+        e.preventDefault();
+        const delta = e.clientY - startY.current;
+        const newH = Math.max(220, Math.round(startHeight.current + delta));
+        setDynamicHeight(newH);
+      };
+
+      const handleResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isResizing.current) return;
+        try {
+          (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {}
+        isResizing.current = false;
+        const delta = e.clientY - startY.current;
+        const newH = Math.max(220, Math.round(startHeight.current + delta));
+        setDynamicHeight(newH);
+        editor.updateBlock(block, {
+          props: {
+            ...block.props,
+            canvasHeight: newH,
+          },
+        });
+      };
 
       const activeColor =
         PEN_COLORS[selectedColorIndex]?.[isDark ? "dark" : "light"] ??
@@ -202,6 +281,7 @@ export const AnnotationBlockSpec = createReactBlockSpec(
           // Erase strokes near point
           eraseNear(pt);
         } else {
+          checkAutoExpand(pt.y);
           currentStroke.current = {
             points: [pt],
             color: activeColor,
@@ -235,6 +315,7 @@ export const AnnotationBlockSpec = createReactBlockSpec(
         if (tool === "eraser") {
           eraseNear(pt);
         } else if (currentStroke.current) {
+          checkAutoExpand(pt.y);
           currentStroke.current.points.push(pt);
           if (canvasRef.current) {
             renderAllStrokes(canvasRef.current, [...strokes, currentStroke.current]);
@@ -412,6 +493,24 @@ export const AnnotationBlockSpec = createReactBlockSpec(
               </button>
               <button
                 type="button"
+                title="Add +160px canvas space"
+                onClick={() => {
+                  const nextH = canvasHeight + 160;
+                  setDynamicHeight(nextH);
+                  editor.updateBlock(block, {
+                    props: {
+                      ...block.props,
+                      canvasHeight: nextH,
+                    },
+                  });
+                }}
+                className="flex items-center gap-1 px-1.5 py-1 rounded-md text-xs text-secondary hover:text-accent hover:bg-surface-0 transition-colors ml-0.5"
+              >
+                <Plus size={12} />
+                <span className="text-[11px] font-medium hidden sm:inline">Space</span>
+              </button>
+              <button
+                type="button"
                 title={isExpanded ? "Collapse canvas" : "Expand canvas"}
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors ml-1"
@@ -440,10 +539,35 @@ export const AnnotationBlockSpec = createReactBlockSpec(
                   Write or sketch freely with your stylus, pen, or touch
                 </p>
                 <p className="text-[11px] text-secondary/50 mt-0.5">
-                  Pressure-sensitive strokes auto-save to this page
+                  Canvas dynamically expands downward as you write
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Bottom Resize / Dynamic Expansion Bar */}
+          <div
+            className="flex items-center justify-center gap-2 py-1.5 px-3 bg-surface-1/40 hover:bg-surface-1/80 border-t border-border/60 cursor-ns-resize select-none transition-colors group/resize"
+            onPointerDown={handleResizePointerDown}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+            onPointerCancel={handleResizePointerUp}
+            title="Drag down to expand canvas · Double-click to add +160px"
+            onDoubleClick={() => {
+              const nextH = canvasHeight + 160;
+              setDynamicHeight(nextH);
+              editor.updateBlock(block, {
+                props: {
+                  ...block.props,
+                  canvasHeight: nextH,
+                },
+              });
+            }}
+          >
+            <div className="w-10 h-1 rounded-full bg-border group-hover/resize:bg-accent transition-colors" />
+            <span className="text-[10px] text-secondary/60 group-hover/resize:text-secondary flex items-center gap-1 font-mono">
+              {canvasHeight}px · Drag to expand
+            </span>
           </div>
         </div>
       );

@@ -49,7 +49,7 @@ export function ReminderHost() {
 
     const received = Notifications.addNotificationReceivedListener((notification) => {
       if (AppState.currentState !== "active") return;
-      const next = promptFromNotification(notification.request.content);
+      const next = promptFromNotification(notification.request.content, notification.request.identifier);
       if (next) emitReminderPrompt(next);
     });
 
