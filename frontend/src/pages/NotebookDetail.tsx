@@ -123,13 +123,13 @@ export default function NotebookDetail() {
         notebookId!,
         title,
         notebookPasswords[notebookId!] ??
-          notebook?.sections.map((s) => sectionPasswords[s.id]).find(Boolean)
+          (notebook?.sections ?? []).map((s) => sectionPasswords[s.id]).find(Boolean)
       ),
     onSuccess: (sec) => {
       invalidate();
       const pw =
         notebookPasswords[notebookId!] ??
-        notebook?.sections.map((s) => sectionPasswords[s.id]).find(Boolean);
+        (notebook?.sections ?? []).map((s) => sectionPasswords[s.id]).find(Boolean);
       if (pw && sec.isLocked) unlockStore.setSectionPassword(sec.id, pw);
       setExpanded((s) => new Set(s).add(sec.id));
       setDialog(null);
@@ -268,7 +268,7 @@ export default function NotebookDetail() {
           <p className="text-sm text-secondary mt-1">
             {sealed
               ? "Sealed — unlock to browse"
-              : `${notebook.sections.length} sections · ${notebook.sections.reduce((n, s) => n + s.pages.length, 0)} pages`}
+              : `${(notebook.sections ?? []).length} sections · ${(notebook.sections ?? []).reduce((n, s) => n + (s.pages ?? []).length, 0)} pages`}
           </p>
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -286,7 +286,7 @@ export default function NotebookDetail() {
           {notebook.isLocked && unlockedNotebooks[notebook.id] && (
             <Button
               title="Re-lock for this session"
-              onClick={() => unlockStore.relockNotebook(notebook.id, notebook.sections.map((s) => s.id))}
+              onClick={() => unlockStore.relockNotebook(notebook.id, (notebook.sections ?? []).map((s) => s.id))}
             >
               <Lock size={14} />
             </Button>
@@ -334,13 +334,13 @@ export default function NotebookDetail() {
         </div>
       ) : (
         <div className="space-y-2">
-          {notebook.sections.length === 0 && (
+          {(notebook.sections ?? []).length === 0 && (
             <p className="text-sm text-secondary py-8 text-center">
               No sections yet — add one and start writing.
             </p>
           )}
           <SortableVerticalList
-            items={notebook.sections}
+            items={notebook.sections ?? []}
             enabled={true}
             className="space-y-2"
             onReorder={async (ids) => {
@@ -375,7 +375,7 @@ export default function NotebookDetail() {
                     {sec.isLocked && (
                       <Lock size={12} className={secSealed ? "text-secondary" : "text-accent"} />
                     )}
-                    <span className="text-xs text-secondary">{sec.pages.length}</span>
+                    <span className="text-xs text-secondary">{(sec.pages ?? []).length}</span>
                   </button>
                   <div className="row-actions flex items-center gap-0.5 shrink-0">
                     <button
@@ -438,7 +438,7 @@ export default function NotebookDetail() {
                 {open && (
                   <div className="border-t border-border px-3.5 py-2 space-y-0.5">
                     <SortableVerticalList
-                      items={sec.pages}
+                      items={sec.pages ?? []}
                       enabled={true}
                       onReorder={async (ids) => {
                         await reorderPages(sec.id, ids);
@@ -545,7 +545,7 @@ export default function NotebookDetail() {
               await unlockNotebook(notebook.id, password);
               unlockStore.unlockNotebook(
                 notebook.id,
-                notebook.sections.filter((s) => s.isLocked).map((s) => s.id),
+                (notebook.sections ?? []).filter((s) => s.isLocked).map((s) => s.id),
                 password
               );
             } else if (dialog?.kind === "unlock-section") {
@@ -564,7 +564,7 @@ export default function NotebookDetail() {
               await lockNotebook(notebook.id, password);
               unlockStore.unlockNotebook(
                 notebook.id,
-                notebook.sections.map((s) => s.id),
+                (notebook.sections ?? []).map((s) => s.id),
                 password
               );
               invalidate();
@@ -576,7 +576,7 @@ export default function NotebookDetail() {
               await removeNotebookLock(notebook.id, password);
               unlockStore.relockNotebook(
                 notebook.id,
-                notebook.sections.map((s) => s.id)
+                (notebook.sections ?? []).map((s) => s.id)
               );
               invalidate();
             } else if (dialog?.kind === "remove-lock-section") {
@@ -661,7 +661,7 @@ export default function NotebookDetail() {
                 onChange={(e) => setMoveSectionId(e.target.value)}
               >
                 <option value="">Choose section…</option>
-                {notebook.sections
+                {(notebook.sections ?? [])
                   .filter((s) => s.id !== dialog.fromSectionId)
                   .map((s) => (
                     <option key={s.id} value={s.id}>

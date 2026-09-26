@@ -126,7 +126,8 @@ export default function Notebooks() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {(notebooks ?? []).map((nb) => {
           const sealed = nb.isLocked && !unlockedNotebooks[nb.id];
-          const pages = nb.sections.reduce((n, s) => n + s.pages.length, 0);
+          const sections = nb.sections ?? [];
+          const pages = sections.reduce((n, s) => n + (s.pages ?? []).length, 0);
           return (
             <div
               key={nb.id}
@@ -153,7 +154,7 @@ export default function Notebooks() {
                     <StatusChip tone="accent">Sealed</StatusChip>
                   ) : (
                     <StatusChip tone="muted">
-                      {nb.sections.length} {nb.sections.length === 1 ? "section" : "sections"} · {pages}{" "}
+                      {sections.length} {sections.length === 1 ? "section" : "sections"} · {pages}{" "}
                       {pages === 1 ? "page" : "pages"}
                     </StatusChip>
                   )}
@@ -186,7 +187,7 @@ export default function Notebooks() {
                     onClick={() =>
                       unlockStore.relockNotebook(
                         nb.id,
-                        nb.sections.map((s) => s.id)
+                        (nb.sections ?? []).map((s) => s.id)
                       )
                     }
                   >
@@ -304,7 +305,7 @@ export default function Notebooks() {
             await unlockNotebook(unlockNb.id, password);
             unlockStore.unlockNotebook(
               unlockNb.id,
-              unlockNb.sections.filter((s) => s.isLocked).map((s) => s.id),
+              (unlockNb.sections ?? []).filter((s) => s.isLocked).map((s) => s.id),
               password
             );
             setActiveNotebook(unlockNb.id);
@@ -328,7 +329,7 @@ export default function Notebooks() {
             await lockNotebook(lockNb.id, password);
             unlockStore.unlockNotebook(
               lockNb.id,
-              lockNb.sections.map((s) => s.id),
+              (lockNb.sections ?? []).map((s) => s.id),
               password
             );
             queryClient.invalidateQueries({ queryKey: ["notebooks"] });
@@ -350,7 +351,7 @@ export default function Notebooks() {
             await removeNotebookLock(removeLockNb.id, password);
             unlockStore.relockNotebook(
               removeLockNb.id,
-              removeLockNb.sections.map((s) => s.id)
+              (removeLockNb.sections ?? []).map((s) => s.id)
             );
             queryClient.invalidateQueries({ queryKey: ["notebooks"] });
             return null;

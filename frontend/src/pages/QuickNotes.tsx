@@ -373,6 +373,22 @@ export default function QuickNotes() {
     }
   }
 
+  function pickEditColor(color: string) {
+    if (!editing) return;
+    const next = { ...editing, color };
+    setEditing(next);
+    if (editSaveTimer.current) clearTimeout(editSaveTimer.current);
+    const seq = ++editSaveSeq.current;
+    void updateQuickNote(next.id, {
+      title: next.title,
+      content: next.kind === "list" ? " " : next.content || " ",
+      color,
+      items: next.kind === "list" ? next.items : undefined,
+    }).then(() => {
+      if (seq === editSaveSeq.current) invalidate();
+    });
+  }
+
   function exportNote() {
     if (!editing) return;
     const name = editing.title?.trim() || (editing.kind === "list" ? "List" : "Note");
@@ -604,6 +620,18 @@ export default function QuickNotes() {
           >
             <Trash2 size={16} />
           </button>
+          <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
+            {Object.keys(PALETTE).map((color) => (
+              <button
+                key={color}
+                type="button"
+                title={`Set color to ${color}`}
+                onClick={() => void bulkPatch({ color })}
+                className="h-3.5 w-3.5 rounded-full border border-border hover:scale-110 transition-transform"
+                style={{ background: DOT_COLORS[color] }}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -701,7 +729,7 @@ export default function QuickNotes() {
               <div className="shrink-0 pt-3 space-y-3">
                 <ColorDots
                   value={editing.color}
-                  onPick={(color) => persistEdit({ ...editing, color })}
+                  onPick={pickEditColor}
                 />
                 <div className="flex items-center gap-1.5">
                   <button

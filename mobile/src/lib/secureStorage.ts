@@ -17,8 +17,14 @@ export async function getSecureItem(key: string): Promise<string | null> {
   if (Platform.OS === "web") {
     return AsyncStorage.getItem(key);
   }
-  const SecureStore = await getSecureStore();
-  return SecureStore.getItemAsync(key);
+  try {
+    const SecureStore = await getSecureStore();
+    const val = await SecureStore.getItemAsync(key);
+    if (val !== null) return val;
+    return AsyncStorage.getItem(key);
+  } catch {
+    return AsyncStorage.getItem(key);
+  }
 }
 
 export async function setSecureItem(key: string, value: string): Promise<void> {
@@ -26,8 +32,17 @@ export async function setSecureItem(key: string, value: string): Promise<void> {
     await AsyncStorage.setItem(key, value);
     return;
   }
-  const SecureStore = await getSecureStore();
-  await SecureStore.setItemAsync(key, value);
+  try {
+    const SecureStore = await getSecureStore();
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    // ignore
+  }
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
 }
 
 export async function deleteSecureItem(key: string): Promise<void> {
@@ -35,6 +50,15 @@ export async function deleteSecureItem(key: string): Promise<void> {
     await AsyncStorage.removeItem(key);
     return;
   }
-  const SecureStore = await getSecureStore();
-  await SecureStore.deleteItemAsync(key);
+  try {
+    const SecureStore = await getSecureStore();
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    // ignore
+  }
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
 }

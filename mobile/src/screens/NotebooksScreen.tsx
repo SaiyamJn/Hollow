@@ -53,9 +53,8 @@ export default function NotebooksScreen({ navigation }: any) {
       } else if (prompt.kind === "new-section") {
         const pw =
           unlock.notebookPasswords[prompt.notebookId] ??
-          notebooks
-            ?.find((nb) => nb.id === prompt.notebookId)
-            ?.sections.map((s) => unlock.sectionPasswords[s.id])
+          (notebooks?.find((nb) => nb.id === prompt.notebookId)?.sections ?? [])
+            .map((s) => unlock.sectionPasswords[s.id])
             .find(Boolean);
         const sec = await createSection(prompt.notebookId, value, pw);
         if (pw && sec.isLocked) unlock.setSectionPassword(sec.id, pw);
@@ -79,7 +78,7 @@ export default function NotebooksScreen({ navigation }: any) {
         await lockNotebook(prompt.notebook.id, value);
         unlock.unlockNotebook(
           prompt.notebook.id,
-          prompt.notebook.sections.map((s) => s.id),
+          (prompt.notebook.sections ?? []).map((s) => s.id),
           value
         );
         invalidate();
@@ -87,14 +86,14 @@ export default function NotebooksScreen({ navigation }: any) {
         await removeNotebookLock(prompt.notebook.id, value);
         unlock.relockNotebook(
           prompt.notebook.id,
-          prompt.notebook.sections.map((s) => s.id)
+          (prompt.notebook.sections ?? []).map((s) => s.id)
         );
         invalidate();
       } else {
         await unlockNotebook(prompt.notebook.id, value);
         unlock.unlockNotebook(
           prompt.notebook.id,
-          prompt.notebook.sections.filter((s) => s.isLocked).map((s) => s.id),
+          (prompt.notebook.sections ?? []).filter((s) => s.isLocked).map((s) => s.id),
           value
         );
         navigation.navigate("Notebook", { notebookId: prompt.notebook.id, title: prompt.notebook.title });
@@ -165,7 +164,7 @@ export default function NotebooksScreen({ navigation }: any) {
         </View>
         {(notebooks ?? []).map((nb) => {
           const sealed = nb.isLocked && !unlock.unlockedNotebooks[nb.id];
-          const pageCount = nb.sections.reduce((n, s) => n + s.pages.length, 0);
+          const pageCount = (nb.sections ?? []).reduce((n, s) => n + (s.pages ?? []).length, 0);
           return (
             <Pressable key={nb.id} onPress={() => openNotebook(nb)} style={{ marginBottom: 10 }}>
               <GlassCard contentStyle={[styles.card, isNarrow && { gap: 8, padding: 12 }]}>
@@ -182,7 +181,7 @@ export default function NotebooksScreen({ navigation }: any) {
                   <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
                     {sealed
                       ? "Sealed · encrypted"
-                      : `${nb.sections.length} ${nb.sections.length === 1 ? "section" : "sections"} · ${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
+                      : `${(nb.sections ?? []).length} ${(nb.sections ?? []).length === 1 ? "section" : "sections"} · ${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
                   </Text>
                 </View>
                 {nb.isLocked && !sealed && (
@@ -192,7 +191,7 @@ export default function NotebooksScreen({ navigation }: any) {
                     onPress={() =>
                       unlock.relockNotebook(
                         nb.id,
-                        nb.sections.map((s) => s.id)
+                        (nb.sections ?? []).map((s) => s.id)
                       )
                     }
                     accessibilityLabel="Re-lock for this session"

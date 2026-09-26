@@ -109,8 +109,8 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
     ];
 
     const pages: SearchItem[] = (notebooks ?? []).flatMap((nb) =>
-      nb.sections.flatMap((sec) =>
-        sec.pages.map((p) => ({
+      (nb.sections ?? []).flatMap((sec) =>
+        (sec.pages ?? []).map((p) => ({
           id: `page-${p.id}`,
           label: p.title,
           hint: `${nb.title} / ${sec.title}`,

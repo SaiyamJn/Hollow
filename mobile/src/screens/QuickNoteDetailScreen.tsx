@@ -472,7 +472,17 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                   hitSlop={6}
                   onPress={() => {
                     setColor(c);
-                    scheduleSave(title, content, c, isList ? items : undefined);
+                    pending.current = {
+                      title,
+                      content,
+                      color: c,
+                      ...(isList ? { items } : {}),
+                    };
+                    if (saveTimer.current) {
+                      clearTimeout(saveTimer.current);
+                      saveTimer.current = null;
+                    }
+                    void saveNow();
                   }}
                   style={{
                     height: dotSize,

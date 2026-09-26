@@ -63,6 +63,7 @@ export default function QuickNotesScreen({ navigation }: any) {
   const [draftColor, setDraftColor] = useState("yellow");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string } | null>(null);
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<TextInput>(null);
@@ -180,6 +181,7 @@ export default function QuickNotesScreen({ navigation }: any) {
   function clearSelection() {
     setSelected(new Set());
     setSelectMode(false);
+    setColorPickerOpen(false);
   }
 
   function enterSelection(id: string) {
@@ -650,10 +652,67 @@ export default function QuickNotesScreen({ navigation }: any) {
             color={colors.textSecondary}
           />
         </Pressable>
+        <Pressable
+          onPress={() => setColorPickerOpen((v) => !v)}
+          hitSlop={8}
+          style={styles.selectIconBtn}
+          accessibilityLabel="Set color"
+        >
+          <Feather
+            name="droplet"
+            size={18}
+            color={colorPickerOpen ? colors.accent : colors.textSecondary}
+          />
+        </Pressable>
         <Pressable onPress={bulkDelete} hitSlop={8} style={styles.selectIconBtn}>
           <Feather name="trash-2" size={18} color={colors.textSecondary} />
         </Pressable>
       </Animated.View>
+
+      {selecting && colorPickerOpen && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: fabBottom + 70,
+            left: 20,
+            right: 20,
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            backgroundColor: colors.surface1,
+            borderRadius: 24,
+            borderColor: colors.border,
+            borderWidth: 1,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 10,
+            elevation: 6,
+            zIndex: 99,
+          }}
+        >
+          {Object.keys(DOT_COLORS).map((c) => (
+            <Pressable
+              key={c}
+              hitSlop={8}
+              onPress={() => {
+                void bulkUpdate({ color: c });
+                setColorPickerOpen(false);
+              }}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                backgroundColor: DOT_COLORS[c],
+                borderWidth: 2,
+                borderColor: colors.surface0,
+              }}
+            />
+          ))}
+        </View>
+      )}
 
       <ConfirmModal
         visible={pendingDelete !== null}

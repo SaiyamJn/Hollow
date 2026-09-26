@@ -13,6 +13,7 @@ model User {
   username     String        @unique
   passwordHash String
   name         String
+  preferences  String?       @default("{}")
   notebooks    Notebook[]
   quickNotes   QuickNote[]
   tasks        Task[]
@@ -159,6 +160,7 @@ model Task {
   title        String
   description  String    @default("")
   done         Boolean   @default(false)
+  completedAt  DateTime?
   starred      Boolean   @default(false)
   /// none | critical | steady | swift | quiet — important×urgent focus class
   focus        String    @default("none")

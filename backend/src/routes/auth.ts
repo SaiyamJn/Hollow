@@ -38,8 +38,12 @@ const loginSchema = z
     message: "Email or username is required",
   });
 
-function publicUser(user: { id: string; email: string; username: string; name: string }) {
-  return { id: user.id, email: user.email, username: user.username, name: user.name };
+function publicUser(user: { id: string; email: string; username: string; name: string; preferences?: string | null }) {
+  let prefs = {};
+  try {
+    if (user.preferences) prefs = JSON.parse(user.preferences);
+  } catch {}
+  return { id: user.id, email: user.email, username: user.username, name: user.name, preferences: prefs };
 }
 
 function normalizeUsername(raw: string) {
@@ -202,10 +206,43 @@ router.post("/login", async (req, res) => {
 router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.userId! },
-    select: { id: true, email: true, username: true, name: true },
+    select: { id: true, email: true, username: true, name: true, preferences: true },
   });
   if (!user) return res.status(401).json({ error: "Invalid or expired token" });
   res.json({ user: publicUser(user) });
+});
+
+router.get("/preferences", requireAuth, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { preferences: true },
+  });
+  let parsed = {};
+  try {
+    if (user?.preferences) parsed = JSON.parse(user.preferences);
+  } catch {}
+  res.json({ preferences: parsed });
+});
+
+router.put("/preferences", requireAuth, async (req: AuthedRequest, res) => {
+  const incoming = req.body?.preferences;
+  if (!incoming || typeof incoming !== "object") {
+    return res.status(400).json({ error: "Invalid preferences object" });
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { preferences: true },
+  });
+  let current = {};
+  try {
+    if (user?.preferences) current = JSON.parse(user.preferences);
+  } catch {}
+  const merged = { ...current, ...incoming };
+  await prisma.user.update({
+    where: { id: req.userId! },
+    data: { preferences: JSON.stringify(merged) },
+  });
+  res.json({ ok: true, preferences: merged });
 });
 
 /** Active devices / sessions for this account. */

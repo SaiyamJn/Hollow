@@ -3,6 +3,7 @@ export interface User {
   email: string;
   username: string;
   name: string;
+  preferences?: Record<string, any>;
 }
 
 export interface AuthSession {
@@ -93,6 +94,7 @@ export interface Task {
   title: string;
   description: string;
   done: boolean;
+  completedAt?: string | null;
   starred: boolean;
   /** Important × urgent focus class */
   focus?: "none" | "critical" | "steady" | "swift" | "quiet";

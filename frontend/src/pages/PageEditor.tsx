@@ -472,8 +472,8 @@ function Editor({
     () =>
       (notebooks ?? [])
         .filter((nb) => nb.id === notebookId)
-        .flatMap((nb) => nb.sections)
-        .flatMap((sec) => sec.pages.map((p) => ({ ...p, sectionId: sec.id }))),
+        .flatMap((nb) => nb.sections ?? [])
+        .flatMap((sec) => (sec.pages ?? []).map((p) => ({ ...p, sectionId: sec.id }))),
     [notebooks, notebookId]
   );
 

@@ -496,3 +496,15 @@ export async function addTagToPage(pageId: string, name: string) {
 export async function removeTagFromPage(pageId: string, tagId: string) {
   await api.delete(`/pages/${pageId}/tags/${tagId}`);
 }
+
+// ---- preferences ----
+export async function fetchPreferences(): Promise<Record<string, any>> {
+  const { data } = await api.get<{ preferences: Record<string, any> }>("/auth/preferences");
+  return data?.preferences ?? {};
+}
+
+export async function updatePreferences(preferences: Record<string, any>): Promise<Record<string, any>> {
+  const { data } = await api.put<{ preferences: Record<string, any> }>("/auth/preferences", { preferences });
+  return data?.preferences ?? {};
+}
+

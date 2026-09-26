@@ -110,6 +110,7 @@ function publicTask<
     repeatEnd: row.repeatEnd ? normalizeRepeatEnd(row.repeatEnd) : null,
     repeatUntil: row.repeatUntil ? row.repeatUntil.toISOString() : null,
     repeatCount: row.repeatCount ?? null,
+    completedAt: (row as any).completedAt ? new Date((row as any).completedAt).toISOString() : null,
   });
   return {
     ...mapRow(task),
@@ -248,6 +249,7 @@ router.post("/", async (req: AuthedRequest, res) => {
       parentTaskId: parentTaskId ?? null,
       starred: starred ?? false,
       focus: normalizeFocus(focus),
+      completedAt: null,
     },
     include: { subtasks: true },
   });
@@ -342,7 +344,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
       data: {
         ...(title !== undefined ? { title: sealAtRest(title) } : {}),
         ...(description !== undefined ? { description: sealAtRest(description) } : {}),
-        ...(done !== undefined ? { done } : {}),
+        ...(done !== undefined ? { done, completedAt: done ? new Date() : null } : {}),
         ...(starred !== undefined ? { starred } : {}),
         ...(focus !== undefined ? { focus: normalizeFocus(focus) } : {}),
         ...(nextDue !== undefined ? { dueAt: nextDue } : {}),

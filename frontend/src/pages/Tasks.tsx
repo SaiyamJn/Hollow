@@ -250,7 +250,11 @@ export default function Tasks() {
     (saveEdit.error as any)?.response?.data?.error ?? (saveEdit.error ? "Couldn't save." : null);
 
   const openGroups = groupOpenTasks(tasks ?? []);
-  const completed = sortTasksByPriority((tasks ?? []).filter((t) => t.done));
+  const completed = [...(tasks ?? []).filter((t) => t.done)].sort((a, b) => {
+    const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
+    const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
+    return timeB - timeA;
+  });
   const boardTasks = useMemo(() => {
     const endOfToday = new Date();
     endOfToday.setHours(0, 0, 0, 0);

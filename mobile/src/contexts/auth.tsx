@@ -28,8 +28,6 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = "hollow-token";
 const USER_KEY = "hollow-user";
 
-// Minimal base64 decode — Hermes has atob on recent SDKs but this avoids
-// depending on it (and on Node's Buffer, which RN doesn't have).
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function base64Decode(input: string): string {
   const clean = input.replace(/=+$/, "");
@@ -53,11 +51,20 @@ function base64Decode(input: string): string {
 // needs the `exp` claim to know when to prompt a re-login.
 function jwtExpired(token: string): boolean {
   try {
-    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const { exp } = JSON.parse(base64Decode(payload));
+    const parts = token.split(".");
+    if (parts.length < 2) return false;
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) {
+      b64 += "=";
+    }
+    const jsonStr =
+      typeof globalThis.atob === "function" ? globalThis.atob(b64) : base64Decode(b64);
+    const { exp } = JSON.parse(jsonStr);
     return typeof exp === "number" && exp * 1000 < Date.now();
   } catch {
-    return true;
+    // If client decode is inconclusive, do NOT treat token as expired.
+    // Let backend /auth/me or API calls validate the session.
+    return false;
   }
 }
 
@@ -123,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (state !== "active") return;
       try {
         const token = await getSecureItem(TOKEN_KEY);
-        if (token && jwtExpired(token)) await logout();
+        if (token && jwtExpired(token)) await logout({ localOnly: true });
       } catch {
         // ignore storage errors on resume
       }

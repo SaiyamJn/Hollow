@@ -15,9 +15,12 @@ import {
   createNotebook,
   createQuickNote,
   createTask,
+  fetchNotebooks,
   fetchRecentPages,
   fetchTasks,
   openDailyNote,
+  unlockNotebook,
+  unlockSection,
   updateTask,
 } from "../lib/api";
 import type { RecentPage, Task } from "../lib/types";
@@ -78,6 +81,14 @@ export default function HomeScreen({ navigation }: any) {
     refetch,
   } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(8) });
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
+  const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
+  const [unlockTarget, setUnlockTarget] = useState<{
+    type: "notebook" | "section";
+    id: string;
+    title: string;
+    notebookId?: string;
+    page?: RecentPage;
+  } | null>(null);
 
   const daily = useMutation({
     mutationFn: openDailyNote,
@@ -305,15 +316,13 @@ export default function HomeScreen({ navigation }: any) {
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CONTINUE WRITING</Text>
       {(() => {
         const sealedNotebookStats = new Map<string, { count: number; newestDate: string; sample: RecentPage }>();
-        const consolidatedRecent: (RecentPage & { sealed: boolean; sealedCount?: number })[] = [];
+        const consolidatedRecent: (RecentPage & { sealed: boolean; sealedType?: "notebook" | "section"; sealedCount?: number })[] = [];
         const seenSealedNotebooks = new Set<string>();
 
         for (const p of recent ?? []) {
-          const isSealed =
-            (p.section.isLocked && !unlock.sectionPasswords[p.section.id]) ||
-            Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
+          const isNotebookLocked = Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
 
-          if (isSealed) {
+          if (isNotebookLocked) {
             const nid = p.section.notebookId;
             const existing = sealedNotebookStats.get(nid);
             if (!existing) {
@@ -328,11 +337,10 @@ export default function HomeScreen({ navigation }: any) {
         }
 
         for (const p of recent ?? []) {
-          const isSealed =
-            (p.section.isLocked && !unlock.sectionPasswords[p.section.id]) ||
-            Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
+          const isNotebookLocked = Boolean((p.section as any).notebook?.isLocked && !unlock.notebookPasswords[p.section.notebookId]);
+          const isSectionLocked = Boolean(p.section.isLocked && !unlock.sectionPasswords[p.section.id]);
 
-          if (isSealed) {
+          if (isNotebookLocked) {
             const nid = p.section.notebookId;
             if (!seenSealedNotebooks.has(nid)) {
               seenSealedNotebooks.add(nid);
@@ -341,9 +349,16 @@ export default function HomeScreen({ navigation }: any) {
                 ...p,
                 updatedAt: stats?.newestDate ?? p.updatedAt,
                 sealed: true,
+                sealedType: "notebook",
                 sealedCount: stats?.count ?? 1,
               });
             }
+          } else if (isSectionLocked) {
+            consolidatedRecent.push({
+              ...p,
+              sealed: true,
+              sealedType: "section",
+            });
           } else {
             consolidatedRecent.push({
               ...p,
@@ -367,19 +382,32 @@ export default function HomeScreen({ navigation }: any) {
 
         return recentDisplay.map((p, i) => {
           const sealed = p.sealed;
-          const displayName = sealed ? p.section.notebook.title : p.title;
+          const displayName = sealed && p.sealedType === "notebook" ? p.section.notebook.title : p.title;
           const displaySub = sealed
-            ? p.sealedCount && p.sealedCount > 1
-              ? `Encrypted notebook · ${p.sealedCount} recent pages`
-              : "Encrypted notebook"
+            ? p.sealedType === "notebook"
+              ? p.sealedCount && p.sealedCount > 1
+                ? `Encrypted notebook · ${p.sealedCount} recent pages`
+                : "Encrypted notebook"
+              : `${p.section.notebook.title} / ${p.section.title} · Encrypted section`
             : `${p.section.notebook.title} / ${p.section.title}`;
 
           const handlePress = () => {
             if (sealed) {
-              navigation.navigate("Notebook", {
-                notebookId: p.section.notebookId,
-                title: p.section.notebook.title,
-              });
+              if (p.sealedType === "notebook") {
+                setUnlockTarget({
+                  type: "notebook",
+                  id: p.section.notebookId,
+                  title: p.section.notebook.title,
+                });
+              } else {
+                setUnlockTarget({
+                  type: "section",
+                  id: p.section.id,
+                  title: p.section.title,
+                  notebookId: p.section.notebookId,
+                  page: p,
+                });
+              }
             } else {
               openRecent(p);
             }
@@ -558,6 +586,7 @@ export default function HomeScreen({ navigation }: any) {
               title: "",
               description: "",
               due: null,
+              focus: "none",
               repeat: null,
               repeatDays: null,
               repeatInterval: 1,
@@ -587,7 +616,7 @@ export default function HomeScreen({ navigation }: any) {
             title: taskDraft.title.trim(),
             description: taskDraft.description.trim() || undefined,
             dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
-            focus: taskDraft.focus,
+            focus: taskDraft.focus ?? "none",
             ...repeatPayload(taskDraft),
           });
           queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -612,6 +641,45 @@ export default function HomeScreen({ navigation }: any) {
           return null;
         } catch (err: any) {
           return err.response?.data?.error ?? "Something went wrong";
+        }
+      }}
+    />
+
+    <PromptModal
+      visible={unlockTarget !== null}
+      title={unlockTarget ? `Unlock ${unlockTarget.type === "notebook" ? "notebook" : "section"} "${unlockTarget.title}"` : "Unlock"}
+      placeholder="Password"
+      secure
+      submitLabel="Unlock"
+      onClose={() => setUnlockTarget(null)}
+      onSubmit={async (pw) => {
+        if (!unlockTarget) return null;
+        try {
+          if (unlockTarget.type === "notebook") {
+            await unlockNotebook(unlockTarget.id, pw);
+            const nb = (notebooks ?? []).find((n) => n.id === unlockTarget.id);
+            const secIds = (nb?.sections ?? []).map((s) => s.id);
+            unlock.unlockNotebook(unlockTarget.id, secIds, pw);
+            const target = unlockTarget;
+            setUnlockTarget(null);
+            navigation.navigate("Notebook", { notebookId: target.id, title: target.title });
+          } else {
+            await unlockSection(unlockTarget.id, pw);
+            unlock.setSectionPassword(unlockTarget.id, pw);
+            const target = unlockTarget;
+            setUnlockTarget(null);
+            if (target.page) {
+              navigation.navigate("Page", {
+                pageId: target.page.id,
+                sectionId: target.id,
+                notebookId: target.notebookId!,
+                title: target.page.title,
+              });
+            }
+          }
+          return null;
+        } catch (err: any) {
+          return err.response?.data?.error ?? "Incorrect password";
         }
       }}
     />

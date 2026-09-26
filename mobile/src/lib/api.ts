@@ -549,3 +549,15 @@ export async function restoreTask(id: string) {
   const { data } = await api.post<Task>(`/tasks/${id}/restore`);
   return data;
 }
+
+// ---- preferences ----
+export async function fetchPreferences(): Promise<Record<string, any>> {
+  const { data } = await api.get<{ preferences: Record<string, any> }>("/auth/preferences");
+  return data?.preferences ?? {};
+}
+
+export async function updatePreferences(preferences: Record<string, any>): Promise<Record<string, any>> {
+  const { data } = await api.put<{ preferences: Record<string, any> }>("/auth/preferences", { preferences });
+  return data?.preferences ?? {};
+}
+

@@ -77,9 +77,14 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
     if (groups[name].length) sections.push({ title: name, data: sortByFocusPriority(groups[name]) });
   }
   if (completed.length) {
+    const sortedCompleted = [...completed].sort((a, b) => {
+      const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
+      const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
+      return timeB - timeA;
+    });
     sections.push({
       title: "Completed",
-      data: showCompleted ? sortByFocusPriority(completed) : [],
+      data: showCompleted ? sortedCompleted : [],
       completedCount: completed.length,
     });
   }

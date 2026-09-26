@@ -242,7 +242,7 @@ export function CommandPalette() {
     }));
 
     const sectionItems: PaletteItem[] = (notebooks ?? []).flatMap((nb) =>
-      nb.sections.map((sec) => ({
+      (nb.sections ?? []).map((sec) => ({
         id: `sec-${sec.id}`,
         label: sec.title,
         hint: `${nb.title} · section`,
@@ -258,8 +258,8 @@ export function CommandPalette() {
     );
 
     const pages: PaletteItem[] = (notebooks ?? []).flatMap((nb) =>
-      nb.sections.flatMap((sec) =>
-        sec.pages.map((p) => ({
+      (nb.sections ?? []).flatMap((sec) =>
+        (sec.pages ?? []).map((p) => ({
           id: `page-${p.id}`,
           label: p.title,
           hint: `${nb.title} / ${sec.title}`,

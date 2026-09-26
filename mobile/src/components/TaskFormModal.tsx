@@ -280,7 +280,7 @@ export function TaskFormModal({
                   {focus === "none" ? "Focus (important × urgent)" : FOCUS_META[focus].hint}
                 </Text>
                 <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: "600" }}>
-                  {FOCUS_META[focus].label}
+                  {focus === "none" ? "None" : FOCUS_META[focus].label}
                 </Text>
                 <Feather name="chevron-right" size={14} color={colors.textSecondary} />
               </Pressable>

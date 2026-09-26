@@ -171,22 +171,26 @@ export default function NotebookScreen({ route, navigation }: any) {
     const fromIsSec = fromSlot.startsWith("sec:");
     const toIsSec = toSlot.startsWith("sec:");
     if (fromIsSec && toIsSec) {
-      const i = nb.sections.findIndex((s) => `sec:${s.id}` === fromSlot);
-      const j = nb.sections.findIndex((s) => `sec:${s.id}` === toSlot);
+      const sections = nb.sections ?? [];
+      const i = sections.findIndex((s) => `sec:${s.id}` === fromSlot);
+      const j = sections.findIndex((s) => `sec:${s.id}` === toSlot);
       if (i < 0 || j < 0) return;
-      const ids = nb.sections.map((s) => s.id);
+      const ids = sections.map((s) => s.id);
       const [m] = ids.splice(i, 1);
       ids.splice(j, 0, m);
       animateListChange();
       void reorderSections(notebookId, ids).then(invalidate);
     } else if (!fromIsSec && !toIsSec) {
-      const fromSec = nb.sections.find((s) => s.pages.some((p) => `page:${p.id}` === fromSlot));
-      const toSec = nb.sections.find((s) => s.pages.some((p) => `page:${p.id}` === toSlot));
+      const sections = nb.sections ?? [];
+      const fromSec = sections.find((s) => (s.pages ?? []).some((p) => `page:${p.id}` === fromSlot));
+      const toSec = sections.find((s) => (s.pages ?? []).some((p) => `page:${p.id}` === toSlot));
       if (!fromSec || !toSec || fromSec.id !== toSec.id) return;
-      const i = fromSec.pages.findIndex((p) => `page:${p.id}` === fromSlot);
-      const j = toSec.pages.findIndex((p) => `page:${p.id}` === toSlot);
+      const fromPages = fromSec.pages ?? [];
+      const toPages = toSec.pages ?? [];
+      const i = fromPages.findIndex((p) => `page:${p.id}` === fromSlot);
+      const j = toPages.findIndex((p) => `page:${p.id}` === toSlot);
       if (i < 0 || j < 0) return;
-      const ids = fromSec.pages.map((p) => p.id);
+      const ids = fromPages.map((p) => p.id);
       const [m] = ids.splice(i, 1);
       ids.splice(j, 0, m);
       animateListChange();
@@ -297,7 +301,7 @@ export default function NotebookScreen({ route, navigation }: any) {
       if (prompt.kind === "new-section") {
         const pw =
           unlock.notebookPasswords[notebookId] ??
-          notebook?.sections.map((s) => unlock.sectionPasswords[s.id]).find(Boolean);
+          (notebook?.sections ?? []).map((s) => unlock.sectionPasswords[s.id]).find(Boolean);
         const sec = await createSection(notebookId, value, pw);
         if (pw && sec.isLocked) unlock.setSectionPassword(sec.id, pw);
         rememberSection(sec.id, value, notebookId, title);
@@ -361,8 +365,8 @@ export default function NotebookScreen({ route, navigation }: any) {
     const memory = getNavMemory();
     const target =
       (memory.section?.notebookId === notebookId
-        ? notebook?.sections.find((s) => s.id === memory.section!.id)
-        : undefined) ?? notebook?.sections[0];
+        ? (notebook?.sections ?? []).find((s) => s.id === memory.section!.id)
+        : undefined) ?? notebook?.sections?.[0];
     if (target) {
       actions.push({
         key: "page",
@@ -411,7 +415,7 @@ export default function NotebookScreen({ route, navigation }: any) {
             {sec.isLocked && sealed && (
               <Feather name="lock" size={13} color={colors.textSecondary} style={{ flexShrink: 0 }} />
             )}
-            <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{sec.pages.length}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, flexShrink: 0 }}>{(sec.pages ?? []).length}</Text>
           </Pressable>
           <Pressable
             hitSlop={8}
@@ -463,7 +467,7 @@ export default function NotebookScreen({ route, navigation }: any) {
 
         {isOpen && (
           <View style={[styles.pages, { borderLeftColor: colors.border }]}>
-            {sec.pages.map((page) => {
+            {(sec.pages ?? []).map((page) => {
               const pageSlotKey = `page:${page.id}`;
               return (
                 <DraggableRow
@@ -577,7 +581,7 @@ export default function NotebookScreen({ route, navigation }: any) {
             );
           })}
 
-          {notebook && notebook.sections.length === 0 && (
+          {notebook && (notebook.sections ?? []).length === 0 && (
             <EmptyState
               icon="layers"
               title="Empty notebook"
@@ -739,11 +743,11 @@ export default function NotebookScreen({ route, navigation }: any) {
   /** Renders the currently-dragged row's content for the floating ghost. */
   function renderDraggedBody(slotKey: string) {
     if (slotKey.startsWith("sec:")) {
-      const sec = notebookRef.current?.sections.find((s) => `sec:${s.id}` === slotKey);
+      const sec = (notebookRef.current?.sections ?? []).find((s) => `sec:${s.id}` === slotKey);
       return sec ? renderSectionBody(sec) : null;
     }
     for (const sec of notebookRef.current?.sections ?? []) {
-      const page = sec.pages.find((p) => `page:${p.id}` === slotKey);
+      const page = (sec.pages ?? []).find((p) => `page:${p.id}` === slotKey);
       if (page) return renderPageRow(sec, page);
     }
     return null;

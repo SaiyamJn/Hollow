@@ -89,7 +89,11 @@ function applyCssVars(overrides: FocusColorOverrides) {
   }
 }
 
+import { fetchPreferences, updatePreferences } from "../lib/api";
+import { useAuthStore } from "../stores/auth";
+
 export function FocusColorsProvider({ children }: { children: ReactNode }) {
+  const token = useAuthStore((s) => s.token);
   const [overrides, setOverrides] = useState<FocusColorOverrides>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -107,6 +111,23 @@ export function FocusColorsProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    if (!token) return;
+    void fetchPreferences().then((prefs) => {
+      if (prefs.focusColors && typeof prefs.focusColors === "object") {
+        const next: FocusColorOverrides = {};
+        for (const key of ["critical", "steady", "swift", "quiet"] as FocusCategory[]) {
+          const hex = prefs.focusColors[key] ? normalizeHex(prefs.focusColors[key]!) : null;
+          if (hex) next[key] = hex;
+        }
+        setOverrides(next);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+      }
+    }).catch(() => undefined);
+  }, [token]);
+
+  useEffect(() => {
     applyCssVars(overrides);
   }, [overrides]);
 
@@ -116,6 +137,9 @@ export function FocusColorsProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
       // localStorage quota
+    }
+    if (useAuthStore.getState().token) {
+      void updatePreferences({ focusColors: next }).catch(() => undefined);
     }
   }, []);
 

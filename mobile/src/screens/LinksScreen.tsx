@@ -101,7 +101,7 @@ export default function LinksScreen({ navigation }: any) {
         />
       )}
 
-      {notebooks && notebooks.length > 0 && visibleSections.every((s) => s.pages.length === 0) && (
+      {notebooks && notebooks.length > 0 && visibleSections.every((s) => (s.pages ?? []).length === 0) && (
         <EmptyState
           icon="git-branch"
           title="No pages to link"
@@ -126,11 +126,11 @@ function SectionLinks({
   onOpenLinked: (pageId: string, sectionId: string, title: string) => void;
 }) {
   const { colors } = useTheme();
-  if (section.pages.length === 0) return null;
+  if ((section.pages ?? []).length === 0) return null;
   return (
     <View style={{ marginBottom: 16 }}>
       <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>{section.title.toUpperCase()}</Text>
-      {section.pages.map((page) => (
+      {(section.pages ?? []).map((page) => (
         <GlassCard key={page.id} style={{ marginBottom: 8 }} contentStyle={styles.pageCard}>
           <Pressable style={styles.pageRow} onPress={() => onToggle(page.id)}>
             <Feather

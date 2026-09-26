@@ -21,6 +21,8 @@ import {
   fetchRecentPages,
   fetchTasks,
   openDailyNote,
+  unlockNotebook,
+  unlockSection,
   updateTask,
 } from "../lib/api";
 import type { RecentPage, Task } from "../lib/types";
@@ -30,6 +32,7 @@ import { useUiStore } from "../stores/ui";
 import { formatCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { StatusChip } from "../components/StatusChip";
 import { Button } from "../components/ui/button";
+import { PasswordDialog } from "../components/PasswordDialog";
 import { pickGreeting } from "../lib/greetings";
 import { compareTaskPriority, normalizeFocus, sortTasksByPriority, FOCUS_META } from "../lib/taskFocus";
 
@@ -233,21 +236,30 @@ function QuickCapture() {
 
 function RecentPages({ recent }: { recent?: RecentPage[] }) {
   const navigate = useNavigate();
+  const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const sectionPasswords = useUnlockStore((s) => s.sectionPasswords);
   const notebookPasswords = useUnlockStore((s) => s.notebookPasswords);
+  const unlockNotebookStore = useUnlockStore((s) => s.unlockNotebook);
+  const setSectionPasswordStore = useUnlockStore((s) => s.setSectionPassword);
+
+  const [unlockTarget, setUnlockTarget] = useState<{
+    type: "notebook" | "section";
+    id: string;
+    title: string;
+    notebookId?: string;
+    page?: RecentPage;
+  } | null>(null);
 
   // Consolidate multiple sealed pages belonging to the same encrypted notebook
   // into a single entry with a page count so the list isn't cluttered with duplicates.
   const sealedNotebookStats = new Map<string, { count: number; newestDate: string; sample: RecentPage }>();
-  const consolidated: (RecentPage & { isSealed: boolean; sealedCount?: number })[] = [];
+  const consolidated: (RecentPage & { isSealed: boolean; sealedType?: "notebook" | "section"; sealedCount?: number })[] = [];
   const seenSealedNotebooks = new Set<string>();
 
   for (const p of recent ?? []) {
-    const isSealed =
-      (p.section.isLocked && !sectionPasswords[p.section.id]) ||
-      Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
+    const isNotebookLocked = Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
 
-    if (isSealed) {
+    if (isNotebookLocked) {
       const nid = p.section.notebookId;
       const existing = sealedNotebookStats.get(nid);
       if (!existing) {
@@ -262,11 +274,10 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
   }
 
   for (const p of recent ?? []) {
-    const isSealed =
-      (p.section.isLocked && !sectionPasswords[p.section.id]) ||
-      Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
+    const isNotebookLocked = Boolean((p.section as any).notebook?.isLocked && !notebookPasswords[p.section.notebookId]);
+    const isSectionLocked = Boolean(p.section.isLocked && !sectionPasswords[p.section.id]);
 
-    if (isSealed) {
+    if (isNotebookLocked) {
       const nid = p.section.notebookId;
       if (!seenSealedNotebooks.has(nid)) {
         seenSealedNotebooks.add(nid);
@@ -275,9 +286,16 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
           ...p,
           updatedAt: stats?.newestDate ?? p.updatedAt,
           isSealed: true,
+          sealedType: "notebook",
           sealedCount: stats?.count ?? 1,
         });
       }
+    } else if (isSectionLocked) {
+      consolidated.push({
+        ...p,
+        isSealed: true,
+        sealedType: "section",
+      });
     } else {
       consolidated.push({
         ...p,
@@ -288,17 +306,57 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
 
   const list = consolidated.slice(0, 5);
 
-  const openRecentPage = (p: RecentPage, e: React.MouseEvent, isSealed: boolean) => {
+  const openRecentPage = (p: RecentPage & { isSealed: boolean; sealedType?: "notebook" | "section" }, e: React.MouseEvent) => {
     if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
       e.preventDefault();
-      if (isSealed) {
-        navigate(`/notebooks/${p.section.notebookId}`);
+      if (p.isSealed) {
+        if (p.sealedType === "notebook") {
+          setUnlockTarget({
+            type: "notebook",
+            id: p.section.notebookId,
+            title: p.section.notebook.title,
+          });
+        } else {
+          setUnlockTarget({
+            type: "section",
+            id: p.section.id,
+            title: p.section.title,
+            notebookId: p.section.notebookId,
+            page: p,
+          });
+        }
       } else {
         window.history.pushState(null, "", `/notebooks/${p.section.notebookId}`);
         navigate(pageRoute(p));
       }
     }
   };
+
+  async function handleUnlock(password: string) {
+    if (!unlockTarget) return null;
+    try {
+      if (unlockTarget.type === "notebook") {
+        await unlockNotebook(unlockTarget.id, password);
+        const nb = (notebooks ?? []).find((n) => n.id === unlockTarget.id);
+        const secIds = (nb?.sections ?? []).map((s) => s.id);
+        unlockNotebookStore(unlockTarget.id, secIds, password);
+        const target = unlockTarget;
+        setUnlockTarget(null);
+        navigate(`/notebooks/${target.id}`);
+      } else {
+        await unlockSection(unlockTarget.id, password);
+        setSectionPasswordStore(unlockTarget.id, password);
+        const target = unlockTarget;
+        setUnlockTarget(null);
+        if (target.page) {
+          navigate(pageRoute(target.page));
+        }
+      }
+      return null;
+    } catch (err: any) {
+      return err.response?.data?.error ?? "Incorrect password";
+    }
+  }
 
   return (
     <section>
@@ -310,7 +368,7 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
             <li key={p.id} className="animate-rise-in" style={{ animationDelay: `${i * 45}ms` }}>
               <Link
                 to={p.isSealed ? `/notebooks/${p.section.notebookId}` : pageRoute(p)}
-                onClick={(e) => openRecentPage(p, e, p.isSealed)}
+                onClick={(e) => openRecentPage(p, e)}
                 className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 -mx-1 text-sm
                            text-secondary hover:text-primary hover:bg-accent-soft/40 transition-colors"
               >
@@ -318,13 +376,20 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
                   {p.isSealed ? <Lock size={12} className="text-accent" /> : <FileText size={12} />}
                 </span>
                 <span className="flex-1 min-w-0">
-                  {p.isSealed ? (
+                  {p.isSealed && p.sealedType === "notebook" ? (
                     <>
                       <span className="block truncate text-primary font-medium">
                         {p.section.notebook.title}
                       </span>
                       <span className="block truncate text-xs text-secondary/70">
                         Encrypted notebook{p.sealedCount && p.sealedCount > 1 ? ` · ${p.sealedCount} recent pages` : ""}
+                      </span>
+                    </>
+                  ) : p.isSealed && p.sealedType === "section" ? (
+                    <>
+                      <span className="block truncate text-primary font-medium">{p.title}</span>
+                      <span className="block truncate text-xs text-secondary/70">
+                        {p.section.notebook.title} / {p.section.title} · Encrypted section
                       </span>
                     </>
                   ) : (
@@ -347,6 +412,13 @@ function RecentPages({ recent }: { recent?: RecentPage[] }) {
           );
         })}
       </ul>
+      <PasswordDialog
+        open={unlockTarget !== null}
+        onOpenChange={(open) => !open && setUnlockTarget(null)}
+        title={unlockTarget ? `Unlock ${unlockTarget.type === "notebook" ? "notebook" : "section"} "${unlockTarget.title}"` : "Unlock"}
+        submitLabel="Unlock"
+        onSubmit={handleUnlock}
+      />
     </section>
   );
 }

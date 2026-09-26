@@ -76,7 +76,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const unlock = useUnlock();
   const queryClient = useQueryClient();
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
-  const notebookId = routeNotebookId ?? notebooks?.find((nb) => nb.sections.some((s) => s.id === sectionId))?.id;
+  const notebookId = routeNotebookId ?? notebooks?.find((nb) => (nb.sections ?? []).some((s) => s.id === sectionId))?.id;
   const password = unlock.sectionPasswords[sectionId] ?? (notebookId ? unlock.notebookPasswords[notebookId] : undefined);
   const { stackBottomClearance, insets } = useLayout();
 
@@ -105,7 +105,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
     queryKey: ["page", pageId, password ?? null],
     queryFn: () => fetchPage(pageId, password),
   });
-  const sectionMeta = notebooks?.flatMap((nb) => nb.sections).find((s) => s.id === sectionId);
+  const sectionMeta = notebooks?.flatMap((nb) => nb.sections ?? []).find((s) => s.id === sectionId);
   const sectionLocked = Boolean(sectionMeta?.isLocked);
 
   useEffect(() => {
@@ -210,7 +210,15 @@ export default function PageEditorScreen({ route, navigation }: any) {
     }
   }, [pageId, password, queryClient, notebookId, page?.content]);
 
+  useEffect(() => {
+    if (!password && sectionLocked) {
+      setText(null);
+      textRef.current = null;
+    }
+  }, [password, sectionLocked]);
+
   function onChangeText(next: string) {
+    unlock.recordActivity?.();
     if (selection !== undefined) setSelection(undefined);
     setText(next);
     textRef.current = next;
@@ -231,8 +239,8 @@ export default function PageEditorScreen({ route, navigation }: any) {
       ? []
       : (notebooks ?? [])
           .filter((nb) => nb.id === notebookId)
-          .flatMap((nb) => nb.sections)
-          .flatMap((sec) => sec.pages)
+          .flatMap((nb) => nb.sections ?? [])
+          .flatMap((sec) => sec.pages ?? [])
           .filter((p) => p.id !== pageId && p.title.toLowerCase().includes(wikiQuery))
           .slice(0, 6);
 
