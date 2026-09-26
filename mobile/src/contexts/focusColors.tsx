@@ -60,7 +60,7 @@ interface FocusColorsContextValue {
 
 const FocusColorsContext = createContext<FocusColorsContextValue | null>(null);
 
-import { fetchPreferences, updatePreferences } from "../lib/api";
+import { fetchPreferences, getApiToken, updatePreferences } from "../lib/api";
 
 export function FocusColorsProvider({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
@@ -82,23 +82,27 @@ export function FocusColorsProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    void fetchPreferences().then((prefs) => {
-      if (prefs?.focusColors && typeof prefs.focusColors === "object") {
-        const next: FocusColorOverrides = {};
-        for (const key of ["critical", "steady", "swift", "quiet"] as FocusCategory[]) {
-          const hex = prefs.focusColors[key] ? normalizeHex(prefs.focusColors[key]!) : null;
-          if (hex) next[key] = hex;
+    if (getApiToken()) {
+      void fetchPreferences().then((prefs) => {
+        if (prefs?.focusColors && typeof prefs.focusColors === "object") {
+          const next: FocusColorOverrides = {};
+          for (const key of ["critical", "steady", "swift", "quiet"] as FocusCategory[]) {
+            const hex = prefs.focusColors[key] ? normalizeHex(prefs.focusColors[key]!) : null;
+            if (hex) next[key] = hex;
+          }
+          setOverrides(next);
+          void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         }
-        setOverrides(next);
-        void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      }
-    }).catch(() => undefined);
+      }).catch(() => undefined);
+    }
   }, []);
 
   const persist = useCallback((next: FocusColorOverrides) => {
     setOverrides(next);
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    void updatePreferences({ focusColors: next }).catch(() => undefined);
+    if (getApiToken()) {
+      void updatePreferences({ focusColors: next }).catch(() => undefined);
+    }
   }, []);
 
   const colorFor = useCallback(

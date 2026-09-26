@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { darkColors, lightColors, ThemeColors } from "../theme";
-import { fetchPreferences, updatePreferences } from "../lib/api";
+import { fetchPreferences, getApiToken, updatePreferences } from "../lib/api";
 
 type Theme = "light" | "dark";
 
@@ -22,12 +22,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem("theme").then((stored) => {
       if (stored === "light" || stored === "dark") setTheme(stored);
     });
-    fetchPreferences().then((prefs) => {
-      if (prefs?.theme === "light" || prefs?.theme === "dark") {
-        setTheme(prefs.theme);
-        void AsyncStorage.setItem("theme", prefs.theme);
-      }
-    }).catch(() => undefined);
+    if (getApiToken()) {
+      fetchPreferences().then((prefs) => {
+        if (prefs?.theme === "light" || prefs?.theme === "dark") {
+          setTheme(prefs.theme);
+          void AsyncStorage.setItem("theme", prefs.theme);
+        }
+      }).catch(() => undefined);
+    }
   }, []);
 
   const toggle = () =>

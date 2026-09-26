@@ -134,6 +134,9 @@ let authToken: string | null = null;
 export function setApiToken(token: string | null) {
   authToken = token;
 }
+export function getApiToken(): string | null {
+  return authToken;
+}
 
 let onUnauthorized: (() => void) | null = null;
 export function setOnUnauthorized(cb: (() => void) | null) {
@@ -141,7 +144,6 @@ export function setOnUnauthorized(cb: (() => void) | null) {
 }
 
 export const SESSION_ENDED = new Set([
-  "Missing token",
   "Invalid or expired token",
   "Session ended. Please sign in again.",
 ]);

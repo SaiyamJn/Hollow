@@ -71,6 +71,24 @@ async function issueSession(
   userId: string,
   meta: { deviceName: string; platform: string; client: string; ip: string | null }
 ) {
+  // If this device / client already has active sessions, mark them revoked so the Devices
+  // screen does not show multiple duplicate entries for the same device.
+  if (meta.client && meta.deviceName) {
+    try {
+      await prisma.authSession.updateMany({
+        where: {
+          userId,
+          client: meta.client,
+          deviceName: meta.deviceName,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+    } catch {
+      // non-fatal
+    }
+  }
+
   const session = await prisma.authSession.create({
     data: {
       userId,
@@ -259,7 +277,35 @@ router.get("/sessions", requireAuth, async (req: AuthedRequest, res) => {
       lastSeenAt: true,
     },
   });
-  res.json({ sessions: sessions.map((s) => publicSession(s, req.sessionId)) });
+
+  // Deduplicate any historical duplicate rows for the same device & client
+  const seen = new Set<string>();
+  const uniqueSessions: typeof sessions = [];
+  const staleIds: string[] = [];
+
+  for (const s of sessions) {
+    const key = `${s.client}::${s.deviceName}`;
+    if (s.id === req.sessionId) {
+      uniqueSessions.push(s);
+      seen.add(key);
+    } else if (!seen.has(key)) {
+      uniqueSessions.push(s);
+      seen.add(key);
+    } else {
+      staleIds.push(s.id);
+    }
+  }
+
+  if (staleIds.length > 0) {
+    void prisma.authSession
+      .updateMany({
+        where: { id: { in: staleIds } },
+        data: { revokedAt: new Date() },
+      })
+      .catch(() => undefined);
+  }
+
+  res.json({ sessions: uniqueSessions.map((s) => publicSession(s, req.sessionId)) });
 });
 
 /** Revoke one session (remote sign-out). */

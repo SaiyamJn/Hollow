@@ -58,7 +58,6 @@ adminApi.interceptors.response.use(undefined, (error) => {
 });
 
 const SESSION_ENDED = new Set([
-  "Missing token",
   "Invalid or expired token",
   "Session ended. Please sign in again.",
 ]);
