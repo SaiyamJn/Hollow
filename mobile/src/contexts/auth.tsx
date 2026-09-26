@@ -7,6 +7,7 @@ import {
   login as apiLogin,
   register as apiRegister,
   logoutAuthSession,
+  SESSION_ENDED,
 } from "../lib/api";
 import { deleteSecureItem, getSecureItem, setSecureItem } from "../lib/secureStorage";
 import type { User } from "../lib/types";
@@ -60,7 +61,7 @@ function jwtExpired(token: string): boolean {
     const jsonStr =
       typeof globalThis.atob === "function" ? globalThis.atob(b64) : base64Decode(b64);
     const { exp } = JSON.parse(jsonStr);
-    return typeof exp === "number" && exp * 1000 < Date.now();
+    return typeof exp === "number" && exp > 0 && exp * 1000 < Date.now();
   } catch {
     // If client decode is inconclusive, do NOT treat token as expired.
     // Let backend /auth/me or API calls validate the session.
@@ -78,13 +79,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const [token, storedUser] = await Promise.all([getSecureItem(TOKEN_KEY), getSecureItem(USER_KEY)]);
+        const token = await getSecureItem(TOKEN_KEY);
         if (cancelled) return;
-        if (!token || jwtExpired(token)) {
+        if (!token) {
           setStatus("signedOut");
           return;
         }
+        if (jwtExpired(token)) {
+          await deleteSecureItem(TOKEN_KEY);
+          await deleteSecureItem(USER_KEY);
+          if (!cancelled) setStatus("signedOut");
+          return;
+        }
         setApiToken(token);
+
+        const storedUser = await getSecureItem(USER_KEY);
         if (storedUser) {
           try {
             setUser(JSON.parse(storedUser));
@@ -94,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setStatus("signedIn");
 
-        // Cheap session ping — kicks out only on 401; offline keeps the session.
+        // Cheap session ping — kicks out only on 401 with SESSION_ENDED; offline keeps the session.
         void api
           .get("/auth/me")
           .then((res) => {
@@ -106,7 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
           .catch(async (err: any) => {
             if (cancelled) return;
-            if (err.response?.status === 401) {
+            const message = err.response?.data?.error;
+            if (err.response?.status === 401 && typeof message === "string" && SESSION_ENDED.has(message)) {
               setApiToken(null);
               await deleteSecureItem(TOKEN_KEY);
               await deleteSecureItem(USER_KEY);
@@ -123,14 +133,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // On return to foreground, check token expiry and prompt re-login instead
-  // of silently failing mid-session (spec: 04-mobile-spec.md, networking).
+  // On return to foreground, re-validate session with server rather than
+  // abruptly terminating on client-side timer comparisons.
   useEffect(() => {
     const sub = AppState.addEventListener("change", async (state) => {
       if (state !== "active") return;
       try {
         const token = await getSecureItem(TOKEN_KEY);
-        if (token && jwtExpired(token)) await logout({ localOnly: true });
+        if (token) {
+          void api.get("/auth/me").catch((err) => {
+            const message = err.response?.data?.error;
+            if (err.response?.status === 401 && typeof message === "string" && SESSION_ENDED.has(message)) {
+              void logout({ localOnly: true });
+            }
+          });
+        }
       } catch {
         // ignore storage errors on resume
       }
@@ -140,10 +157,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function persistSession(token: string, nextUser: User) {
-    await Promise.all([setSecureItem(TOKEN_KEY, token), setSecureItem(USER_KEY, JSON.stringify(nextUser))]);
     setApiToken(token);
     setUser(nextUser);
     setStatus("signedIn");
+    await setSecureItem(TOKEN_KEY, token);
+    await setSecureItem(USER_KEY, JSON.stringify(nextUser));
   }
 
   async function updateUser(nextUser: User) {
@@ -169,7 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Still clear local session if the network/server call fails.
       }
     }
-    await Promise.all([deleteSecureItem(TOKEN_KEY), deleteSecureItem(USER_KEY)]);
+    await deleteSecureItem(TOKEN_KEY);
+    await deleteSecureItem(USER_KEY);
     setApiToken(null);
     setUser(null);
     setStatus("signedOut");

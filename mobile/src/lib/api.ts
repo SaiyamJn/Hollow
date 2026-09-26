@@ -140,7 +140,7 @@ export function setOnUnauthorized(cb: (() => void) | null) {
   onUnauthorized = cb;
 }
 
-const SESSION_ENDED = new Set([
+export const SESSION_ENDED = new Set([
   "Missing token",
   "Invalid or expired token",
   "Session ended. Please sign in again.",

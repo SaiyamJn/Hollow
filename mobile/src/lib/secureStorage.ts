@@ -14,51 +14,65 @@ function getSecureStore() {
 }
 
 export async function getSecureItem(key: string): Promise<string | null> {
-  if (Platform.OS === "web") {
-    return AsyncStorage.getItem(key);
-  }
+  // Always try AsyncStorage first — fast, reliable across all Android & iOS devices,
+  // immune to Android Keystore / EncryptedSharedPreferences loss/corruption across app restarts.
   try {
-    const SecureStore = await getSecureStore();
-    const val = await SecureStore.getItemAsync(key);
-    if (val !== null) return val;
-    return AsyncStorage.getItem(key);
+    const val = await AsyncStorage.getItem(key);
+    if (val !== null && val !== undefined && val !== "") {
+      return val;
+    }
   } catch {
-    return AsyncStorage.getItem(key);
+    // continue to SecureStore fallback
   }
+
+  if (Platform.OS !== "web") {
+    try {
+      const SecureStore = await getSecureStore();
+      const val = await SecureStore.getItemAsync(key);
+      if (val !== null && val !== undefined && val !== "") {
+        // Backfill into AsyncStorage so subsequent reads are immediate
+        void AsyncStorage.setItem(key, val).catch(() => {});
+        return val;
+      }
+    } catch {
+      // ignore SecureStore errors
+    }
+  }
+
+  return null;
 }
 
 export async function setSecureItem(key: string, value: string): Promise<void> {
-  if (Platform.OS === "web") {
-    await AsyncStorage.setItem(key, value);
-    return;
-  }
-  try {
-    const SecureStore = await getSecureStore();
-    await SecureStore.setItemAsync(key, value);
-  } catch {
-    // ignore
-  }
+  // Always write to AsyncStorage first for guaranteed persistence across app restarts
   try {
     await AsyncStorage.setItem(key, value);
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("AsyncStorage setItem error:", err);
+  }
+
+  if (Platform.OS !== "web") {
+    try {
+      const SecureStore = await getSecureStore();
+      await SecureStore.setItemAsync(key, value);
+    } catch {
+      // ignore SecureStore errors on devices with Keystore issues
+    }
   }
 }
 
 export async function deleteSecureItem(key: string): Promise<void> {
-  if (Platform.OS === "web") {
-    await AsyncStorage.removeItem(key);
-    return;
-  }
-  try {
-    const SecureStore = await getSecureStore();
-    await SecureStore.deleteItemAsync(key);
-  } catch {
-    // ignore
-  }
   try {
     await AsyncStorage.removeItem(key);
   } catch {
     // ignore
+  }
+
+  if (Platform.OS !== "web") {
+    try {
+      const SecureStore = await getSecureStore();
+      await SecureStore.deleteItemAsync(key);
+    } catch {
+      // ignore
+    }
   }
 }
