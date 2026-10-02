@@ -34,12 +34,24 @@ export function subscribeReminderClear(listener: ClearListener) {
   };
 }
 
+const upcomingTimers = new Map<string, number>();
+
 export function remindersPref(): boolean {
-  return localStorage.getItem(PREF_KEY) === "true";
+  if (typeof window === "undefined") return false;
+  const pref = localStorage.getItem(PREF_KEY);
+  if (pref === "false") return false;
+  if (pref === "true") return true;
+  // If not explicitly disabled, default to active if browser permission was already granted
+  return "Notification" in window && Notification.permission === "granted";
 }
 
 function remindersActive(): boolean {
-  return remindersPref() && "Notification" in window && Notification.permission === "granted";
+  return (
+    remindersPref() &&
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    Notification.permission === "granted"
+  );
 }
 
 function getSnoozes(): Record<string, number> {
@@ -56,17 +68,28 @@ function setSnoozes(map: Record<string, number>) {
 
 /** Returns the effective state (false if the browser permission was denied). */
 export async function setRemindersEnabled(on: boolean): Promise<boolean> {
-  if (!on || !("Notification" in window)) {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return false;
+  }
+  if (!on) {
     localStorage.setItem(PREF_KEY, "false");
     return false;
   }
-  const permission = await Notification.requestPermission();
+  let permission = Notification.permission;
+  if (permission !== "granted") {
+    permission = await Notification.requestPermission();
+  }
   const granted = permission === "granted";
   localStorage.setItem(PREF_KEY, granted ? "true" : "false");
   return granted;
 }
 
 export function dismissTaskNotification(taskId: string) {
+  const upcoming = upcomingTimers.get(taskId);
+  if (upcoming) {
+    window.clearTimeout(upcoming);
+    upcomingTimers.delete(taskId);
+  }
   const timer = snoozeTimers.get(taskId);
   if (timer) {
     window.clearTimeout(timer);
@@ -157,11 +180,23 @@ export function notifyDueTasks(tasks: Task[]) {
     openIds.add(task.id);
     if (!task.dueAt) continue;
     const due = new Date(task.dueAt).getTime();
-    if (due > now) continue;
 
     const snoozeUntil = snoozes[task.id];
     if (snoozeUntil && snoozeUntil > now) continue;
     if (snoozeUntil) delete snoozes[task.id];
+
+    // If due in the future (within next 24h), schedule a timer so it notifies precisely on time
+    if (due > now) {
+      const ms = due - now;
+      if (ms <= 24 * 60 * 60 * 1000 && !upcomingTimers.has(task.id)) {
+        const timer = window.setTimeout(() => {
+          upcomingTimers.delete(task.id);
+          notifyDueTasks([task]);
+        }, ms);
+        upcomingTimers.set(task.id, timer);
+      }
+      continue;
+    }
 
     // Only fire for tasks that became due recently — not the whole overdue
     // backlog the first time reminders get switched on.

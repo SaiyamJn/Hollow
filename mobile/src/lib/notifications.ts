@@ -108,6 +108,7 @@ export async function handleNotificationResponse(
       }
       lastHandledResponse = key;
       await AsyncStorage.setItem(HANDLED_RESPONSE_KEY, key);
+      emitTaskChange();
       onChanged?.();
       return;
     }
@@ -122,6 +123,7 @@ export async function handleNotificationResponse(
       }
       lastHandledResponse = key;
       await AsyncStorage.setItem(HANDLED_RESPONSE_KEY, key);
+      emitTaskChange();
       onChanged?.();
       return;
     }
@@ -165,8 +167,11 @@ export type ReminderPrompt = {
 
 type PromptListener = (prompt: ReminderPrompt) => void;
 type ClearListener = (taskId: string) => void;
+type TaskChangeListener = () => void;
+
 let promptListener: PromptListener | null = null;
 let clearListener: ClearListener | null = null;
+const taskChangeListeners = new Set<TaskChangeListener>();
 
 export function subscribeReminderPrompt(listener: PromptListener) {
   promptListener = listener;
@@ -182,6 +187,23 @@ export function subscribeReminderClear(listener: ClearListener) {
   };
 }
 
+export function subscribeTaskChange(listener: TaskChangeListener) {
+  taskChangeListeners.add(listener);
+  return () => {
+    taskChangeListeners.delete(listener);
+  };
+}
+
+export function emitTaskChange() {
+  taskChangeListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      // ignore
+    }
+  });
+}
+
 export function emitReminderPrompt(prompt: ReminderPrompt) {
   promptListener?.(prompt);
 }
@@ -192,43 +214,51 @@ export function notificationIdForTask(taskId: string) {
 
 let boundNotificationResponse = false;
 
-export function initNotifications() {
+// Set default notification behavior at module load time so incoming notifications
+// are presented immediately even if the app was backgrounded or cold-started.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    priority: Notifications.AndroidNotificationPriority.MAX,
+  }),
+});
+
+export async function initNotifications() {
   Notifications.setNotificationHandler({
-    handleNotification: async () => {
-      const inApp = AppState.currentState === "active";
-      return {
-        // In the foreground we show a Hollow popup instead of the system banner.
-        shouldShowBanner: !inApp,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      };
-    },
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+    }),
   });
-  void registerTaskCategory();
+  await registerTaskCategory();
   if (Platform.OS === "android") {
-    void Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: "Task reminders",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       sound: "default",
       enableVibrate: true,
-      showBadge: false,
+      showBadge: true,
       lightColor: ACCENT,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
   if (!boundNotificationResponse) {
     boundNotificationResponse = true;
     Notifications.addNotificationResponseReceivedListener((response) => {
-      // Delegate to the shared handler so Complete actually marks the task done
-      // and Snooze reschedules — the previous dismiss-only path left the
-      // notification in the shade and never called the API.
       void handleNotificationResponse(response);
     });
-    // Headless task — lets Complete / Remind later act from the shade even
-    // when the app is backgrounded or terminated (Android).
     void Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch(() => undefined);
   }
+  void ensureNotificationPermissions();
 }
 
 async function registerTaskCategory() {
@@ -246,8 +276,58 @@ async function registerTaskCategory() {
   ]);
 }
 
+/** Check if notifications are enabled, falling back to OS permission state if preference is unset. */
 export async function getNotificationsEnabled(): Promise<boolean> {
-  return (await AsyncStorage.getItem(PREF_KEY)) === "true";
+  const pref = await AsyncStorage.getItem(PREF_KEY);
+  if (pref === "false") return false;
+  if (pref === "true") {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      return status === "granted";
+    } catch {
+      return true;
+    }
+  }
+  // If not explicitly set yet, check if system notification permission is granted
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status === "granted") {
+      await AsyncStorage.setItem(PREF_KEY, "true");
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+/** Ensure notification permissions are requested on first use if not explicitly disabled. */
+export async function ensureNotificationPermissions(): Promise<boolean> {
+  const pref = await AsyncStorage.getItem(PREF_KEY);
+  if (pref === "false") return false;
+
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === "granted") {
+      await AsyncStorage.setItem(PREF_KEY, "true");
+      return true;
+    }
+    if (current.canAskAgain || current.status === "undetermined") {
+      const req = await Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+        android: {},
+      });
+      const granted = req.status === "granted";
+      await AsyncStorage.setItem(PREF_KEY, granted ? "true" : "false");
+      if (granted) {
+        await registerTaskCategory();
+      }
+      return granted;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
 }
 
 /** Returns the effective state (false if the OS permission was denied). */
@@ -323,11 +403,17 @@ function contentFor(kind: ReminderPrompt["kind"], title: string, taskId: string)
     categoryIdentifier: TASK_CATEGORY,
     color: ACCENT,
     autoDismiss: true,
+    vibrate: [0, 250, 250, 250],
+    priority: "max",
     ...(Platform.OS === "ios" ? { interruptionLevel: "timeSensitive" as const } : {}),
   };
 }
 
 async function scheduleAt(date: Date, kind: ReminderPrompt["kind"], title: string, taskId: string) {
+  if (date.getTime() <= Date.now()) {
+    await scheduleIn(2, kind, title, taskId);
+    return;
+  }
   await Notifications.scheduleNotificationAsync({
     identifier: notificationIdForTask(taskId),
     content: contentFor(kind, title, taskId),
@@ -420,7 +506,14 @@ export async function snoozeTaskReminder(taskId: string, title: string, kind: Re
  * - Done tasks → drop any leftover tray / scheduled notifications.
  */
 export async function syncTaskReminders(tasks: Task[] | undefined) {
-  if (!(await getNotificationsEnabled())) return;
+  let enabled = await getNotificationsEnabled();
+  if (!enabled) {
+    const pref = await AsyncStorage.getItem(PREF_KEY);
+    if (pref !== "false") {
+      enabled = await ensureNotificationPermissions();
+    }
+  }
+  if (!enabled) return;
   if (!tasks) return;
 
   if (Platform.OS === "android") {
@@ -430,7 +523,9 @@ export async function syncTaskReminders(tasks: Task[] | undefined) {
       vibrationPattern: [0, 250, 250, 250],
       sound: "default",
       enableVibrate: true,
+      showBadge: true,
       lightColor: ACCENT,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
   await registerTaskCategory();
@@ -482,7 +577,7 @@ export async function syncTaskReminders(tasks: Task[] | undefined) {
 
     stillNeedsOnce.add(task.id);
     if (fired.has(task.id)) continue;
-    await scheduleIn(8, "overdue", task.title, task.id);
+    await scheduleIn(2, "overdue", task.title, task.id);
     fired.add(task.id);
   }
 

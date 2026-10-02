@@ -8,11 +8,13 @@ import {
   completeTask,
   dismissTaskNotifications,
   emitReminderPrompt,
+  ensureNotificationPermissions,
   handleNotificationResponse,
   promptFromNotification,
   snoozeTaskReminder,
   subscribeReminderClear,
   subscribeReminderPrompt,
+  subscribeTaskChange,
   syncTaskReminders,
   type ReminderPrompt,
 } from "../lib/notifications";
@@ -32,6 +34,14 @@ export function ReminderHost() {
   });
 
   useEffect(() => {
+    if (status === "signedIn") {
+      void ensureNotificationPermissions().then((enabled) => {
+        if (enabled && tasks) void syncTaskReminders(tasks);
+      });
+    }
+  }, [status]);
+
+  useEffect(() => {
     if (status === "signedIn" && tasks) void syncTaskReminders(tasks);
   }, [status, tasks]);
 
@@ -43,6 +53,12 @@ export function ReminderHost() {
       }),
     []
   );
+
+  useEffect(() => {
+    return subscribeTaskChange(() => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    });
+  }, [queryClient]);
 
   useEffect(() => {
     if (status !== "signedIn") return;
