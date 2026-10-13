@@ -451,6 +451,7 @@ export async function createQuickNote(input: {
   color?: string;
   kind?: "note" | "list";
   items?: ChecklistItem[];
+  archived?: boolean;
 }) {
   const { data } = await api.post<QuickNote>("/quick-notes", input);
   return data;

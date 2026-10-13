@@ -129,18 +129,23 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   const buildPatch = useCallback(
     (snap: { title: string; content: string; color: string; items?: ChecklistItem[]; kind: "note" | "list"; supportsTitleField: boolean }) => {
       if (snap.kind === "list") {
+        const cleanedItems = snap.items
+          ? (snap.items.filter((i) => i.text.trim().length > 0).length > 0
+              ? snap.items.filter((i) => i.text.trim().length > 0)
+              : snap.items)
+          : undefined;
         if (snap.supportsTitleField) {
           return {
             title: snap.title,
             content: "",
             color: snap.color,
-            items: snap.items,
+            items: cleanedItems,
           };
         }
         return {
           content: snap.title.trim() || " ",
           color: snap.color,
-          items: snap.items,
+          items: cleanedItems,
         };
       }
 
@@ -176,10 +181,15 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
       // Retry once with packed content if title field was rejected.
       try {
         const packed = packNoteBody(snap.title, snap.content);
+        const cleanedItems = snap.items
+          ? (snap.items.filter((i) => i.text.trim().length > 0).length > 0
+              ? snap.items.filter((i) => i.text.trim().length > 0)
+              : snap.items)
+          : undefined;
         await updateQuickNote(noteId, {
           content: packed.trim() ? packed : " ",
           color: snap.color,
-          ...(latest.current.kind === "list" ? { items: snap.items } : {}),
+          ...(latest.current.kind === "list" ? { items: cleanedItems } : {}),
         });
         setSaveState("saved");
         invalidate();
@@ -245,6 +255,12 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
         ).then(invalidate);
         return;
       }
+      if (snap.kind === "list" && snap.items) {
+        const filled = snap.items.filter((i) => i.text.trim().length > 0);
+        if (filled.length > 0) {
+          snap.items = filled;
+        }
+      }
       if (pending.current) {
         void saveNow();
       }
@@ -266,6 +282,12 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
           void queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
         });
         return;
+      }
+      if (snap.kind === "list" && snap.items) {
+        const filled = snap.items.filter((i) => i.text.trim().length > 0);
+        if (filled.length > 0) {
+          snap.items = filled;
+        }
       }
       void saveNow();
     };
@@ -352,6 +374,16 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
     patchItems(next.length ? next : [{ id: newItemId(), text: "", done: false }]);
   }
 
+  function removeAndFocusPrev(item: ChecklistItem) {
+    const curIndex = items.findIndex((i) => i.id === item.id);
+    const prevItem = curIndex > 0 ? items[curIndex - 1] : undefined;
+    const next = items.filter((i) => i.id !== item.id);
+    patchItems(next.length ? next : [{ id: newItemId(), text: "", done: false }]);
+    if (prevItem) {
+      setFocusId(prevItem.id);
+    }
+  }
+
   const pinned = note?.pinned ?? false;
   const archived = note?.archived ?? false;
   const { isNarrow, screenPad, insets } = useLayout();
@@ -403,6 +435,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                     updateItem(item.id, { text });
                   }}
                   onRemove={() => removeItem(item.id)}
+                  onBackspaceEmpty={() => removeAndFocusPrev(item)}
                   onSubmit={addItem}
                 />
               ))}
@@ -534,6 +567,7 @@ function ChecklistRow({
   onChangeText,
   onRemove,
   onSubmit,
+  onBackspaceEmpty,
   focusId,
 }: {
   item: ChecklistItem;
@@ -541,6 +575,7 @@ function ChecklistRow({
   onChangeText: (text: string) => void;
   onRemove: () => void;
   onSubmit?: () => void;
+  onBackspaceEmpty?: () => void;
   focusId?: string | null;
 }) {
   const { colors } = useTheme();
@@ -572,8 +607,18 @@ function ChecklistRow({
         placeholderTextColor={colors.textSecondary}
         onSubmitEditing={onSubmit}
         returnKeyType="next"
+        onKeyPress={({ nativeEvent }) => {
+          if (nativeEvent.key === "Backspace" && item.text === "") {
+            onBackspaceEmpty?.();
+          }
+        }}
       />
-      <Pressable onPress={onRemove} hitSlop={8}>
+      <Pressable
+        onPress={onRemove}
+        hitSlop={10}
+        accessibilityLabel="Delete item"
+        style={{ padding: 4 }}
+      >
         <Feather name="x" size={16} color={colors.textSecondary} />
       </Pressable>
     </View>

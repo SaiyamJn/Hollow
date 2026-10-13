@@ -22,6 +22,7 @@ const createSchema = z.object({
   color: z.string().optional(),
   kind: z.enum(["note", "list"]).optional(),
   items: z.array(checklistItemSchema).optional(),
+  archived: z.boolean().optional(),
 });
 
 const patchSchema = z.object({
@@ -178,6 +179,7 @@ router.post("/", async (req: AuthedRequest, res) => {
       items: kind === "list" ? sealItems(parsed.data.items ?? []) : null,
       ownerId: req.userId!,
       sortOrder: Math.floor(Date.now() / 1000),
+      archived: parsed.data.archived ?? false,
     },
   });
   res.status(201).json(publicNote(note));

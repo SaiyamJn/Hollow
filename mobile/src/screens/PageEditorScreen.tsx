@@ -101,7 +101,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const scrollOffsetRef = useRef(0);
   const restoredScrollRef = useRef(false);
 
-  const { data: page, error, isLoading } = useQuery({
+  const { data: page, error, isLoading, refetch } = useQuery({
     queryKey: ["page", pageId, password ?? null],
     queryFn: () => fetchPage(pageId, password),
   });
@@ -137,7 +137,9 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   // Remember where the user is so the floating "+" can target this section.
   useEffect(() => {
-    if (page) rememberSection(page.section.id, page.section.title, page.section.notebookId);
+    if (page?.section?.id) {
+      rememberSection(page.section.id, page.section.title, page.section.notebookId);
+    }
   }, [page]);
 
   const editorScrollRef = useRef<ScrollView>(null);
@@ -378,6 +380,22 @@ export default function PageEditorScreen({ route, navigation }: any) {
     );
   }
 
+  if (error && status !== 423 && status !== 401) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.surface0, padding: 24 }]}>
+        <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 16 }}>
+          Couldn't load this page.
+        </Text>
+        <Pressable
+          style={[styles.unlockBtn, { backgroundColor: colors.accentSoft }]}
+          onPress={() => void refetch()}
+        >
+          <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "500" }}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (isLoading || text === null || !positionReady) {
     return (
       <View style={[styles.center, { backgroundColor: colors.surface0 }]}>
@@ -386,7 +404,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
     );
   }
 
-  const showTemplates = !templatesDismissed && !page?.content && text.trim() === "";
+  const showTemplates = !templatesDismissed && !page?.content && (text?.trim() ?? "") === "";
 
   const mediaSegments = useMemo(() => {
     const all = extractPageSegments(page?.content ?? "");
@@ -495,7 +513,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
             ref={inputRef}
             style={[
               styles.editor,
-              { color: colors.textPrimary, flex: 1, minHeight: "100%" },
+              { color: colors.textPrimary, flex: 1, minHeight: 320 },
               focus && styles.focusEditor,
             ]}
             multiline

@@ -1,15 +1,14 @@
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   api,
   setApiToken,
-  setOnUnauthorized,
   login as apiLogin,
   register as apiRegister,
   logoutAuthSession,
-  SESSION_ENDED,
 } from "../lib/api";
 import { deleteSecureItem, getSecureItem, setSecureItem } from "../lib/secureStorage";
+import { queryClient } from "../lib/queryClient";
 import type { User } from "../lib/types";
 
 type Status = "loading" | "signedIn" | "signedOut";
@@ -29,43 +28,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = "hollow-token";
 const USER_KEY = "hollow-user";
 
-const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-function base64Decode(input: string): string {
-  const clean = input.replace(/=+$/, "");
-  let bits = 0;
-  let value = 0;
-  let out = "";
-  for (const char of clean) {
-    const idx = B64.indexOf(char);
-    if (idx === -1) continue;
-    value = (value << 6) | idx;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out += String.fromCharCode((value >> bits) & 0xff);
-    }
-  }
-  return out;
-}
-
-// Decode the JWT payload (base64url) without verifying — the client only
-// needs the `exp` claim to know when to prompt a re-login.
-function jwtExpired(token: string): boolean {
+async function purgeAccountCache() {
   try {
-    const parts = token.split(".");
-    if (parts.length < 2) return false;
-    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4 !== 0) {
-      b64 += "=";
-    }
-    const jsonStr =
-      typeof globalThis.atob === "function" ? globalThis.atob(b64) : base64Decode(b64);
-    const { exp } = JSON.parse(jsonStr);
-    return typeof exp === "number" && exp > 0 && exp * 1000 < Date.now();
+    queryClient.clear();
+    await AsyncStorage.multiRemove([
+      "hollow-offline-queue",
+      "hollow-nav-memory",
+      "hollow-notified-tasks",
+      "hollow-fired-once",
+      "hollow-snoozed-tasks",
+    ]);
   } catch {
-    // If client decode is inconclusive, do NOT treat token as expired.
-    // Let backend /auth/me or API calls validate the session.
-    return false;
+    // ignore
   }
 }
 
@@ -73,8 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [user, setUser] = useState<User | null>(null);
 
-  // Cold start: restore session from storage immediately (don't block the UI
-  // on a heavy /notebooks tree). Validate the token in the background.
+  // Cold start: restore session from storage immediately.
+  // Phone sessions stay logged in permanently until explicitly signed out.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -83,12 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (!token) {
           setStatus("signedOut");
-          return;
-        }
-        if (jwtExpired(token)) {
-          await deleteSecureItem(TOKEN_KEY);
-          await deleteSecureItem(USER_KEY);
-          if (!cancelled) setStatus("signedOut");
           return;
         }
         setApiToken(token);
@@ -103,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setStatus("signedIn");
 
-        // Cheap session ping — kicks out only on 401 with SESSION_ENDED; offline keeps the session.
+        // Ping /auth/me in background to keep user details fresh, but never auto-logout on phone.
         void api
           .get("/auth/me")
           .then((res) => {
@@ -113,16 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               void setSecureItem(USER_KEY, JSON.stringify(res.data.user));
             }
           })
-          .catch(async (err: any) => {
-            if (cancelled) return;
-            const message = err.response?.data?.error;
-            if (err.response?.status === 401 && typeof message === "string" && SESSION_ENDED.has(message)) {
-              setApiToken(null);
-              await deleteSecureItem(TOKEN_KEY);
-              await deleteSecureItem(USER_KEY);
-              setUser(null);
-              setStatus("signedOut");
-            }
+          .catch(() => {
+            // offline / network error / ping failure — preserve phone session
           });
       } catch {
         if (!cancelled) setStatus("signedOut");
@@ -133,30 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // On return to foreground, re-validate session with server rather than
-  // abruptly terminating on client-side timer comparisons.
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", async (state) => {
-      if (state !== "active") return;
-      try {
-        const token = await getSecureItem(TOKEN_KEY);
-        if (token) {
-          void api.get("/auth/me").catch((err) => {
-            const message = err.response?.data?.error;
-            if (err.response?.status === 401 && typeof message === "string" && SESSION_ENDED.has(message)) {
-              void logout({ localOnly: true });
-            }
-          });
-        }
-      } catch {
-        // ignore storage errors on resume
-      }
-    });
-    return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function persistSession(token: string, nextUser: User) {
+    await purgeAccountCache();
     setApiToken(token);
     setUser(nextUser);
     setStatus("signedIn");
@@ -187,22 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Still clear local session if the network/server call fails.
       }
     }
+    await purgeAccountCache();
     await deleteSecureItem(TOKEN_KEY);
     await deleteSecureItem(USER_KEY);
     setApiToken(null);
     setUser(null);
     setStatus("signedOut");
   }
-
-  const logoutRef = useRef(logout);
-  logoutRef.current = logout;
-
-  useEffect(() => {
-    setOnUnauthorized(() => {
-      void logoutRef.current({ localOnly: true });
-    });
-    return () => setOnUnauthorized(null);
-  }, []);
 
   return (
     <AuthContext.Provider value={{ status, user, login, register, updateUser, logout }}>{children}</AuthContext.Provider>

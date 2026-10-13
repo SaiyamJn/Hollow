@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeft,
   CheckSquare,
   FileDown,
   ListTodo,
@@ -127,6 +128,39 @@ export default function QuickNotes() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, hoverNoteId]);
 
+  // Close archive on Escape
+  useEffect(() => {
+    function onEsc(e: globalThis.KeyboardEvent) {
+      if (e.key === "Escape" && showArchived && !editing && !confirmTrash && !confirmDeleteEdit) {
+        e.preventDefault();
+        setShowArchived(false);
+      }
+    }
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [showArchived, editing, confirmTrash, confirmDeleteEdit]);
+
+  // Close archive on browser back button
+  useEffect(() => {
+    if (showArchived) {
+      window.history.pushState({ hollowArchive: true }, "");
+      const onPop = () => {
+        setShowArchived(false);
+      };
+      window.addEventListener("popstate", onPop);
+      return () => {
+        window.removeEventListener("popstate", onPop);
+      };
+    }
+  }, [showArchived]);
+
+  // Also close archive when navigating away from notes section
+  useEffect(() => {
+    return () => {
+      setShowArchived(false);
+    };
+  }, []);
+
   const { data: library } = useQuery({
     queryKey: ["quicknotes", "library"],
     queryFn: () => fetchQuickNotes(true),
@@ -175,7 +209,13 @@ export default function QuickNotes() {
   }
 
   const create = useMutation({
-    mutationFn: () => createQuickNote({ content: draft.trim() || " ", color: draftColor, kind: "note" }),
+    mutationFn: () =>
+      createQuickNote({
+        content: draft.trim() || " ",
+        color: draftColor,
+        kind: "note",
+        archived: showArchived,
+      }),
     onSuccess: () => {
       setDraft("");
       setDraftColor("yellow");
@@ -191,6 +231,7 @@ export default function QuickNotes() {
         color: kind === "list" ? "green" : "yellow",
         kind,
         items: kind === "list" ? [{ id: newItemId(), text: "", done: false }] : undefined,
+        archived: showArchived,
       }),
     onSuccess: (note) => {
       invalidate();
@@ -225,10 +266,17 @@ export default function QuickNotes() {
       clearTimeout(emptyDeleteTimer.current);
       emptyDeleteTimer.current = null;
     }
+    const cleanItems = editing.kind === "list"
+      ? editing.items.filter((it) => it.text.trim() !== "")
+      : undefined;
+    const effectiveEdit = {
+      ...editing,
+      items: cleanItems ?? editing.items,
+    };
     // Auto-delete notes/lists that end up empty (no title, no content, no items).
     // Brand-new drafts are removed outright; an existing note that's emptied goes
     // to the recycle bin so it can still be restored within 7 days.
-    if (isEmptyEdit(editing)) {
+    if (isEmptyEdit(effectiveEdit)) {
       try {
         if (editing.isNew) {
           await deleteQuickNotePermanent(editing.id);
@@ -249,7 +297,7 @@ export default function QuickNotes() {
           title: editing.title,
           content: editing.kind === "list" ? " " : editing.content || " ",
           color: editing.color,
-          items: editing.kind === "list" ? editing.items : undefined,
+          items: cleanItems,
         });
         invalidate();
       } catch {
@@ -444,59 +492,69 @@ export default function QuickNotes() {
         </p>
       </div>
 
-      {!showArchived && (
-        <>
-          <div className="flex gap-3 max-w-xl mx-auto mb-4">
-            <button
-              type="button"
-              disabled={createBlank.isPending}
-              onClick={() => createBlank.mutate("note")}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-[rgb(250,184,8)]/50 hover:bg-[rgb(250,184,8)]/12 transition-colors"
-            >
-              <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center bg-[rgb(250,184,8)]/22 text-[rgb(180,83,9)] dark:text-[rgb(250,204,21)]">
-                <StickyNote size={15} />
-              </span>
-              Note
-            </button>
-            <button
-              type="button"
-              disabled={createBlank.isPending}
-              onClick={() => createBlank.mutate("list")}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-accent/50 hover:bg-accent-soft transition-colors"
-            >
-              <span className="icon-well h-8 w-8 rounded-xl">
-                <ListTodo size={15} />
-              </span>
-              List
-            </button>
-          </div>
-
-          <div
-            className="rounded-xl border border-border glass p-5 mb-6 max-w-3xl mx-auto shadow-card text-center"
-            style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
+      {showArchived && (
+        <div className="flex items-center justify-between max-w-xl mx-auto mb-4">
+          <button
+            type="button"
+            onClick={() => setShowArchived(false)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border glass px-3.5 py-2 text-xs font-semibold text-secondary hover:text-primary transition-colors"
           >
-            <textarea
-              className={clsx(
-                "w-full bg-transparent resize-none focus:outline-none placeholder:text-secondary text-left overflow-y-auto",
-                draftFocus || draft.length > 80 ? "min-h-[220px] max-h-[55vh] text-base leading-relaxed" : "max-h-40 text-sm"
-              )}
-              rows={draftFocus || draft.length > 80 ? 10 : 3}
-              placeholder="A quick thought…"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onDraftKeyDown}
-              onFocus={() => setDraftFocus(true)}
-              onBlur={() => setDraftFocus(false)}
-            />
-            <div className="flex flex-col items-center gap-3 mt-3">
-              <ColorDots value={draftColor} onPick={setDraftColor} />
-              <Button variant="accent" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()}>
-                {create.isPending ? "Adding…" : "Save"}
-              </Button>
-            </div>
-          </div>
-        </>
+            <ArrowLeft size={14} />
+            Back to Capture (Esc)
+          </button>
+          <span className="text-xs text-secondary font-medium">Archive</span>
+        </div>
       )}
+
+      <div className="flex gap-3 max-w-xl mx-auto mb-4">
+        <button
+          type="button"
+          disabled={createBlank.isPending}
+          onClick={() => createBlank.mutate("note")}
+          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-[rgb(250,184,8)]/50 hover:bg-[rgb(250,184,8)]/12 transition-colors"
+        >
+          <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center bg-[rgb(250,184,8)]/22 text-[rgb(180,83,9)] dark:text-[rgb(250,204,21)]">
+            <StickyNote size={15} />
+          </span>
+          {showArchived ? "Note in archive" : "Note"}
+        </button>
+        <button
+          type="button"
+          disabled={createBlank.isPending}
+          onClick={() => createBlank.mutate("list")}
+          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-accent/50 hover:bg-accent-soft transition-colors"
+        >
+          <span className="icon-well h-8 w-8 rounded-xl">
+            <ListTodo size={15} />
+          </span>
+          {showArchived ? "List in archive" : "List"}
+        </button>
+      </div>
+
+      <div
+        className="rounded-xl border border-border glass p-5 mb-6 max-w-3xl mx-auto shadow-card text-center"
+        style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
+      >
+        <textarea
+          className={clsx(
+            "w-full bg-transparent resize-none focus:outline-none placeholder:text-secondary text-left overflow-y-auto",
+            draftFocus || draft.length > 80 ? "min-h-[220px] max-h-[55vh] text-base leading-relaxed" : "max-h-40 text-sm"
+          )}
+          rows={draftFocus || draft.length > 80 ? 10 : 3}
+          placeholder={showArchived ? "A thought to save directly in the archive…" : "A quick thought…"}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onDraftKeyDown}
+          onFocus={() => setDraftFocus(true)}
+          onBlur={() => setDraftFocus(false)}
+        />
+        <div className="flex flex-col items-center gap-3 mt-3">
+          <ColorDots value={draftColor} onPick={setDraftColor} />
+          <Button variant="accent" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()}>
+            {create.isPending ? "Adding…" : showArchived ? "Save to archive" : "Save"}
+          </Button>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
         <button
@@ -664,8 +722,8 @@ export default function QuickNotes() {
                 <div className="space-y-1.5 flex-1 min-h-[12rem] overflow-y-auto">
                   {[...editing.items]
                     .sort((a, b) => Number(a.done) - Number(b.done))
-                    .map((item, idx) => (
-                    <div key={item.id} className="flex items-center gap-2">
+                    .map((item) => (
+                    <div key={item.id} className="flex items-center gap-2 group/item">
                       <button
                         type="button"
                         onClick={() => {
@@ -674,11 +732,12 @@ export default function QuickNotes() {
                           );
                           persistEdit({ ...editing, items });
                         }}
-                        className="text-secondary hover:text-accent"
+                        className="text-secondary hover:text-accent shrink-0"
                       >
                         {item.done ? <CheckSquare size={15} /> : <Square size={15} />}
                       </button>
                       <input
+                        data-item-id={item.id}
                         className={clsx(
                           "flex-1 bg-transparent text-sm focus:outline-none",
                           item.done && "line-through text-secondary"
@@ -694,12 +753,48 @@ export default function QuickNotes() {
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
+                            const curIndex = editing.items.findIndex((it) => it.id === item.id);
+                            const newId = newItemId();
                             const items = [...editing.items];
-                            items.splice(idx + 1, 0, { id: newItemId(), text: "", done: false });
+                            items.splice(curIndex >= 0 ? curIndex + 1 : items.length, 0, {
+                              id: newId,
+                              text: "",
+                              done: false,
+                            });
                             persistEdit({ ...editing, items });
+                            setTimeout(() => {
+                              const el = document.querySelector(`[data-item-id="${newId}"]`) as HTMLInputElement | null;
+                              el?.focus();
+                            }, 10);
+                          } else if (e.key === "Backspace" && item.text === "" && editing.items.length > 1) {
+                            e.preventDefault();
+                            const curIndex = editing.items.findIndex((it) => it.id === item.id);
+                            const prevItem = curIndex > 0 ? editing.items[curIndex - 1] : editing.items[curIndex + 1];
+                            const items = editing.items.filter((it) => it.id !== item.id);
+                            persistEdit({ ...editing, items });
+                            if (prevItem) {
+                              setTimeout(() => {
+                                const el = document.querySelector(`[data-item-id="${prevItem.id}"]`) as HTMLInputElement | null;
+                                el?.focus();
+                              }, 10);
+                            }
                           }
                         }}
                       />
+                      <button
+                        type="button"
+                        title="Delete item"
+                        className="p-1 rounded text-secondary/40 hover:text-danger hover:bg-surface-2 transition-colors shrink-0 opacity-60 hover:opacity-100"
+                        onClick={() => {
+                          const items = editing.items.filter((it) => it.id !== item.id);
+                          persistEdit({
+                            ...editing,
+                            items: items.length ? items : [{ id: newItemId(), text: "", done: false }],
+                          });
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                   ))}
                   <button
@@ -772,13 +867,14 @@ export default function QuickNotes() {
                         void closeEditor();
                         return;
                       }
+                      const cleanItems = editing.kind === "list" ? editing.items.filter((i) => i.text.trim().length > 0) : undefined;
                       saveEdit.mutate({
                         id: editing.id,
                         patch: {
                           title: editing.title,
                           content: editing.kind === "list" ? " " : editing.content || " ",
                           color: editing.color,
-                          items: editing.kind === "list" ? editing.items : undefined,
+                          items: editing.kind === "list" ? (cleanItems && cleanItems.length > 0 ? cleanItems : editing.items) : undefined,
                         },
                       });
                     }}

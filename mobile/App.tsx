@@ -58,18 +58,10 @@ export type RootStackParamList = {
   Register: undefined;
 };
 
+import { queryClient } from "./src/lib/queryClient";
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator();
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-    },
-  },
-});
 
 /** Top inset that clears the system status bar on all Android variants. */
 function useStatusBarInset() {

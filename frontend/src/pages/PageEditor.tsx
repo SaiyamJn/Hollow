@@ -61,7 +61,13 @@ function parseContent(raw: string): PartialBlock[] | undefined {
   } catch {
     // legacy/plain content: one paragraph per line
   }
-  return raw.split("\n").map((line) => ({ type: "paragraph", content: line }) as PartialBlock);
+  return raw.split("\n").map(
+    (line) =>
+      ({
+        type: "paragraph",
+        content: line ? [{ type: "text", text: line, styles: {} }] : [],
+      }) as PartialBlock
+  );
 }
 
 export default function PageEditor() {
@@ -261,8 +267,12 @@ function Editor({
   useEffect(() => {
     if (session.seed && page.content && !seededRef.current) {
       seededRef.current = true;
-      const blocks = parseContent(page.content);
-      if (blocks) editor.replaceBlocks(editor.document, blocks);
+      try {
+        const blocks = parseContent(page.content);
+        if (blocks && blocks.length > 0) editor.replaceBlocks(editor.document, blocks);
+      } catch (err) {
+        console.warn("Failed to seed blocks from page content:", err);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, page.content, editor]);

@@ -405,6 +405,7 @@ function contentFor(kind: ReminderPrompt["kind"], title: string, taskId: string)
     autoDismiss: true,
     vibrate: [0, 250, 250, 250],
     priority: "max",
+    ...(Platform.OS === "android" ? { channelId: CHANNEL_ID } : {}),
     ...(Platform.OS === "ios" ? { interruptionLevel: "timeSensitive" as const } : {}),
   };
 }

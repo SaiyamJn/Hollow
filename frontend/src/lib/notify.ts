@@ -20,8 +20,37 @@ let clearListener: ClearListener | null = null;
 const openNotifications = new Map<string, Notification>();
 const snoozeTimers = new Map<string, number>();
 
+const pendingPrompts = new Map<string, ReminderPrompt>();
+
+function emitPrompt(prompt: ReminderPrompt) {
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    promptListener?.(prompt);
+  } else {
+    pendingPrompts.set(prompt.taskId, prompt);
+  }
+}
+
+function flushPendingPrompts() {
+  if (typeof document !== "undefined" && document.visibilityState === "visible" && promptListener) {
+    if (pendingPrompts.size > 0) {
+      const next = pendingPrompts.values().next().value;
+      if (next) {
+        pendingPrompts.delete(next.taskId);
+        promptListener(next);
+      }
+    }
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    flushPendingPrompts();
+  });
+}
+
 export function subscribeReminderPrompt(listener: PromptListener) {
   promptListener = listener;
+  flushPendingPrompts();
   return () => {
     if (promptListener === listener) promptListener = null;
   };
@@ -40,18 +69,7 @@ export function remindersPref(): boolean {
   if (typeof window === "undefined") return false;
   const pref = localStorage.getItem(PREF_KEY);
   if (pref === "false") return false;
-  if (pref === "true") return true;
-  // If not explicitly disabled, default to active if browser permission was already granted
-  return "Notification" in window && Notification.permission === "granted";
-}
-
-function remindersActive(): boolean {
-  return (
-    remindersPref() &&
-    typeof window !== "undefined" &&
-    "Notification" in window &&
-    Notification.permission === "granted"
-  );
+  return true;
 }
 
 function getSnoozes(): Record<string, number> {
@@ -66,25 +84,28 @@ function setSnoozes(map: Record<string, number>) {
   localStorage.setItem(SNOOZE_KEY, JSON.stringify(map));
 }
 
-/** Returns the effective state (false if the browser permission was denied). */
+/** Returns the effective state (false if explicitly disabled). */
 export async function setRemindersEnabled(on: boolean): Promise<boolean> {
-  if (typeof window === "undefined" || !("Notification" in window)) {
+  if (typeof window === "undefined") {
     return false;
   }
   if (!on) {
     localStorage.setItem(PREF_KEY, "false");
     return false;
   }
-  let permission = Notification.permission;
-  if (permission !== "granted") {
-    permission = await Notification.requestPermission();
+  localStorage.setItem(PREF_KEY, "true");
+  if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+    try {
+      await Notification.requestPermission();
+    } catch {
+      // ignore
+    }
   }
-  const granted = permission === "granted";
-  localStorage.setItem(PREF_KEY, granted ? "true" : "false");
-  return granted;
+  return true;
 }
 
 export function dismissTaskNotification(taskId: string) {
+  pendingPrompts.delete(taskId);
   const upcoming = upcomingTimers.get(taskId);
   if (upcoming) {
     window.clearTimeout(upcoming);
@@ -110,6 +131,7 @@ export function snoozeTaskReminder(
   title = "Task",
   kind: ReminderPrompt["kind"] = "reminder"
 ) {
+  pendingPrompts.delete(taskId);
   const snoozes = getSnoozes();
   snoozes[taskId] = Date.now() + SNOOZE_MS;
   setSnoozes(snoozes);
@@ -131,35 +153,38 @@ export function snoozeTaskReminder(
     if (!current[taskId] || current[taskId] > Date.now() + 2_000) return;
     delete current[taskId];
     setSnoozes(current);
-    if (document.visibilityState === "visible") {
-      promptListener?.({ taskId, title, kind });
-    }
+    emitPrompt({ taskId, title, kind });
     showSystemNotification(taskId, title, kind);
   }, SNOOZE_MS);
   snoozeTimers.set(taskId, timer);
 }
 
 function showSystemNotification(taskId: string, title: string, kind: ReminderPrompt["kind"]) {
-  if (!("Notification" in window)) return;
-  const heading =
-    kind === "overdue" ? "Task overdue" : kind === "due" ? "Task due" : "Task reminder";
-  closeSystemNotification(taskId);
-  const n = new Notification(heading, {
-    body: title,
-    tag: `hollow-task-${taskId}`,
-    requireInteraction: true,
-  });
-  openNotifications.set(taskId, n);
-  n.onclick = () => {
-    window.focus();
-    openNotifications.delete(taskId);
-    n.close();
-    promptListener?.({ taskId, title, kind });
-  };
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const heading =
+      kind === "overdue" ? "Task overdue" : kind === "due" ? "Task due" : "Task reminder";
+    closeSystemNotification(taskId);
+    const n = new Notification(heading, {
+      body: title,
+      tag: `hollow-task-${taskId}`,
+      requireInteraction: true,
+    });
+    openNotifications.set(taskId, n);
+    n.onclick = () => {
+      window.focus();
+      openNotifications.delete(taskId);
+      n.close();
+      emitPrompt({ taskId, title, kind });
+    };
+  } catch {
+    // Non-secure context or browser restrictions
+  }
 }
 
 export function notifyDueTasks(tasks: Task[]) {
-  if (!remindersActive()) return;
+  if (!remindersPref()) return;
   const sent = new Set<string>(JSON.parse(localStorage.getItem(SENT_KEY) ?? "[]"));
   const snoozes = getSnoozes();
   const now = Date.now();
@@ -206,9 +231,7 @@ export function notifyDueTasks(tasks: Task[]) {
 
     const kind: ReminderPrompt["kind"] = now - due > 60_000 ? "overdue" : "due";
     const prompt = { taskId: task.id, title: task.title, kind };
-    if (document.visibilityState === "visible") {
-      promptListener?.(prompt);
-    }
+    emitPrompt(prompt);
     showSystemNotification(task.id, task.title, kind);
     sent.add(key);
     changed = true;

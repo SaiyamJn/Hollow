@@ -8,7 +8,7 @@ import { requireAuth, AuthedRequest } from "../middleware/auth";
 const router = Router();
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
-const SESSION_TTL = "7d";
+const SESSION_TTL = "3650d";
 
 const registerSchema = z.object({
   email: z.string().email(),
