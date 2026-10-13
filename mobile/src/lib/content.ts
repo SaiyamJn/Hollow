@@ -40,22 +40,23 @@ interface BlockJson {
 function inlineText(content: BlockJson["content"]): string {
   if (!Array.isArray(content)) return "";
   return content
-    .map((item) => item.text ?? (Array.isArray(item.content) ? inlineText(item.content) : ""))
+    .map((item) => (item && typeof item === "object" ? item.text ?? (Array.isArray(item.content) ? inlineText(item.content) : "") : ""))
     .join("");
 }
 
 function blockLines(blocks: BlockJson[], depth: number): string[] {
   const lines: string[] = [];
   for (const block of blocks) {
+    if (!block || typeof block !== "object") continue;
     const indent = "  ".repeat(depth);
     lines.push(indent + inlineText(block.content));
-    if (block.children?.length) lines.push(...blockLines(block.children, depth + 1));
+    if (Array.isArray(block.children) && block.children.length) lines.push(...blockLines(block.children, depth + 1));
   }
   return lines;
 }
 
 export function contentToText(raw: string): string {
-  if (!raw) return "";
+  if (!raw || typeof raw !== "string") return "";
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return blockLines(parsed, 0).join("\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -67,6 +68,7 @@ export function contentToText(raw: string): string {
 
 /** True when the stored content is rich BlockNote JSON. */
 export function isRichContent(raw: string): boolean {
+  if (!raw || typeof raw !== "string") return false;
   try {
     return Array.isArray(JSON.parse(raw));
   } catch {
@@ -79,7 +81,7 @@ export function isRichContent(raw: string): boolean {
  * so images and handwritten annotations can be displayed visually on mobile.
  */
 export function extractPageSegments(raw: string): PageSegment[] {
-  if (!raw) return [];
+  if (!raw || typeof raw !== "string") return [];
 
   try {
     const parsed = JSON.parse(raw);
@@ -101,6 +103,7 @@ export function extractPageSegments(raw: string): PageSegment[] {
 
       for (let i = 0; i < parsed.length; i++) {
         const b = parsed[i] as BlockJson;
+        if (!b || typeof b !== "object") continue;
         if (b.type === "image" && (b.props?.url || b.props?.src)) {
           flushText();
           segments.push({

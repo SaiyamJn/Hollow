@@ -4,6 +4,7 @@ import {
   Animated,
   BackHandler,
   FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -115,15 +116,15 @@ export default function QuickNotesScreen({ navigation }: any) {
   }, [navigation]);
 
   useEffect(() => {
-    if (!showArchived) return;
+    if (!showArchived || Platform.OS !== "web") return;
     const handleKey = (e: any) => {
       if (e.key === "Escape") {
         setShowArchived(false);
       }
     };
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("keydown", handleKey);
-      return () => window.removeEventListener("keydown", handleKey);
+      return () => window.removeEventListener?.("keydown", handleKey);
     }
   }, [showArchived]);
 

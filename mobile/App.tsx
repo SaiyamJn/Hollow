@@ -242,12 +242,12 @@ function Root() {
             <Stack.Screen
               name="Notebook"
               component={NotebookScreen}
-              options={({ route }: any) => ({ title: route.params.title })}
+              options={({ route }: any) => ({ title: route?.params?.title ?? "Notebook" })}
             />
             <Stack.Screen
               name="Page"
               component={PageEditorScreen}
-              options={({ route }: any) => ({ title: route.params.title })}
+              options={({ route }: any) => ({ title: route?.params?.title ?? "Page" })}
             />
             <Stack.Screen name="QuickNote" component={QuickNoteDetailScreen} options={{ title: "Note" }} />
             <Stack.Screen name="RecycleBin" component={RecycleBinScreen} options={{ title: "Recycle bin" }} />

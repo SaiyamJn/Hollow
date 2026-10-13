@@ -41,7 +41,7 @@ export default function NotebooksScreen({ navigation }: any) {
       setPrompt({ kind: "unlock-notebook", notebook: nb });
       return;
     }
-    navigation.navigate("Notebook", { notebookId: nb.id, title: nb.title });
+    navigation.navigate("Notebook", { notebookId: nb.id, title: nb.title ?? "Notebook" });
   }
 
   async function onPromptSubmit(value: string): Promise<string | null> {
@@ -59,7 +59,10 @@ export default function NotebooksScreen({ navigation }: any) {
         const sec = await createSection(prompt.notebookId, value, pw);
         if (pw && sec.isLocked) unlock.setSectionPassword(sec.id, pw);
         invalidate();
-        navigation.navigate("Notebook", { notebookId: prompt.notebookId, title: prompt.notebookTitle });
+        navigation.navigate("Notebook", {
+          notebookId: prompt.notebookId,
+          title: prompt.notebookTitle || "Notebook",
+        });
       } else if (prompt.kind === "new-page") {
         const page = await createPage(prompt.sectionId, value, unlock.sectionPasswords[prompt.sectionId]);
         invalidate();
@@ -96,7 +99,10 @@ export default function NotebooksScreen({ navigation }: any) {
           (prompt.notebook.sections ?? []).filter((s) => s.isLocked).map((s) => s.id),
           value
         );
-        navigation.navigate("Notebook", { notebookId: prompt.notebook.id, title: prompt.notebook.title });
+        navigation.navigate("Notebook", {
+          notebookId: prompt.notebook.id,
+          title: prompt.notebook.title || "Notebook",
+        });
       }
       return null;
     } catch (err: any) {
@@ -111,7 +117,7 @@ export default function NotebooksScreen({ navigation }: any) {
     const actions: FabAction[] = [
       { key: "notebook", label: "New notebook", icon: "book", onPress: () => setPrompt({ kind: "new-notebook" }) },
     ];
-    if (memory.notebook) {
+    if (memory.notebook?.id && memory.notebook?.title) {
       const nb = memory.notebook;
       actions.push({
         key: "section",
@@ -120,7 +126,7 @@ export default function NotebooksScreen({ navigation }: any) {
         onPress: () => setPrompt({ kind: "new-section", notebookId: nb.id, notebookTitle: nb.title }),
       });
     }
-    if (memory.section) {
+    if (memory.section?.id && memory.section?.title) {
       const sec = memory.section;
       actions.push({
         key: "page",
@@ -260,11 +266,11 @@ export default function NotebooksScreen({ navigation }: any) {
                 : prompt?.kind === "rename-notebook"
                   ? "Rename notebook"
                   : prompt?.kind === "lock-notebook"
-                    ? `Lock "${prompt.notebook.title}"`
+                    ? `Lock "${prompt.notebook?.title ?? ""}"`
                     : prompt?.kind === "remove-lock-notebook"
-                      ? `Remove password from "${prompt.notebook.title}"`
+                      ? `Remove password from "${prompt.notebook?.title ?? ""}"`
                       : prompt?.kind === "unlock-notebook"
-                        ? `Unlock "${prompt.notebook.title}"`
+                        ? `Unlock "${prompt.notebook?.title ?? ""}"`
                         : ""
         }
         placeholder={
@@ -290,7 +296,7 @@ export default function NotebooksScreen({ navigation }: any) {
                   ? "Save"
                   : "Create"
         }
-        initialValue={prompt?.kind === "rename-notebook" ? prompt.notebook.title : ""}
+        initialValue={prompt?.kind === "rename-notebook" ? prompt.notebook?.title ?? "" : ""}
         onClose={() => setPrompt(null)}
         onSubmit={onPromptSubmit}
       />

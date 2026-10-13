@@ -138,7 +138,12 @@ export default function PageEditorScreen({ route, navigation }: any) {
   // Remember where the user is so the floating "+" can target this section.
   useEffect(() => {
     if (page?.section?.id) {
-      rememberSection(page.section.id, page.section.title, page.section.notebookId);
+      rememberSection(
+        page.section.id,
+        page.section.title,
+        page.section.notebookId,
+        (page.section as any)?.notebook?.title
+      );
     }
   }, [page]);
 
@@ -243,7 +248,7 @@ export default function PageEditorScreen({ route, navigation }: any) {
           .filter((nb) => nb.id === notebookId)
           .flatMap((nb) => nb.sections ?? [])
           .flatMap((sec) => sec.pages ?? [])
-          .filter((p) => p.id !== pageId && p.title.toLowerCase().includes(wikiQuery))
+          .filter((p) => p?.id !== pageId && (p?.title?.toLowerCase() ?? "").includes(wikiQuery))
           .slice(0, 6);
 
   function insertWikiLink(title: string) {

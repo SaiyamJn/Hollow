@@ -67,7 +67,7 @@ type Confirm =
 // Inside one notebook: sections as cards that drop down into their pages.
 // Reorder sections and pages by long-pressing a row and dragging it.
 export default function NotebookScreen({ route, navigation }: any) {
-  const { notebookId, title } = route.params as { notebookId: string; title: string };
+  const { notebookId = "", title = "Notebook" } = (route?.params ?? {}) as { notebookId: string; title: string };
   const { colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
@@ -117,14 +117,15 @@ export default function NotebookScreen({ route, navigation }: any) {
 
   function measureContainer() {
     contentRef.current?.measureInWindow((x, y) => {
-      containerX.current = x;
-      containerY.current = y;
+      if (typeof x === "number" && !isNaN(x)) containerX.current = x;
+      if (typeof y === "number" && !isNaN(y)) containerY.current = y;
     });
   }
 
   /** Measure every reorderable row's screen position once (rows are static during a drag). */
   function measureAllSlots() {
     contentRef.current?.measureInWindow((cx, cy) => {
+      if (typeof cx !== "number" || typeof cy !== "number" || isNaN(cx) || isNaN(cy)) return;
       containerX.current = cx;
       containerY.current = cy;
       const slots: DragSlot[] = [];
@@ -133,11 +134,14 @@ export default function NotebookScreen({ route, navigation }: any) {
         if (!view) return;
         pending++;
         view.measureInWindow((x, y, _w, h) => {
-          slots.push({ slotKey: key, top: y - cy, height: h });
+          if (typeof y === "number" && !isNaN(y) && typeof h === "number") {
+            slots.push({ slotKey: key, top: y - cy, height: h });
+          }
           pending--;
           if (pending === 0) slotsRef.current = slots;
         });
       });
+      if (pending === 0) slotsRef.current = slots;
     });
   }
 
@@ -147,12 +151,14 @@ export default function NotebookScreen({ route, navigation }: any) {
     dragSlotRef.current = slotKey;
     startPageX.current = 0;
     startPageY.current = 0;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     contentRef.current?.measureInWindow((cx, cy) => {
+      if (typeof cx !== "number" || typeof cy !== "number" || isNaN(cx) || isNaN(cy)) return;
       containerX.current = cx;
       containerY.current = cy;
       const view = rowRefs.current.get(slotKey);
       view?.measureInWindow((x, y, w, h) => {
+        if (typeof x !== "number" || typeof y !== "number" || isNaN(x) || isNaN(y)) return;
         ghostOrigin.current = { left: x - cx, top: y - cy, width: w, height: h };
         dragX.setValue(0);
         dragY.setValue(0);
@@ -218,7 +224,7 @@ export default function NotebookScreen({ route, navigation }: any) {
     setDragging(null);
     setHoverTarget(null);
     if (from && to && from !== to) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       doReorder(from, to);
     }
   }
@@ -249,7 +255,7 @@ export default function NotebookScreen({ route, navigation }: any) {
         if (!armedRef.current) {
           if (Math.hypot(dx, dy) < ACTIVATE_PX) return;
           armedRef.current = true;
-          void Haptics.selectionAsync();
+          void Haptics.selectionAsync().catch(() => {});
         }
         if (slotsRef.current.length === 0) measureAllSlots();
         const target = hitTestSlot(
@@ -264,7 +270,7 @@ export default function NotebookScreen({ route, navigation }: any) {
         if (key !== hoverSlotRef.current) {
           hoverSlotRef.current = key;
           setHoverTarget(key);
-          if (key) void Haptics.selectionAsync();
+          if (key) void Haptics.selectionAsync().catch(() => {});
         }
       },
       onPanResponderRelease: finishDrag,
@@ -367,7 +373,7 @@ export default function NotebookScreen({ route, navigation }: any) {
       (memory.section?.notebookId === notebookId
         ? (notebook?.sections ?? []).find((s) => s.id === memory.section!.id)
         : undefined) ?? notebook?.sections?.[0];
-    if (target) {
+    if (target?.title) {
       actions.push({
         key: "page",
         label: `New page in "${truncateLabel(target.title)}"`,
@@ -589,7 +595,7 @@ export default function NotebookScreen({ route, navigation }: any) {
             />
           )}
 
-          {dragging && ghostOrigin.current && (
+          {dragging && ghostOrigin.current && typeof ghostOrigin.current.left === "number" && !isNaN(ghostOrigin.current.left) && (
             <Animated.View
               pointerEvents="none"
               style={{
@@ -661,17 +667,17 @@ export default function NotebookScreen({ route, navigation }: any) {
           prompt?.kind === "new-section"
             ? "New section"
             : prompt?.kind === "new-page"
-              ? `New page in "${truncateLabel(prompt.section.title, 28)}"`
+              ? `New page in "${truncateLabel(prompt.section?.title, 28)}"`
               : prompt?.kind === "rename-section"
                 ? "Rename section"
                 : prompt?.kind === "rename-page"
                   ? "Rename page"
                   : prompt?.kind === "lock-section"
-                    ? `Lock "${truncateLabel(prompt.section.title, 28)}"`
+                    ? `Lock "${truncateLabel(prompt.section?.title, 28)}"`
                     : prompt?.kind === "remove-lock-section"
-                      ? `Remove password from "${truncateLabel(prompt.section.title, 28)}"`
+                      ? `Remove password from "${truncateLabel(prompt.section?.title, 28)}"`
                       : prompt?.kind === "unlock-section"
-                        ? `Unlock "${truncateLabel(prompt.section.title, 28)}"`
+                        ? `Unlock "${truncateLabel(prompt.section?.title, 28)}"`
                         : ""
         }
         placeholder={
@@ -699,9 +705,9 @@ export default function NotebookScreen({ route, navigation }: any) {
         }
         initialValue={
           prompt?.kind === "rename-section"
-            ? prompt.section.title
+            ? prompt.section?.title ?? ""
             : prompt?.kind === "rename-page"
-              ? prompt.title
+              ? prompt.title ?? ""
               : ""
         }
         onClose={() => setPrompt(null)}
@@ -713,9 +719,9 @@ export default function NotebookScreen({ route, navigation }: any) {
         title={confirm?.kind === "section" ? "Delete section" : "Move to recycle bin?"}
         message={
           confirm?.kind === "section"
-            ? `Delete “${confirm.section.title}”? All pages inside will be permanently removed.`
+            ? `Delete “${confirm.section?.title ?? ""}”? All pages inside will be permanently removed.`
             : confirm?.kind === "page"
-              ? `Move “${confirm.title}” to the recycle bin? You can restore it within 7 days.`
+              ? `Move “${confirm.title ?? ""}” to the recycle bin? You can restore it within 7 days.`
               : ""
         }
         confirmLabel={confirm?.kind === "page" ? "Move" : "Delete"}

@@ -37,8 +37,9 @@ export function useLayout() {
 }
 
 /** Truncate long titles used in FAB menus / headers. */
-export function truncateLabel(text: string, max = 22): string {
-  const t = text.trim();
+export function truncateLabel(text?: string | null, max = 22): string {
+  if (!text) return "";
+  const t = String(text).trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
 }

@@ -112,8 +112,8 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
       (nb.sections ?? []).flatMap((sec) =>
         (sec.pages ?? []).map((p) => ({
           id: `page-${p.id}`,
-          label: p.title,
-          hint: `${nb.title} / ${sec.title}`,
+          label: p.title || "Untitled",
+          hint: `${nb.title || "Notebook"} / ${sec.title || "Section"}`,
           icon: "file-text" as const,
           locked: sec.isLocked && !unlock.sectionPasswords[sec.id],
           run: () => {
@@ -121,8 +121,8 @@ export function SearchModal({ visible, onClose, navigation }: SearchModalProps) 
             navigation.navigate("Page", {
               pageId: p.id,
               sectionId: sec.id,
-              notebookId: sec.notebookId,
-              title: p.title,
+              notebookId: sec.notebookId || nb.id,
+              title: p.title || "Page",
             });
           },
         }))

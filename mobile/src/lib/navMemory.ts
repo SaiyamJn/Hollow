@@ -28,19 +28,21 @@ export function getNavMemory(): NavMemory {
   return memory;
 }
 
-export function rememberNotebook(id: string, title: string) {
+export function rememberNotebook(id: string, title?: string) {
+  const cleanTitle = title ?? "";
   const section = memory.section?.notebookId === id ? memory.section : undefined;
-  memory = { notebook: { id, title }, section };
+  memory = { notebook: { id, title: cleanTitle }, section };
   persist();
 }
 
-export function rememberSection(id: string, title: string, notebookId: string, notebookTitle?: string) {
+export function rememberSection(id: string, title: string | undefined, notebookId: string, notebookTitle?: string) {
+  const cleanTitle = title ?? "";
   memory = {
     notebook:
       memory.notebook?.id === notebookId
         ? memory.notebook
         : { id: notebookId, title: notebookTitle ?? memory.notebook?.title ?? "" },
-    section: { id, title, notebookId },
+    section: { id, title: cleanTitle, notebookId },
   };
   persist();
 }
