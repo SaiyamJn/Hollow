@@ -64,8 +64,8 @@ export function getNoteGlassStyle(color?: string) {
   return {
     backgroundColor: c.bg,
     borderColor: c.border,
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
   };
 }
 
