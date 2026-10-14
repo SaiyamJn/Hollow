@@ -293,12 +293,13 @@ export default function NotebookScreen({ route, navigation }: any) {
   }
 
   function openPage(sec: Section, pageId: string, pageTitle: string) {
+    if (!pageId || !sec?.id) return;
     if (sec.isLocked && !isSecUnlocked(sec.id)) {
-      setPrompt({ kind: "unlock-section", section: sec, thenOpenPage: { pageId, title: pageTitle } });
+      setPrompt({ kind: "unlock-section", section: sec, thenOpenPage: { pageId, title: pageTitle ?? "Page" } });
       return;
     }
-    rememberSection(sec.id, sec.title, notebookId, title);
-    navigation.navigate("Page", { pageId, sectionId: sec.id, notebookId, title: pageTitle });
+    rememberSection(sec.id, sec.title ?? "", notebookId, title);
+    navigation.navigate("Page", { pageId, sectionId: sec.id, notebookId, title: pageTitle ?? "Page" });
   }
 
   async function onPromptSubmit(value: string): Promise<string | null> {

@@ -61,13 +61,15 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
     color: initialColor,
     kind: initialKind,
     autoFocus: autoFocusParam,
-  } = route.params as {
+    archived: initialArchived,
+  } = (route?.params ?? {}) as {
     noteId: string;
     title?: string;
     content?: string;
     color?: string;
     kind?: "note" | "list";
     autoFocus?: boolean;
+    archived?: boolean;
   };
   const shouldAutoFocus = Boolean(autoFocusParam);
   const { colors } = useTheme();
@@ -385,7 +387,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
   }
 
   const pinned = note?.pinned ?? false;
-  const archived = note?.archived ?? false;
+  const archived = note?.archived ?? initialArchived ?? false;
   const { isNarrow, screenPad, insets } = useLayout();
   const dotSize = isNarrow ? 20 : 24;
   const openItems = items.filter((i) => !i.done);
@@ -412,17 +414,22 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
         >
           {isList ? (
             <View style={{ flex: 1 }}>
-              <TextInput
-                style={[styles.title, { color: colors.textPrimary }]}
-                placeholder="List title"
-                placeholderTextColor={colors.textSecondary}
-                value={title}
-                autoFocus={shouldAutoFocus}
-                onChangeText={(next) => {
-                  setTitle(next);
-                  scheduleSave(next, content, color, items);
-                }}
-              />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <TextInput
+                  style={[styles.title, { color: colors.textPrimary, flex: 1 }]}
+                  placeholder="Title"
+                  placeholderTextColor={colors.textSecondary}
+                  value={title}
+                  autoFocus={shouldAutoFocus}
+                  onChangeText={(next) => {
+                    setTitle(next);
+                    scheduleSave(next, content, color, items);
+                  }}
+                />
+                <Pressable onPress={() => togglePin.mutate()} hitSlop={8} style={{ padding: 4 }}>
+                  <Feather name="star" size={19} color={pinned ? colors.accent : colors.textSecondary} />
+                </Pressable>
+              </View>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={{ flex: 1 }}>
               {openItems.map((item) => (
                 <ChecklistRow
@@ -463,16 +470,21 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
             </View>
           ) : (
             <View style={{ flex: 1 }}>
-              <TextInput
-                style={[styles.title, { color: colors.textPrimary }]}
-                placeholder="Title"
-                placeholderTextColor={colors.textSecondary}
-                value={title}
-                onChangeText={(next) => {
-                  setTitle(next);
-                  scheduleSave(next, content, color);
-                }}
-              />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <TextInput
+                  style={[styles.title, { color: colors.textPrimary, flex: 1 }]}
+                  placeholder="Title"
+                  placeholderTextColor={colors.textSecondary}
+                  value={title}
+                  onChangeText={(next) => {
+                    setTitle(next);
+                    scheduleSave(next, content, color);
+                  }}
+                />
+                <Pressable onPress={() => togglePin.mutate()} hitSlop={8} style={{ padding: 4 }}>
+                  <Feather name="star" size={19} color={pinned ? colors.accent : colors.textSecondary} />
+                </Pressable>
+              </View>
               <TextInput
                 style={[
                   styles.editor,
@@ -487,7 +499,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
                   setContent(next);
                   scheduleSave(title, next, color);
                 }}
-                placeholder="Write your note…"
+                placeholder="Take a note…"
                 placeholderTextColor={colors.textSecondary}
               />
             </View>

@@ -371,12 +371,12 @@ export default function QuickNotesScreen({ navigation }: any) {
             }}
             pointerEvents={selecting ? "none" : "auto"}
           >
-            {showArchived && (
-              <View style={{ marginBottom: 12 }}>
+            {showArchived ? (
+              <View style={{ marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Pressable
                   onPress={() => setArchiveView(false)}
                   style={[
-                    styles.quickChip,
+                    styles.libraryChip,
                     {
                       alignSelf: "flex-start",
                       borderColor: colors.border,
@@ -385,201 +385,185 @@ export default function QuickNotesScreen({ navigation }: any) {
                       paddingHorizontal: 12,
                     },
                   ]}
+                  hitSlop={8}
                 >
                   <Feather name="arrow-left" size={15} color={colors.textPrimary} />
                   <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "600" }}>
-                    Back to Capture
+                    Archive
                   </Text>
+                  {archivedCount > 0 && (
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>({archivedCount})</Text>
+                  )}
                 </Pressable>
               </View>
-            )}
-
-            <Text style={{ color: colors.textPrimary, fontSize: 22, fontWeight: "600", letterSpacing: -0.3 }}>
-              {showArchived ? "Archive" : "Capture"}
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4, marginBottom: 14 }}>
-              {showArchived
-                ? "Notes you've put aside — restore anytime."
-                : "Sticky notes & checklists — pin what matters."}
-            </Text>
-
-            <View style={styles.quickRow}>
-              <Pressable
-                onPress={openFullNote}
-                disabled={createBlankNote.isPending}
-                style={[
-                  styles.quickChip,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface1,
-                    opacity: createBlankNote.isPending ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: "rgba(250, 184, 8, 0.28)" }]}>
-                  <Feather name="edit-3" size={16} color="rgb(250, 184, 8)" />
-                </View>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
-                  {createBlankNote.isPending ? "Opening…" : showArchived ? "Note in archive" : "Note"}
+            ) : (
+              <>
+                <Text style={{ color: colors.textPrimary, fontSize: 22, fontWeight: "600", letterSpacing: -0.3 }}>
+                  Notes
                 </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  if (!createList.isPending) createList.mutate();
-                }}
-                disabled={createList.isPending}
-                style={[
-                  styles.quickChip,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface1,
-                    opacity: createList.isPending ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: colors.accentSoft }]}>
-                  <Feather name="check-square" size={16} color={colors.accent} />
-                </View>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
-                  {createList.isPending ? "Creating…" : showArchived ? "List in archive" : "List"}
+                <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 3, marginBottom: 14 }}>
+                  Thoughts & checklists — pin what matters.
                 </Text>
-              </Pressable>
-            </View>
 
-            <Pressable onPress={openComposer} style={{ marginBottom: composerOpen ? 10 : 0 }}>
-              <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "500" }}>
-                {showArchived ? "Quick capture in archive…" : "Quick capture…"}
-              </Text>
-            </Pressable>
-
-            {composerOpen && (
-              <View
-                style={[
-                  styles.composer,
-                  {
-                    backgroundColor:
-                      draftColor !== "gray" ? noteTint(colors, draftColor) : colors.surface1,
-                    borderColor: colors.border,
-                    borderLeftColor: ACCENT_BAR[draftColor] || colors.accent,
-                  },
-                ]}
-              >
-                <TextInput
-                  ref={composerRef}
-                  style={{
-                    color: colors.textPrimary,
-                    fontSize: 15,
-                    minHeight: 56,
-                    maxHeight: 180,
-                    textAlign: "left",
-                    lineHeight: 22,
-                  }}
-                  placeholder={showArchived ? "Add a note directly into archive…" : "What's on your mind?"}
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  scrollEnabled
-                  textAlignVertical="top"
-                  value={draft}
-                  onChangeText={setDraft}
-                />
-                <View style={styles.composerRow}>
-                  <View style={[styles.dots, isNarrow && { gap: 8 }]}>
-                    {NOTE_COLOR_KEYS.map((color) => {
-                      const isSelected = draftColor === color;
-                      const size = isNarrow ? 18 : 22;
-                      return (
-                        <TouchableOpacity
-                          key={color}
-                          onPress={() => setDraftColor(color)}
-                          activeOpacity={0.7}
-                          hitSlop={6}
-                          style={{
-                            height: size,
-                            width: size,
-                            borderRadius: size / 2,
-                            backgroundColor: DOT_COLORS[color],
-                            opacity: isSelected ? 1 : 0.35,
-                            transform: [{ scale: isSelected ? 1.15 : 1 }],
-                            borderWidth: isSelected ? 2 : 0,
-                            borderColor: colors.textPrimary,
-                          }}
-                        />
-                      );
-                    })}
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <TouchableOpacity
+                {/* Google Keep minimal 'Take a note...' bar */}
+                <Pressable
+                  onPress={openComposer}
+                  style={[
+                    styles.keepBar,
+                    {
+                      backgroundColor: colors.surface1,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: colors.textSecondary, fontSize: 14, flex: 1 }}>
+                    Take a note…
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                    <Pressable
                       onPress={() => {
-                        setComposerOpen(false);
-                        setDraft("");
+                        if (!createList.isPending) createList.mutate();
                       }}
                       hitSlop={8}
+                      accessibilityLabel="New list"
                     >
-                      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      disabled={!draft.trim() || create.isPending}
-                      onPress={() => create.mutate()}
-                      activeOpacity={0.75}
-                      style={[
-                        styles.addButton,
-                        { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 },
-                      ]}
-                    >
-                      <Text style={{ color: colors.surface0, fontWeight: "600", fontSize: 13 }}>
-                        {showArchived ? "Save to archive" : "Save"}
-                      </Text>
-                    </TouchableOpacity>
+                      <Feather name="check-square" size={17} color={colors.textSecondary} />
+                    </Pressable>
+                    <Pressable onPress={openFullNote} hitSlop={8} accessibilityLabel="New note">
+                      <Feather name="edit-3" size={17} color={colors.textSecondary} />
+                    </Pressable>
                   </View>
-                </View>
-              </View>
-            )}
+                </Pressable>
 
-            <View style={styles.libraryRow}>
-              <Pressable
-                onPress={() => setArchiveView(!showArchived)}
-                style={[
-                  styles.libraryChip,
-                  {
-                    borderColor: showArchived ? colors.accent : colors.border,
-                    backgroundColor: showArchived ? colors.accentSoft : colors.surface1,
-                  },
-                ]}
-              >
-                <Feather
-                  name="archive"
-                  size={14}
-                  color={showArchived ? colors.accent : colors.textSecondary}
-                />
-                <Text
-                  style={{
-                    color: showArchived ? colors.accent : colors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: "500",
-                  }}
-                >
-                  {showArchived ? "Exit archive" : "Archive"}
-                  {!showArchived && archivedCount > 0 ? ` (${archivedCount})` : ""}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => navigation.navigate("RecycleBin")}
-                style={[
-                  styles.libraryChip,
-                  { borderColor: colors.border, backgroundColor: colors.surface1 },
-                ]}
-              >
-                <Feather name="trash-2" size={14} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
-                  Recycle bin
-                </Text>
-                <Feather name="chevron-right" size={14} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            {!showArchived && !selectMode && (
-              <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 10 }}>
-                Long-press a note to select and rearrange
-              </Text>
+                {composerOpen && (
+                  <View
+                    style={[
+                      styles.composer,
+                      {
+                        backgroundColor:
+                          draftColor !== "gray" ? noteTint(colors, draftColor) : colors.surface1,
+                        borderColor: colors.border,
+                        borderLeftColor: ACCENT_BAR[draftColor] || colors.accent,
+                        marginTop: 10,
+                      },
+                    ]}
+                  >
+                    <TextInput
+                      ref={composerRef}
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        minHeight: 56,
+                        maxHeight: 180,
+                        textAlign: "left",
+                        lineHeight: 22,
+                      }}
+                      placeholder="What's on your mind?"
+                      placeholderTextColor={colors.textSecondary}
+                      multiline
+                      scrollEnabled
+                      textAlignVertical="top"
+                      value={draft}
+                      onChangeText={setDraft}
+                    />
+                    <View style={styles.composerRow}>
+                      <View style={[styles.dots, isNarrow && { gap: 8 }]}>
+                        {NOTE_COLOR_KEYS.map((color) => {
+                          const isSelected = draftColor === color;
+                          const size = isNarrow ? 18 : 22;
+                          return (
+                            <TouchableOpacity
+                              key={color}
+                              onPress={() => setDraftColor(color)}
+                              activeOpacity={0.7}
+                              hitSlop={6}
+                              style={{
+                                height: size,
+                                width: size,
+                                borderRadius: size / 2,
+                                backgroundColor: DOT_COLORS[color],
+                                opacity: isSelected ? 1 : 0.35,
+                                transform: [{ scale: isSelected ? 1.15 : 1 }],
+                                borderWidth: isSelected ? 2 : 0,
+                                borderColor: colors.textPrimary,
+                              }}
+                            />
+                          );
+                        })}
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setComposerOpen(false);
+                            setDraft("");
+                          }}
+                          hitSlop={8}
+                        >
+                          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          disabled={!draft.trim() || create.isPending}
+                          onPress={() => create.mutate()}
+                          activeOpacity={0.75}
+                          style={[
+                            styles.addButton,
+                            { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 },
+                          ]}
+                        >
+                          <Text style={{ color: colors.surface0, fontWeight: "600", fontSize: 13 }}>
+                            Save
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.libraryRow}>
+                  <Pressable
+                    onPress={() => setArchiveView(true)}
+                    style={[
+                      styles.libraryChip,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface1,
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name="archive"
+                      size={13}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: "500",
+                      }}
+                    >
+                      Archive{archivedCount > 0 ? ` (${archivedCount})` : ""}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => navigation.navigate("RecycleBin")}
+                    style={[
+                      styles.libraryChip,
+                      { borderColor: colors.border, backgroundColor: colors.surface1 },
+                    ]}
+                  >
+                    <Feather name="trash-2" size={13} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
+                      Recycle bin
+                    </Text>
+                  </Pressable>
+                </View>
+                {!selectMode && (
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 10 }}>
+                    Long-press a note to select and rearrange
+                  </Text>
+                )}
+              </>
             )}
           </View>
         }
@@ -638,11 +622,11 @@ export default function QuickNotesScreen({ navigation }: any) {
         ListEmptyComponent={
           <EmptyState
             icon={showArchived ? "archive" : "feather"}
-            title={showArchived ? "Nothing tucked away" : "Your pocket is empty"}
+            title={showArchived ? "Archive is empty" : "No notes yet"}
             subtitle={
               showArchived
-                ? "Long-press notes to restore or clean up the archive."
-                : "A sticky thought, a little list — whatever's buzzing around."
+                ? "Tap + to add an archived note, or archive notes from capture."
+                : "A quick thought, a checklist — whatever's on your mind."
             }
           />
         }
@@ -650,23 +634,42 @@ export default function QuickNotesScreen({ navigation }: any) {
 
       {!selecting && (
         <Fab
-          actions={[
-            {
-              key: "note",
-              label: showArchived ? "New note in archive" : "New note",
-              icon: "edit-3",
-              onPress: openFullNote,
-            },
-            {
-              key: "list",
-              label: showArchived ? "New list in archive" : "New list",
-              icon: "check-square",
-              onPress: () => {
-                if (!createList.isPending) createList.mutate();
-              },
-            },
-            { key: "quick", label: "Quick capture", icon: "zap", onPress: openComposer },
-          ]}
+          actions={
+            showArchived
+              ? [
+                  {
+                    key: "note",
+                    label: "New note",
+                    icon: "edit-3",
+                    onPress: openFullNote,
+                  },
+                  {
+                    key: "list",
+                    label: "New list",
+                    icon: "check-square",
+                    onPress: () => {
+                      if (!createList.isPending) createList.mutate();
+                    },
+                  },
+                ]
+              : [
+                  {
+                    key: "note",
+                    label: "New note",
+                    icon: "edit-3",
+                    onPress: openFullNote,
+                  },
+                  {
+                    key: "list",
+                    label: "New list",
+                    icon: "check-square",
+                    onPress: () => {
+                      if (!createList.isPending) createList.mutate();
+                    },
+                  },
+                  { key: "quick", label: "Quick capture", icon: "zap", onPress: openComposer },
+                ]
+          }
         />
       )}
 
@@ -935,6 +938,16 @@ function NoteCard({
 }
 
 const styles = StyleSheet.create({
+  keepBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 6,
+  },
   quickRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
   quickChip: {
     flex: 1,

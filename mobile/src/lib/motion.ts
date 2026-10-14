@@ -15,21 +15,20 @@ export function configureMotion() {
 export function animateListChange() {
   configureMotion();
   LayoutAnimation.configureNext({
-    duration: 300,
+    duration: 240,
     create: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 240,
+      duration: 180,
     },
     update: {
-      type: LayoutAnimation.Types.spring,
-      springDamping: 0.88,
-      duration: 300,
+      type: LayoutAnimation.Types.easeInEaseOut,
+      duration: 240,
     },
     delete: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
-      duration: 200,
+      duration: 160,
     },
   });
 }

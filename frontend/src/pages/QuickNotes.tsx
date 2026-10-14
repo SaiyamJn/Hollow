@@ -8,6 +8,7 @@ import {
   CheckSquare,
   FileDown,
   ListTodo,
+  Plus,
   Printer,
   Square,
   Star,
@@ -102,8 +103,9 @@ export default function QuickNotes() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
   const [draft, setDraft] = useState("");
-  const [draftColor, setDraftColor] = useState("yellow");
-  const [draftFocus, setDraftFocus] = useState(false);
+  const [draftColor, setDraftColor] = useState("gray");
+  const [takeNoteOpen, setTakeNoteOpen] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmTrash, setConfirmTrash] = useState(false);
@@ -244,15 +246,6 @@ export default function QuickNotes() {
         items: note.items ?? [{ id: newItemId(), text: "", done: false }],
         isNew: true,
       });
-    },
-  });
-
-  const saveEdit = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updateQuickNote>[1] }) =>
-      updateQuickNote(id, patch),
-    onSuccess: () => {
-      invalidate();
-      setEditing(null);
     },
   });
 
@@ -481,104 +474,189 @@ export default function QuickNotes() {
   const pinned = notes.filter((n) => n.pinned);
   const rest = notes.filter((n) => !n.pinned);
 
+  const currentEditingNote = (library ?? []).find((n) => n.id === editing?.id);
+  const editingNotePinned = currentEditingNote?.pinned ?? false;
+  const editingNoteArchived = currentEditingNote?.archived ?? (showArchived || false);
+
+  async function togglePinEditing() {
+    if (!editing) return;
+    await updateQuickNote(editing.id, { pinned: !editingNotePinned });
+    invalidate();
+  }
+
+  async function toggleArchiveEditing() {
+    if (!editing) return;
+    await updateQuickNote(editing.id, { archived: !editingNoteArchived });
+    invalidate();
+    void closeEditor();
+  }
+
   return (
     <div className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-14 xl:px-16 py-10 pb-28">
-      <div className="text-center mb-6">
-        <h1 className="text-xl font-medium">{showArchived ? "Archive" : "Capture"}</h1>
-        <p className="text-sm text-secondary mt-1">
-          {showArchived
-            ? "Things you've set aside — bring them back whenever."
-            : "Sticky thoughts & little lists — pin what matters."}
-        </p>
-      </div>
-
-      {showArchived && (
-        <div className="flex items-center justify-between max-w-xl mx-auto mb-4">
+      {showArchived ? (
+        /* Minimalist Archive View: No note composer, only clean header and floating FAB */
+        <div className="flex items-center justify-between max-w-4xl mx-auto mb-8 px-2">
           <button
             type="button"
             onClick={() => setShowArchived(false)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border glass px-3.5 py-2 text-xs font-semibold text-secondary hover:text-primary transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-surface-1 hover:bg-surface-2 px-3.5 py-2 text-xs font-medium text-secondary hover:text-primary transition-colors"
           >
             <ArrowLeft size={14} />
-            Back to Capture (Esc)
+            Back to Notes
           </button>
-          <span className="text-xs text-secondary font-medium">Archive</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-primary">
+              Archive {archivedCount > 0 ? `(${archivedCount})` : ""}
+            </span>
+          </div>
+          <Link
+            to="/recycle-bin"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border/40 bg-surface-1/60 hover:bg-surface-2 px-3 py-1.5 text-xs text-secondary hover:text-primary transition-colors"
+          >
+            <Trash2 size={13} />
+            Recycle bin
+          </Link>
+        </div>
+      ) : (
+        /* Google Keep Style Minimal "Take a note..." Bar */
+        <div className="max-w-2xl mx-auto mb-8">
+          {!takeNoteOpen ? (
+            <div
+              onClick={() => setTakeNoteOpen(true)}
+              className="flex items-center justify-between rounded-xl border border-border/70 bg-surface-1 hover:border-border px-4 py-3 shadow-sm cursor-pointer transition-colors"
+            >
+              <span className="text-sm text-secondary/70 font-normal">Take a note…</span>
+              <div className="flex items-center gap-1 text-secondary" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  title="New list"
+                  disabled={createBlank.isPending}
+                  onClick={() => createBlank.mutate("list")}
+                  className="p-2 rounded-lg hover:text-primary hover:bg-surface-2 transition-colors"
+                >
+                  <CheckSquare size={17} />
+                </button>
+                <button
+                  type="button"
+                  title="New note"
+                  disabled={createBlank.isPending}
+                  onClick={() => createBlank.mutate("note")}
+                  className="p-2 rounded-lg hover:text-primary hover:bg-surface-2 transition-colors"
+                >
+                  <StickyNote size={17} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl border border-border/90 bg-surface-1 p-4 shadow-md transition-all"
+              style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
+            >
+              <textarea
+                autoFocus
+                rows={3}
+                className="w-full bg-transparent resize-none border-0 outline-none text-sm leading-relaxed text-primary placeholder:text-secondary/60 focus:ring-0"
+                placeholder="Take a note…"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onDraftKeyDown}
+              />
+              <div className="flex items-center justify-between pt-2 border-t border-border/40 mt-2">
+                <ColorDots value={draftColor} onPick={setDraftColor} />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    className="text-xs px-3 py-1.5"
+                    onClick={() => {
+                      setTakeNoteOpen(false);
+                      setDraft("");
+                      setDraftColor("gray");
+                    }}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    variant="accent"
+                    className="text-xs px-3 py-1.5"
+                    disabled={!draft.trim() || create.isPending}
+                    onClick={() => {
+                      create.mutate(undefined, {
+                        onSuccess: () => setTakeNoteOpen(false),
+                      });
+                    }}
+                  >
+                    {create.isPending ? "Adding…" : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick links to Archive and Recycle bin */}
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowArchived(true);
+                setSelected(new Set());
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold chip-idle hover:text-primary transition-colors"
+            >
+              <Archive size={13} />
+              {`Archive${archivedCount ? ` (${archivedCount})` : ""}`}
+            </button>
+            <Link
+              to="/recycle-bin"
+              className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary transition-colors"
+            >
+              <Trash2 size={13} />
+              Recycle bin
+            </Link>
+          </div>
         </div>
       )}
 
-      <div className="flex gap-3 max-w-xl mx-auto mb-4">
-        <button
-          type="button"
-          disabled={createBlank.isPending}
-          onClick={() => createBlank.mutate("note")}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-[rgb(250,184,8)]/50 hover:bg-[rgb(250,184,8)]/12 transition-colors"
-        >
-          <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center bg-[rgb(250,184,8)]/22 text-[rgb(180,83,9)] dark:text-[rgb(250,204,21)]">
-            <StickyNote size={15} />
-          </span>
-          {showArchived ? "Note in archive" : "Note"}
-        </button>
-        <button
-          type="button"
-          disabled={createBlank.isPending}
-          onClick={() => createBlank.mutate("list")}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border glass-strong px-3 py-3.5 text-sm font-semibold hover:border-accent/50 hover:bg-accent-soft transition-colors"
-        >
-          <span className="icon-well h-8 w-8 rounded-xl">
-            <ListTodo size={15} />
-          </span>
-          {showArchived ? "List in archive" : "List"}
-        </button>
-      </div>
-
-      <div
-        className="rounded-xl border border-border glass p-5 mb-6 max-w-3xl mx-auto shadow-card text-center"
-        style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
-      >
-        <textarea
-          className={clsx(
-            "w-full bg-transparent resize-none focus:outline-none placeholder:text-secondary text-left overflow-y-auto",
-            draftFocus || draft.length > 80 ? "min-h-[220px] max-h-[55vh] text-base leading-relaxed" : "max-h-40 text-sm"
+      {/* Floating Action Button (FAB) inside Archive to create archived notes */}
+      {showArchived && (
+        <div className="fixed bottom-8 right-8 z-40 flex flex-col items-end gap-2">
+          {fabMenuOpen && (
+            <div className="flex flex-col gap-1.5 mb-2 p-2 rounded-2xl bg-surface-1 border border-border shadow-xl backdrop-blur-md">
+              <button
+                type="button"
+                disabled={createBlank.isPending}
+                onClick={() => {
+                  setFabMenuOpen(false);
+                  createBlank.mutate("note");
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-primary hover:bg-surface-2 transition-colors"
+              >
+                <StickyNote size={15} className="text-accent" />
+                New note
+              </button>
+              <button
+                type="button"
+                disabled={createBlank.isPending}
+                onClick={() => {
+                  setFabMenuOpen(false);
+                  createBlank.mutate("list");
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-primary hover:bg-surface-2 transition-colors"
+              >
+                <ListTodo size={15} className="text-accent" />
+                New checklist
+              </button>
+            </div>
           )}
-          rows={draftFocus || draft.length > 80 ? 10 : 3}
-          placeholder={showArchived ? "A thought to save directly in the archive…" : "A quick thought…"}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onDraftKeyDown}
-          onFocus={() => setDraftFocus(true)}
-          onBlur={() => setDraftFocus(false)}
-        />
-        <div className="flex flex-col items-center gap-3 mt-3">
-          <ColorDots value={draftColor} onPick={setDraftColor} />
-          <Button variant="accent" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? "Adding…" : showArchived ? "Save to archive" : "Save"}
-          </Button>
+          <button
+            type="button"
+            onClick={() => setFabMenuOpen((o) => !o)}
+            title="Create note in archive"
+            className="h-12 w-12 rounded-full bg-accent text-accent-fg shadow-lg hover:scale-105 active:scale-95 flex items-center justify-center transition-all"
+          >
+            <Plus size={22} className={clsx("transition-transform duration-200", fabMenuOpen && "rotate-45")} />
+          </button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-        <button
-          type="button"
-          onClick={() => {
-            setShowArchived((v) => !v);
-            setSelected(new Set());
-          }}
-          className={clsx(
-            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-            showArchived ? "chip-active" : "chip-idle hover:text-primary"
-          )}
-        >
-          <Archive size={13} />
-          {showArchived ? "Exit archive" : `Archive${archivedCount ? ` (${archivedCount})` : ""}`}
-        </button>
-        <Link
-          to="/recycle-bin"
-          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
-        >
-          <Trash2 size={13} />
-          Recycle bin
-        </Link>
-      </div>
+      )}
 
       {notes.length === 0 && (
         <EmptyState
@@ -708,98 +786,121 @@ export default function QuickNotes() {
           if (!o) void closeEditor();
         }}
       >
-        <DialogContent title={editing?.kind === "list" ? "List" : "Note"} className="max-w-5xl">
+        <DialogContent
+          hideHeader
+          title={editing?.kind === "list" ? "List" : "Note"}
+          className="max-w-2xl p-5 rounded-2xl bg-surface-1 border border-border/80 shadow-2xl"
+          style={{ background: editing?.color && editing.color !== "gray" ? PALETTE[editing.color] : undefined }}
+        >
           {editing && (
-            <div className="flex flex-col h-[calc(min(90dvh,44rem)_-_14rem)] overflow-hidden">
-              <input
-                autoFocus={!!editing.isNew}
-                className="w-full bg-transparent text-xl font-semibold text-primary placeholder:text-secondary focus:outline-none shrink-0 mb-3"
-                placeholder={editing.kind === "list" ? "List title" : "Title"}
-                value={editing.title}
-                onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
-              />
+            <div className="flex flex-col min-h-[16rem] max-h-[calc(min(90dvh,46rem)_-_6rem)]">
+              {/* Google Keep Header: Title + Star/Pin Icon */}
+              <div className="flex items-center justify-between gap-3 mb-2 shrink-0">
+                <input
+                  autoFocus={!!editing.isNew}
+                  className="w-full bg-transparent text-lg font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
+                  placeholder={editing.kind === "list" ? "Title" : "Title"}
+                  value={editing.title}
+                  onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
+                />
+                <button
+                  type="button"
+                  title={editingNotePinned ? "Unpin note" : "Pin note"}
+                  onClick={() => void togglePinEditing()}
+                  className="p-1.5 rounded-full text-secondary hover:text-primary hover:bg-surface-2 transition-colors shrink-0"
+                >
+                  <Star
+                    size={18}
+                    className={clsx(
+                      editingNotePinned ? "text-accent fill-accent" : "text-secondary hover:text-primary"
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* Note Content / Checklist items */}
               {editing.kind === "list" ? (
-                <div className="space-y-1.5 flex-1 min-h-[12rem] overflow-y-auto">
+                <div className="space-y-1.5 flex-1 min-h-[12rem] overflow-y-auto py-2">
                   {[...editing.items]
                     .sort((a, b) => Number(a.done) - Number(b.done))
                     .map((item) => (
-                    <div key={item.id} className="flex items-center gap-2 group/item">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const items = editing.items.map((it) =>
-                            it.id === item.id ? { ...it, done: !it.done } : it
-                          );
-                          persistEdit({ ...editing, items });
-                        }}
-                        className="text-secondary hover:text-accent shrink-0"
-                      >
-                        {item.done ? <CheckSquare size={15} /> : <Square size={15} />}
-                      </button>
-                      <input
-                        data-item-id={item.id}
-                        className={clsx(
-                          "flex-1 bg-transparent text-sm focus:outline-none",
-                          item.done && "line-through text-secondary"
-                        )}
-                        value={item.text}
-                        placeholder="List item"
-                        onChange={(e) => {
-                          const items = editing.items.map((it) =>
-                            it.id === item.id ? { ...it, text: e.target.value } : it
-                          );
-                          persistEdit({ ...editing, items });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const curIndex = editing.items.findIndex((it) => it.id === item.id);
-                            const newId = newItemId();
-                            const items = [...editing.items];
-                            items.splice(curIndex >= 0 ? curIndex + 1 : items.length, 0, {
-                              id: newId,
-                              text: "",
-                              done: false,
-                            });
+                      <div key={item.id} className="flex items-center gap-2 group/item">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const items = editing.items.map((it) =>
+                              it.id === item.id ? { ...it, done: !it.done } : it
+                            );
                             persistEdit({ ...editing, items });
-                            setTimeout(() => {
-                              const el = document.querySelector(`[data-item-id="${newId}"]`) as HTMLInputElement | null;
-                              el?.focus();
-                            }, 10);
-                          } else if (e.key === "Backspace" && item.text === "" && editing.items.length > 1) {
-                            e.preventDefault();
-                            const curIndex = editing.items.findIndex((it) => it.id === item.id);
-                            const prevItem = curIndex > 0 ? editing.items[curIndex - 1] : editing.items[curIndex + 1];
-                            const items = editing.items.filter((it) => it.id !== item.id);
+                          }}
+                          className="text-secondary hover:text-accent shrink-0"
+                        >
+                          {item.done ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                        <input
+                          data-item-id={item.id}
+                          className={clsx(
+                            "flex-1 bg-transparent text-sm focus:outline-none border-0 p-0",
+                            item.done && "line-through text-secondary"
+                          )}
+                          value={item.text}
+                          placeholder="List item"
+                          onChange={(e) => {
+                            const items = editing.items.map((it) =>
+                              it.id === item.id ? { ...it, text: e.target.value } : it
+                            );
                             persistEdit({ ...editing, items });
-                            if (prevItem) {
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const curIndex = editing.items.findIndex((it) => it.id === item.id);
+                              const newId = newItemId();
+                              const items = [...editing.items];
+                              items.splice(curIndex >= 0 ? curIndex + 1 : items.length, 0, {
+                                id: newId,
+                                text: "",
+                                done: false,
+                              });
+                              persistEdit({ ...editing, items });
                               setTimeout(() => {
-                                const el = document.querySelector(`[data-item-id="${prevItem.id}"]`) as HTMLInputElement | null;
+                                const el = document.querySelector(`[data-item-id="${newId}"]`) as HTMLInputElement | null;
                                 el?.focus();
                               }, 10);
+                            } else if (e.key === "Backspace" && item.text === "" && editing.items.length > 1) {
+                              e.preventDefault();
+                              const curIndex = editing.items.findIndex((it) => it.id === item.id);
+                              const prevItem = curIndex > 0 ? editing.items[curIndex - 1] : editing.items[curIndex + 1];
+                              const items = editing.items.filter((it) => it.id !== item.id);
+                              persistEdit({ ...editing, items });
+                              if (prevItem) {
+                                setTimeout(() => {
+                                  const el = document.querySelector(`[data-item-id="${prevItem.id}"]`) as HTMLInputElement | null;
+                                  el?.focus();
+                                }, 10);
+                              }
                             }
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        title="Delete item"
-                        className="p-1 rounded text-secondary/40 hover:text-danger hover:bg-surface-2 transition-colors shrink-0 opacity-60 hover:opacity-100"
-                        onClick={() => {
-                          const items = editing.items.filter((it) => it.id !== item.id);
-                          persistEdit({
-                            ...editing,
-                            items: items.length ? items : [{ id: newItemId(), text: "", done: false }],
-                          });
-                        }}
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
+                          }}
+                        />
+                        <button
+                          type="button"
+                          title="Delete item"
+                          className="p-1 rounded text-secondary/40 hover:text-danger hover:bg-surface-2 transition-colors shrink-0 opacity-60 hover:opacity-100"
+                          onClick={() => {
+                            const items = editing.items.filter((it) => it.id !== item.id);
+                            persistEdit({
+                              ...editing,
+                              items: items.length ? items : [{ id: newItemId(), text: "", done: false }],
+                            });
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
                   <button
                     type="button"
-                    className="text-sm text-secondary hover:text-accent"
+                    className="text-xs text-secondary hover:text-primary mt-1 font-medium transition-colors"
                     onClick={() =>
                       persistEdit({
                         ...editing,
@@ -813,73 +914,64 @@ export default function QuickNotes() {
               ) : (
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full flex-1 min-h-[12rem] rounded-xl border border-border glass-input px-6 py-5 text-[15px] text-primary leading-[1.7]
-                             placeholder:text-secondary/70 focus:outline-none focus:border-accent resize-none overflow-y-auto"
-                  placeholder="Write your note…"
+                  className="w-full flex-1 min-h-[12rem] bg-transparent border-0 outline-none p-0 text-[15px] text-primary leading-relaxed
+                             placeholder:text-secondary/60 focus:ring-0 resize-none overflow-y-auto"
+                  placeholder="Note"
                   value={editing.content}
                   onChange={(e) => persistEdit({ ...editing, content: e.target.value })}
-                  style={{ background: editing.color !== "gray" ? PALETTE[editing.color] : undefined }}
                 />
               )}
-              <div className="shrink-0 pt-3 space-y-3">
-                <ColorDots
-                  value={editing.color}
-                  onPick={pickEditColor}
-                />
-                <div className="flex items-center gap-1.5">
+
+              {/* Google Keep Bottom Toolbar */}
+              <div className="shrink-0 pt-4 flex items-center justify-between gap-3 border-t border-border/30 mt-auto">
+                <div className="flex items-center gap-1">
+                  <div className="mr-2">
+                    <ColorDots
+                      value={editing.color}
+                      onPick={pickEditColor}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    title={editingNoteArchived ? "Unarchive note" : "Archive note"}
+                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+                    onClick={() => void toggleArchiveEditing()}
+                  >
+                    {editingNoteArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                  </button>
                   <button
                     type="button"
                     title="Delete note"
-                    className="p-1.5 rounded-md text-secondary hover:text-danger transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-danger hover:bg-surface-2 transition-colors"
                     onClick={() => setConfirmDeleteEdit(true)}
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={16} />
                   </button>
                   <button
                     type="button"
                     title="Export as Markdown"
-                    className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
                     onClick={exportNote}
                   >
-                    <FileDown size={14} />
+                    <FileDown size={16} />
                   </button>
                   <button
                     type="button"
                     title="Export as PDF"
-                    className="p-1.5 rounded-md text-secondary hover:text-primary transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
                     onClick={exportNotePdf}
                   >
-                    <Printer size={14} />
+                    <Printer size={16} />
                   </button>
-                  <span className="flex-1" />
-                  <Button className="flex-1 max-w-[10rem]" variant="ghost" onClick={() => void closeEditor()}>
-                    Done
-                  </Button>
+                </div>
+
+                <div className="flex items-center gap-3">
                   <Button
-                    className="flex-1"
-                    variant="accent"
-                    disabled={saveEdit.isPending}
-                    onClick={() => {
-                      if (!editing) return;
-                      // An emptied note/list is deleted (new → permanent, existing → recycle bin)
-                      // instead of being saved as a blank note.
-                      if (isEmptyEdit(editing)) {
-                        void closeEditor();
-                        return;
-                      }
-                      const cleanItems = editing.kind === "list" ? editing.items.filter((i) => i.text.trim().length > 0) : undefined;
-                      saveEdit.mutate({
-                        id: editing.id,
-                        patch: {
-                          title: editing.title,
-                          content: editing.kind === "list" ? " " : editing.content || " ",
-                          color: editing.color,
-                          items: editing.kind === "list" ? (cleanItems && cleanItems.length > 0 ? cleanItems : editing.items) : undefined,
-                        },
-                      });
-                    }}
+                    variant="ghost"
+                    className="text-xs font-semibold px-4 py-1.5"
+                    onClick={() => void closeEditor()}
                   >
-                    {saveEdit.isPending ? "Saving…" : "Save"}
+                    Close
                   </Button>
                 </div>
               </div>

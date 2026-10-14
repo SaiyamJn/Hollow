@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -26,6 +26,34 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { GlassCard } from "../components/GlassCard";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useLayout } from "../lib/layout";
+
+// Error boundary to catch any unexpected render crash and keep the app alive
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback: (error: Error, reset: () => void) => ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+class ScreenErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.warn("PageEditorScreen caught error:", error, errorInfo);
+  }
+  reset = () => {
+    this.setState({ hasError: false, error: null });
+  };
+  render() {
+    if (this.state.hasError && this.state.error) {
+      return this.props.fallback(this.state.error, this.reset);
+    }
+    return this.props.children;
+  }
+}
 
 // Slow breathing ring around the lock emblem on sealed content.
 function VaultSeal({ color, background }: { color: string; background: string }) {
@@ -60,24 +88,63 @@ function VaultSeal({ color, background }: { color: string; background: string })
   );
 }
 
-// Plain-text editor (open implementation choice per 04-mobile-spec.md: a
-// simple editor instead of a native block editor for v1). Saving from mobile
-// stores plain text; the web app renders it as paragraphs.
-export default function PageEditorScreen({ route, navigation }: any) {
-  const { pageId, sectionId, notebookId: routeNotebookId, title: titleParam, autoFocus: autoFocusParam } = route.params as {
-    pageId: string;
-    sectionId: string;
+export default function PageEditorScreen(props: any) {
+  const { navigation } = props;
+  const { colors } = useTheme();
+
+  return (
+    <ScreenErrorBoundary
+      fallback={(err, reset) => (
+        <View style={[styles.center, { backgroundColor: colors.surface0, padding: 24 }]}>
+          <Feather name="alert-triangle" size={36} color={colors.accent} />
+          <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600", marginTop: 14 }}>
+            Couldn't load this page
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 6, marginBottom: 20, textAlign: "center" }}>
+            {err?.message ?? "An unexpected error occurred while loading the page."}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable
+              style={[styles.unlockBtn, { backgroundColor: colors.accentSoft }]}
+              onPress={reset}
+            >
+              <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "500" }}>Try again</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.unlockBtn, { backgroundColor: colors.surface1, borderColor: colors.border, borderWidth: 1 }]}
+              onPress={() => navigation?.goBack?.()}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "500" }}>Back</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    >
+      <PageEditorInner {...props} />
+    </ScreenErrorBoundary>
+  );
+}
+
+function PageEditorInner({ route, navigation }: any) {
+  const params = (route?.params ?? {}) as {
+    pageId?: string;
+    sectionId?: string;
     notebookId?: string;
     title?: string;
     autoFocus?: boolean;
   };
-  const shouldAutoFocus = Boolean(autoFocusParam);
+  const pageId = params.pageId ?? "";
+  const sectionId = params.sectionId ?? "";
+  const routeNotebookId = params.notebookId;
+  const titleParam = params.title;
+  const shouldAutoFocus = Boolean(params.autoFocus);
+
   const { colors } = useTheme();
   const unlock = useUnlock();
   const queryClient = useQueryClient();
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
   const notebookId = routeNotebookId ?? notebooks?.find((nb) => (nb.sections ?? []).some((s) => s.id === sectionId))?.id;
-  const password = unlock.sectionPasswords[sectionId] ?? (notebookId ? unlock.notebookPasswords[notebookId] : undefined);
+  const password = (sectionId ? unlock.sectionPasswords[sectionId] : undefined) ?? (notebookId ? unlock.notebookPasswords[notebookId] : undefined);
   const { stackBottomClearance, insets } = useLayout();
 
   const [text, setText] = useState<string | null>(null);
@@ -90,7 +157,6 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const skipSave = useRef(false);
   const [focus, setFocus] = useState(false);
   const [templatesDismissed, setTemplatesDismissed] = useState(false);
-  const [selection, setSelection] = useState<{ start: number; end: number } | undefined>();
   const [positionReady, setPositionReady] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingText = useRef<string | null>(null);
@@ -103,9 +169,10 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   const { data: page, error, isLoading, refetch } = useQuery({
     queryKey: ["page", pageId, password ?? null],
-    queryFn: () => fetchPage(pageId, password),
+    queryFn: () => (pageId ? fetchPage(pageId, password) : Promise.reject(new Error("No page ID"))),
+    enabled: Boolean(pageId),
   });
-  const sectionMeta = notebooks?.flatMap((nb) => nb.sections ?? []).find((s) => s.id === sectionId);
+  const sectionMeta = (notebooks ?? []).flatMap((nb) => nb.sections ?? []).find((s) => s.id === sectionId);
   const sectionLocked = Boolean(sectionMeta?.isLocked);
 
   useEffect(() => {
@@ -121,17 +188,24 @@ export default function PageEditorScreen({ route, navigation }: any) {
       textRef.current = body;
       setWasRich(isRichContent(page.content));
       restoredScrollRef.current = false;
-      void loadPagePosition(pageId).then((pos) => {
-        if (pos) {
-          const start = Math.min(Math.max(0, pos.selection), body.length);
-          setSelection({ start, end: start });
-          scrollOffsetRef.current = pos.scrollOffset ?? 0;
-        } else {
-          setSelection(undefined);
-          scrollOffsetRef.current = 0;
-        }
+      if (pageId) {
+        void loadPagePosition(pageId)
+          .then((pos) => {
+            if (pos) {
+              scrollOffsetRef.current = pos.scrollOffset ?? 0;
+            } else {
+              scrollOffsetRef.current = 0;
+            }
+          })
+          .catch(() => {
+            scrollOffsetRef.current = 0;
+          })
+          .finally(() => {
+            setPositionReady(true);
+          });
+      } else {
         setPositionReady(true);
-      });
+      }
     }
   }, [page, text, pageId]);
 
@@ -151,19 +225,12 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   useEffect(() => {
     if (!positionReady) return;
-    if (!shouldAutoFocus) {
-      const t = setTimeout(() => setSelection(undefined), 300);
-      return () => clearTimeout(t);
-    }
+    if (!shouldAutoFocus) return;
     const t = setTimeout(() => {
       inputRef.current?.focus();
-      if (selection != null) {
-        inputRef.current?.setNativeProps?.({ selection });
-        setSelection(undefined);
-      }
-    }, 50);
+    }, 80);
     return () => clearTimeout(t);
-  }, [positionReady, pageId, shouldAutoFocus]);
+  }, [positionReady, shouldAutoFocus]);
 
   // Restore scroll position once the ScrollView has laid out.
   useEffect(() => {
@@ -226,7 +293,6 @@ export default function PageEditorScreen({ route, navigation }: any) {
 
   function onChangeText(next: string) {
     unlock.recordActivity?.();
-    if (selection !== undefined) setSelection(undefined);
     setText(next);
     textRef.current = next;
     pendingText.current = next;
@@ -412,8 +478,12 @@ export default function PageEditorScreen({ route, navigation }: any) {
   const showTemplates = !templatesDismissed && !page?.content && (text?.trim() ?? "") === "";
 
   const mediaSegments = useMemo(() => {
-    const all = extractPageSegments(page?.content ?? "");
-    return all.filter((s) => s.type !== "text");
+    try {
+      const all = extractPageSegments(page?.content ?? "");
+      return (all || []).filter((s) => s && s.type !== "text");
+    } catch {
+      return [];
+    }
   }, [page?.content]);
 
   return (
@@ -524,18 +594,14 @@ export default function PageEditorScreen({ route, navigation }: any) {
             multiline
             scrollEnabled={false}
             textAlignVertical="top"
-            value={text}
-            onFocus={() => {
-              if (selection !== undefined) setSelection(undefined);
-            }}
+            value={text ?? ""}
             onChangeText={onChangeText}
-            {...(selection ? { selection } : {})}
             onSelectionChange={(e) => {
               const next = e.nativeEvent.selection;
               selectionRef.current = next;
               if (posTimer.current) clearTimeout(posTimer.current);
               posTimer.current = setTimeout(() => {
-                void savePagePosition(pageId, { selection: next.start, scrollOffset: scrollOffsetRef.current });
+                if (pageId) void savePagePosition(pageId, { selection: next.start, scrollOffset: scrollOffsetRef.current });
               }, 250);
             }}
             placeholder="Write freely…  Type [[ to link a page"
