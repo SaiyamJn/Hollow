@@ -18,10 +18,9 @@ export function DialogContent({
   style?: React.CSSProperties;
   hideHeader?: boolean;
 }) {
-  // Only fall back to the compact width when the caller didn't pass their own
-  // `max-w-*` — otherwise both classes fight and the default wins. This lets a
-  // note editor or task form be genuinely wide instead of a narrow strip.
   const hasWidthOverride = className?.includes("max-w-");
+  const hasHeightOverride = className?.includes("max-h-");
+  const hasOverflowOverride = className?.includes("overflow-");
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/80 sm:bg-black/65 sm:backdrop-blur-[3px] animate-fade-in" />
@@ -31,7 +30,8 @@ export function DialogContent({
         className={clsx(
           "fixed left-1/2 top-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2",
           "rounded-2xl border border-border bg-[var(--surface-1)] p-6 text-primary shadow-pop",
-          "max-h-[min(90dvh,44rem)] overflow-y-auto overscroll-contain overflow-x-hidden",
+          !hasHeightOverride && "max-h-[min(90dvh,44rem)]",
+          !hasOverflowOverride && "overflow-y-auto overscroll-contain overflow-x-hidden",
           "focus:outline-none animate-pop-in",
           !hasWidthOverride && "max-w-sm",
           className

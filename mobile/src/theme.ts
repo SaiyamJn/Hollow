@@ -17,13 +17,13 @@ export const darkColors = {
   focusSteady: "#38bdf8",
   focusSwift: "#fbbf24",
   focusQuiet: "#a78bfa",
-  noteYellow: "rgba(250, 204, 21, 0.26)",
-  noteGreen: "rgba(52, 211, 153, 0.24)",
-  noteBlue: "rgba(96, 165, 250, 0.24)",
-  noteRed: "rgba(251, 113, 133, 0.24)",
-  notePurple: "rgba(192, 132, 252, 0.24)",
+  noteYellow: "#423415",
+  noteGreen: "#153e28",
+  noteBlue: "#163354",
+  noteRed: "#4a1b24",
+  notePurple: "#3a1950",
   // Translucent surface tint layered over BlurView for glass chrome.
-  glass: "rgba(18, 26, 24, 0.5)",
+  glass: "rgba(18, 26, 24, 0.8)",
   glassBorder: "rgba(94, 233, 181, 0.12)",
 };
 
@@ -43,12 +43,12 @@ export const lightColors = {
   focusSteady: "#0284c7",
   focusSwift: "#f59e0b",
   focusQuiet: "#8b5cf6",
-  noteYellow: "rgba(250, 184, 8, 0.5)",
-  noteGreen: "rgba(16, 185, 129, 0.38)",
-  noteBlue: "rgba(59, 130, 246, 0.34)",
-  noteRed: "rgba(244, 63, 94, 0.32)",
-  notePurple: "rgba(168, 85, 247, 0.32)",
-  glass: "rgba(220, 246, 232, 0.58)",
+  noteYellow: "#fef08a",
+  noteGreen: "#bbf7d0",
+  noteBlue: "#bae6fd",
+  noteRed: "#fecdd3",
+  notePurple: "#e9d5ff",
+  glass: "rgba(255, 255, 255, 0.85)",
   glassBorder: "rgba(15, 42, 31, 0.09)",
 };
 
@@ -69,6 +69,6 @@ export function noteTint(colors: ThemeColors, color: string | undefined): string
     case "purple":
       return colors.notePurple;
     default:
-      return "transparent";
+      return colors.surface1;
   }
 }

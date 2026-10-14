@@ -25,11 +25,16 @@
   --focus-steady-pane: rgba(2, 132, 199, 0.14);
   --focus-swift-pane: rgba(245, 158, 11, 0.14);
   --focus-quiet-pane: rgba(139, 92, 246, 0.14);
-  --note-yellow: rgba(250, 184, 8, 0.5);
-  --note-green: rgba(16, 185, 129, 0.38);
-  --note-blue: rgba(59, 130, 246, 0.34);
-  --note-red: rgba(244, 63, 94, 0.32);
-  --note-purple: rgba(168, 85, 247, 0.32);
+  --note-yellow: #fef08a;
+  --note-green: #bbf7d0;
+  --note-blue: #bae6fd;
+  --note-red: #fecdd3;
+  --note-purple: #e9d5ff;
+  --note-yellow-border: rgba(234, 179, 8, 0.55);
+  --note-green-border: rgba(34, 197, 94, 0.55);
+  --note-blue-border: rgba(14, 165, 233, 0.55);
+  --note-red-border: rgba(244, 63, 94, 0.55);
+  --note-purple-border: rgba(168, 85, 247, 0.55);
   --shadow-card: 0 1px 2px rgba(15, 42, 31, 0.07);
   --shadow-pop: 0 8px 32px rgba(12, 184, 121, 0.16);
   --glow: radial-gradient(ellipse 72% 52% at 50% -8%, rgba(12, 184, 121, 0.22), transparent 58%),
@@ -60,11 +65,16 @@
   --focus-steady-pane: rgba(56, 189, 248, 0.18);
   --focus-swift-pane: rgba(251, 191, 36, 0.16);
   --focus-quiet-pane: rgba(167, 139, 250, 0.18);
-  --note-yellow: rgba(250, 204, 21, 0.26);
-  --note-green: rgba(52, 211, 153, 0.24);
-  --note-blue: rgba(96, 165, 250, 0.24);
-  --note-red: rgba(251, 113, 133, 0.24);
-  --note-purple: rgba(192, 132, 252, 0.24);
+  --note-yellow: #423415;
+  --note-green: #153e28;
+  --note-blue: #163354;
+  --note-red: #4a1b24;
+  --note-purple: #3a1950;
+  --note-yellow-border: rgba(250, 204, 21, 0.55);
+  --note-green-border: rgba(52, 211, 153, 0.55);
+  --note-blue-border: rgba(96, 165, 250, 0.55);
+  --note-red-border: rgba(251, 113, 133, 0.55);
+  --note-purple-border: rgba(192, 132, 252, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.36);
   --shadow-pop: 0 10px 36px rgba(0, 0, 0, 0.5);
   --glow: radial-gradient(ellipse 70% 52% at 50% -5%, rgba(94, 233, 181, 0.18), transparent 56%),

@@ -32,33 +32,50 @@ import { EmptyState } from "../components/EmptyState";
 import { shouldHandleItemDelete } from "../lib/keys";
 import { downloadMarkdown, printHtml } from "../lib/export";
 
-const PALETTE: Record<string, string> = {
-  gray: "transparent",
-  yellow: "var(--note-yellow)",
-  green: "var(--note-green)",
-  blue: "var(--note-blue)",
-  red: "var(--note-red)",
-  purple: "var(--note-purple)",
+const PALETTE: Record<string, { bg: string; border: string }> = {
+  gray: {
+    bg: "var(--surface-1)",
+    border: "var(--border)",
+  },
+  yellow: {
+    bg: "var(--note-yellow)",
+    border: "var(--note-yellow-border)",
+  },
+  green: {
+    bg: "var(--note-green)",
+    border: "var(--note-green-border)",
+  },
+  blue: {
+    bg: "var(--note-blue)",
+    border: "var(--note-blue-border)",
+  },
+  red: {
+    bg: "var(--note-red)",
+    border: "var(--note-red-border)",
+  },
+  purple: {
+    bg: "var(--note-purple)",
+    border: "var(--note-purple-border)",
+  },
 };
 
 export function getNoteGlassStyle(color?: string) {
-  const isColored = color && color !== "gray" && PALETTE[color];
+  const c = color && PALETTE[color] ? PALETTE[color] : PALETTE.gray;
   return {
-    backgroundColor: isColored
-      ? `color-mix(in srgb, var(--surface-1) 82%, ${PALETTE[color]})`
-      : "color-mix(in srgb, var(--surface-1) 88%, transparent)",
-    backdropFilter: "blur(24px) saturate(1.5)",
-    WebkitBackdropFilter: "blur(24px) saturate(1.5)",
+    backgroundColor: c.bg,
+    borderColor: c.border,
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
   };
 }
 
 const DOT_COLORS: Record<string, string> = {
   gray: "rgba(128, 128, 128, 0.6)",
-  yellow: "rgb(250, 184, 8)",
-  green: "rgb(16, 185, 129)",
-  blue: "rgb(59, 130, 246)",
-  red: "rgb(244, 63, 94)",
-  purple: "rgb(168, 85, 247)",
+  yellow: "#eab308",
+  green: "#22c55e",
+  blue: "#3b82f6",
+  red: "#f43f5e",
+  purple: "#a855f7",
 };
 
 function newItemId() {
@@ -81,8 +98,8 @@ function ColorDots({
           title={color}
           onClick={() => onPick(color)}
           className={clsx(
-            "h-4 w-4 rounded-full border",
-            value === color ? "border-accent" : "border-border hover:border-secondary"
+            "h-4 w-4 rounded-full border transition-transform hover:scale-110",
+            value === color ? "border-accent ring-2 ring-accent/40" : "border-border hover:border-secondary"
           )}
           style={{ background: DOT_COLORS[color] }}
         />
@@ -120,6 +137,27 @@ export default function QuickNotes() {
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [confirmDeleteEdit, setConfirmDeleteEdit] = useState(false);
   const [hoverNoteId, setHoverNoteId] = useState<string | null>(null);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustTextareaHeight = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const parent = el.parentElement;
+    const prevScrollTop = parent?.scrollTop;
+    el.style.height = "auto";
+    const newHeight = Math.max(el.scrollHeight, 180);
+    el.style.height = `${newHeight}px`;
+    if (parent && prevScrollTop !== undefined) {
+      parent.scrollTop = prevScrollTop;
+    }
+  };
+
+  useEffect(() => {
+    if (editing && editing.kind === "note") {
+      requestAnimationFrame(adjustTextareaHeight);
+    }
+  }, [editing?.content, editing?.id, editing?.kind]);
 
   useEffect(() => {
     const action = searchParams.get("action");
@@ -589,8 +627,8 @@ export default function QuickNotes() {
             </div>
           ) : (
             <div
-              className="rounded-2xl border border-border/90 glass-strong p-4 shadow-md transition-all"
-              style={draftColor !== "gray" ? getNoteGlassStyle(draftColor) : undefined}
+              className="rounded-2xl border p-4 shadow-md transition-all"
+              style={getNoteGlassStyle(draftColor)}
             >
               <textarea
                 autoFocus
@@ -787,17 +825,17 @@ export default function QuickNotes() {
         <DialogContent
           hideHeader
           title={editing?.kind === "list" ? "List" : "Note"}
-          className="w-[min(94vw,56rem)] max-w-4xl p-6 sm:p-8 rounded-3xl border border-border/80 shadow-2xl glass-strong"
+          className="w-[min(94vw,50rem)] max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
           style={getNoteGlassStyle(editing?.color || "gray")}
         >
           {editing && (
-            <div className="flex flex-col h-[min(82vh,46rem)] min-h-[26rem]">
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
               {/* Google Keep Header: Title + Star/Pin Icon */}
-              <div className="flex items-center justify-between gap-3 mb-3 shrink-0">
+              <div className="flex items-center justify-between gap-3 mb-2 shrink-0">
                 <input
                   autoFocus={!!editing.isNew}
                   className="w-full bg-transparent text-xl font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
-                  placeholder={editing.kind === "list" ? "Title" : "Title"}
+                  placeholder="Title"
                   value={editing.title}
                   onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
                 />
@@ -805,7 +843,7 @@ export default function QuickNotes() {
                   type="button"
                   title={editingNotePinned ? "Unpin note" : "Pin note"}
                   onClick={() => void togglePinEditing()}
-                  className="p-1.5 rounded-full text-secondary hover:text-primary hover:bg-surface-2 transition-colors shrink-0"
+                  className="p-1.5 rounded-full text-secondary hover:text-primary hover:bg-surface-2/60 transition-colors shrink-0"
                 >
                   <Star
                     size={20}
@@ -816,112 +854,118 @@ export default function QuickNotes() {
                 </button>
               </div>
 
-              {/* Note Content / Checklist items - adaptable to viewport */}
-              {editing.kind === "list" ? (
-                <div className="space-y-1.5 flex-1 min-h-[16rem] overflow-y-auto py-2 pr-1">
-                  {[...editing.items]
-                    .sort((a, b) => Number(a.done) - Number(b.done))
-                    .map((item) => (
-                      <div key={item.id} className="flex items-center gap-2 group/item">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const items = editing.items.map((it) =>
-                              it.id === item.id ? { ...it, done: !it.done } : it
-                            );
-                            persistEdit({ ...editing, items });
-                          }}
-                          className="text-secondary hover:text-accent shrink-0"
-                        >
-                          {item.done ? <CheckSquare size={16} /> : <Square size={16} />}
-                        </button>
-                        <input
-                          data-item-id={item.id}
-                          className={clsx(
-                            "flex-1 bg-transparent text-sm focus:outline-none border-0 p-0",
-                            item.done && "line-through text-secondary"
-                          )}
-                          value={item.text}
-                          placeholder="List item"
-                          onChange={(e) => {
-                            const items = editing.items.map((it) =>
-                              it.id === item.id ? { ...it, text: e.target.value } : it
-                            );
-                            persistEdit({ ...editing, items });
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const curIndex = editing.items.findIndex((it) => it.id === item.id);
-                              const newId = newItemId();
-                              const items = [...editing.items];
-                              items.splice(curIndex >= 0 ? curIndex + 1 : items.length, 0, {
-                                id: newId,
-                                text: "",
-                                done: false,
-                              });
+              {/* Note Content / Checklist items - dynamically sizes and scrolls */}
+              <div className="flex-1 min-h-[180px] overflow-y-auto py-2 pr-1 overscroll-contain">
+                {editing.kind === "list" ? (
+                  <div className="space-y-1.5 min-h-[180px]">
+                    {[...editing.items]
+                      .sort((a, b) => Number(a.done) - Number(b.done))
+                      .map((item) => (
+                        <div key={item.id} className="flex items-center gap-2 group/item">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const items = editing.items.map((it) =>
+                                it.id === item.id ? { ...it, done: !it.done } : it
+                              );
                               persistEdit({ ...editing, items });
-                              setTimeout(() => {
-                                const el = document.querySelector(`[data-item-id="${newId}"]`) as HTMLInputElement | null;
-                                el?.focus();
-                              }, 10);
-                            } else if (e.key === "Backspace" && item.text === "" && editing.items.length > 1) {
-                              e.preventDefault();
-                              const curIndex = editing.items.findIndex((it) => it.id === item.id);
-                              const prevItem = curIndex > 0 ? editing.items[curIndex - 1] : editing.items[curIndex + 1];
-                              const items = editing.items.filter((it) => it.id !== item.id);
+                            }}
+                            className="text-secondary hover:text-accent shrink-0"
+                          >
+                            {item.done ? <CheckSquare size={16} /> : <Square size={16} />}
+                          </button>
+                          <input
+                            data-item-id={item.id}
+                            className={clsx(
+                              "flex-1 bg-transparent text-sm focus:outline-none border-0 p-0",
+                              item.done && "line-through text-secondary"
+                            )}
+                            value={item.text}
+                            placeholder="List item"
+                            onChange={(e) => {
+                              const items = editing.items.map((it) =>
+                                it.id === item.id ? { ...it, text: e.target.value } : it
+                              );
                               persistEdit({ ...editing, items });
-                              if (prevItem) {
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const curIndex = editing.items.findIndex((it) => it.id === item.id);
+                                const newId = newItemId();
+                                const items = [...editing.items];
+                                items.splice(curIndex >= 0 ? curIndex + 1 : items.length, 0, {
+                                  id: newId,
+                                  text: "",
+                                  done: false,
+                                });
+                                persistEdit({ ...editing, items });
                                 setTimeout(() => {
-                                  const el = document.querySelector(`[data-item-id="${prevItem.id}"]`) as HTMLInputElement | null;
+                                  const el = document.querySelector(`[data-item-id="${newId}"]`) as HTMLInputElement | null;
                                   el?.focus();
                                 }, 10);
+                              } else if (e.key === "Backspace" && item.text === "" && editing.items.length > 1) {
+                                e.preventDefault();
+                                const curIndex = editing.items.findIndex((it) => it.id === item.id);
+                                const prevItem = curIndex > 0 ? editing.items[curIndex - 1] : editing.items[curIndex + 1];
+                                const items = editing.items.filter((it) => it.id !== item.id);
+                                persistEdit({ ...editing, items });
+                                if (prevItem) {
+                                  setTimeout(() => {
+                                    const el = document.querySelector(`[data-item-id="${prevItem.id}"]`) as HTMLInputElement | null;
+                                    el?.focus();
+                                  }, 10);
+                                }
                               }
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          title="Delete item"
-                          className="p-1 rounded text-secondary/40 hover:text-danger hover:bg-surface-2 transition-colors shrink-0 opacity-60 hover:opacity-100"
-                          onClick={() => {
-                            const items = editing.items.filter((it) => it.id !== item.id);
-                            persistEdit({
-                              ...editing,
-                              items: items.length ? items : [{ id: newItemId(), text: "", done: false }],
-                            });
-                          }}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  <button
-                    type="button"
-                    className="text-xs text-secondary hover:text-primary mt-1 font-medium transition-colors"
-                    onClick={() =>
-                      persistEdit({
-                        ...editing,
-                        items: [...editing.items, { id: newItemId(), text: "", done: false }],
-                      })
-                    }
-                  >
-                    + List item
-                  </button>
-                </div>
-              ) : (
-                <textarea
-                  autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full flex-1 min-h-[16rem] bg-transparent border-0 outline-none p-0 text-base text-primary leading-relaxed
-                             placeholder:text-secondary/60 focus:ring-0 resize-none overflow-y-auto"
-                  placeholder="Note"
-                  value={editing.content}
-                  onChange={(e) => persistEdit({ ...editing, content: e.target.value })}
-                />
-              )}
+                            }}
+                          />
+                          <button
+                            type="button"
+                            title="Delete item"
+                            className="p-1 rounded text-secondary/40 hover:text-danger hover:bg-surface-2 transition-colors shrink-0 opacity-60 hover:opacity-100"
+                            onClick={() => {
+                              const items = editing.items.filter((it) => it.id !== item.id);
+                              persistEdit({
+                                ...editing,
+                                items: items.length ? items : [{ id: newItemId(), text: "", done: false }],
+                              });
+                            }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    <button
+                      type="button"
+                      className="text-xs text-secondary hover:text-primary mt-1 font-medium transition-colors"
+                      onClick={() =>
+                        persistEdit({
+                          ...editing,
+                          items: [...editing.items, { id: newItemId(), text: "", done: false }],
+                        })
+                      }
+                    >
+                      + List item
+                    </button>
+                  </div>
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    autoFocus={!!editing.isNew && !editing.title}
+                    className="w-full min-h-[180px] bg-transparent border-0 outline-none p-0 text-base text-primary leading-relaxed
+                               placeholder:text-secondary/60 focus:ring-0 resize-none overflow-hidden"
+                    placeholder="Note"
+                    value={editing.content}
+                    onChange={(e) => {
+                      persistEdit({ ...editing, content: e.target.value });
+                      adjustTextareaHeight();
+                    }}
+                  />
+                )}
+              </div>
 
-              {/* Google Keep Bottom Toolbar */}
-              <div className="shrink-0 pt-4 flex items-center justify-between gap-3 border-t border-border/30 mt-auto">
+              {/* Google Keep Bottom Toolbar - Always pinned and visible */}
+              <div className="shrink-0 pt-3 flex items-center justify-between gap-3 border-t border-border/30 mt-auto">
                 <div className="flex items-center gap-1">
                   <div className="mr-2">
                     <ColorDots
@@ -932,7 +976,7 @@ export default function QuickNotes() {
                   <button
                     type="button"
                     title={editingNoteArchived ? "Unarchive note" : "Archive note"}
-                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2/60 transition-colors"
                     onClick={() => void toggleArchiveEditing()}
                   >
                     {editingNoteArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
@@ -940,7 +984,7 @@ export default function QuickNotes() {
                   <button
                     type="button"
                     title="Delete note"
-                    className="p-2 rounded-lg text-secondary hover:text-danger hover:bg-surface-2 transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-danger hover:bg-surface-2/60 transition-colors"
                     onClick={() => setConfirmDeleteEdit(true)}
                   >
                     <Trash2 size={16} />
@@ -948,7 +992,7 @@ export default function QuickNotes() {
                   <button
                     type="button"
                     title="Export as Markdown"
-                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2/60 transition-colors"
                     onClick={exportNote}
                   >
                     <FileDown size={16} />
@@ -956,7 +1000,7 @@ export default function QuickNotes() {
                   <button
                     type="button"
                     title="Export as PDF"
-                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2 transition-colors"
+                    className="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-2/60 transition-colors"
                     onClick={exportNotePdf}
                   >
                     <Printer size={16} />
@@ -1039,10 +1083,13 @@ function NoteCard({
       onPointerCancel={clearHold}
       onPointerLeave={clearHold}
       className={clsx(
-        "relative rounded-xl border glass-strong p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
-        selected ? "border-accent border-2" : "border-border hover:shadow-pop hover:-translate-y-0.5"
+        "relative rounded-xl border p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
+        selected ? "border-accent ring-2 ring-accent" : "hover:shadow-pop hover:-translate-y-0.5"
       )}
-      style={getNoteGlassStyle(note.color)}
+      style={{
+        ...getNoteGlassStyle(note.color),
+        ...(selected ? { borderColor: "var(--accent)" } : {}),
+      }}
     >
       <button
         type="button"
