@@ -70,12 +70,12 @@ export function getNoteGlassStyle(color?: string) {
 }
 
 const DOT_COLORS: Record<string, string> = {
-  gray: "rgba(128, 128, 128, 0.6)",
-  yellow: "#eab308",
-  green: "#22c55e",
-  blue: "#3b82f6",
-  red: "#f43f5e",
-  purple: "#a855f7",
+  gray: "rgba(128, 128, 128, 0.45)",
+  yellow: "rgba(202, 138, 4, 0.75)",
+  green: "rgba(22, 163, 74, 0.75)",
+  blue: "rgba(2, 132, 199, 0.75)",
+  red: "rgba(225, 29, 72, 0.75)",
+  purple: "rgba(147, 51, 234, 0.75)",
 };
 
 function newItemId() {
@@ -98,8 +98,10 @@ function ColorDots({
           title={color}
           onClick={() => onPick(color)}
           className={clsx(
-            "h-4 w-4 rounded-full border transition-transform hover:scale-110",
-            value === color ? "border-accent ring-2 ring-accent/40" : "border-border hover:border-secondary"
+            "h-4 w-4 rounded-full border transition-all",
+            value === color
+              ? "border-primary/80 ring-1 ring-primary/25 scale-105"
+              : "border-border/60 hover:border-secondary/60 hover:scale-105"
           )}
           style={{ background: DOT_COLORS[color] }}
         />
@@ -627,7 +629,7 @@ export default function QuickNotes() {
             </div>
           ) : (
             <div
-              className="rounded-2xl border p-4 shadow-md transition-all"
+              className="rounded-2xl border border-border/80 focus-within:border-[color:var(--text-secondary)]/40 p-4 shadow-sm transition-all"
               style={getNoteGlassStyle(draftColor)}
             >
               <textarea
@@ -1083,12 +1085,14 @@ function NoteCard({
       onPointerCancel={clearHold}
       onPointerLeave={clearHold}
       className={clsx(
-        "relative rounded-xl border p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
-        selected ? "border-accent ring-2 ring-accent" : "hover:shadow-pop hover:-translate-y-0.5"
+        "relative rounded-xl border p-4 shadow-card transition-all duration-200 min-h-[72px] flex flex-col",
+        selected
+          ? "border-accent/60 shadow-sm"
+          : "hover:shadow-pop hover:-translate-y-0.5"
       )}
       style={{
         ...getNoteGlassStyle(note.color),
-        ...(selected ? { borderColor: "var(--accent)" } : {}),
+        ...(selected ? { borderColor: "color-mix(in srgb, var(--accent) 55%, var(--border))" } : {}),
       }}
     >
       <button

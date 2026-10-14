@@ -45,7 +45,7 @@ export function FocusField({
               className={clsx(
                 "rounded-xl px-3 py-2.5 text-left transition-all",
                 FOCUS_PANE[id],
-                active && "ring-2 ring-[color:var(--pane-accent)]/45 scale-[1.01]"
+                active && "ring-1 ring-[color:var(--pane-accent)]/30 border-[color:var(--pane-accent)]/40"
               )}
             >
               <div className="flex items-center gap-2 mb-0.5">
