@@ -437,7 +437,7 @@ export default function TasksScreen() {
                   onPress={() => update.mutate({ id: task.id, patch: { done: !task.done } })}
                 >
                   <Feather
-                    name={task.done ? "check-circle" : "circle"}
+                    name={task.done ? "check-square" : "square"}
                     size={17}
                     color={task.done ? colors.accent : colors.textSecondary}
                   />
@@ -540,8 +540,8 @@ export default function TasksScreen() {
                     <View key={sub.id} style={styles.taskRow}>
                       <Pressable onPress={() => update.mutate({ id: sub.id, patch: { done: !sub.done } })}>
                         <Feather
-                          name={sub.done ? "check-circle" : "circle"}
-                          size={14}
+                          name={sub.done ? "check-square" : "square"}
+                          size={15}
                           color={sub.done ? colors.accent : colors.textSecondary}
                         />
                       </Pressable>

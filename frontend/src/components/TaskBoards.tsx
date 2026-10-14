@@ -44,10 +44,10 @@ function BoardCard({
           type="button"
           onClick={onToggle}
           className={clsx(
-            "mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border flex items-center justify-center transition-colors",
+            "mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[4px] border flex items-center justify-center transition-colors",
             task.done
-              ? "bg-accent/80 border-accent/80 text-surface-0"
-              : "border-secondary/40 hover:border-accent/60 bg-surface-1/40"
+              ? "bg-accent border-accent text-surface-0"
+              : "border-secondary/40 hover:border-accent bg-surface-1/40"
           )}
         >
           {task.done && <Check size={9} strokeWidth={3} />}
@@ -109,7 +109,7 @@ function Column({
         "flex flex-col rounded-2xl overflow-hidden transition-[box-shadow,transform] duration-150",
         fillHeight ? "h-full min-h-0" : "min-h-[240px]",
         FOCUS_PANE[focus],
-        dropActive && "ring-1 ring-[color:var(--pane-accent)]/30 scale-[1.01]"
+        dropActive && "ring-2 ring-[color:var(--pane-accent)]/40 scale-[1.01]"
       )}
     >
       <div className="px-3 py-2.5 border-b border-border/60 flex items-start gap-2 shrink-0">

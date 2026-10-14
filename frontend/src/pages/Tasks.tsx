@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import { dismissTaskNotification } from "../lib/notify";
 import type { Task } from "../lib/types";
+import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { DateTimePicker } from "../components/DateTimePicker";
@@ -77,16 +78,13 @@ function groupOpenTasks(tasks: Task[]): [GroupName, Task[]][] {
 function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
   return (
     <button
-      type="button"
       onClick={onToggle}
       className={clsx(
-        "h-4 w-4 shrink-0 rounded-full border flex items-center justify-center transition-all duration-200",
-        checked
-          ? "bg-accent/80 border-accent/80 text-surface-0 scale-95"
-          : "border-border/80 hover:border-accent/60"
+        "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-all duration-300",
+        checked ? "bg-accent border-accent text-surface-0 scale-95" : "border-border hover:border-secondary"
       )}
     >
-      {checked && <Check size={10} strokeWidth={3} className="animate-fade-in" />}
+      {checked && <Check size={11} strokeWidth={3} className="animate-fade-in" />}
     </button>
   );
 }
@@ -103,15 +101,11 @@ type Draft = {
   repeatUntil?: Date | null;
   repeatCount?: number | null;
 };
-type EditDraft = Draft & { id: string; starred?: boolean };
+type EditDraft = Draft & { id: string };
 
 export default function Tasks() {
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickDesc, setQuickDesc] = useState("");
-  const [quickDue, setQuickDue] = useState<Date | null>(null);
-  const [quickFocus, setQuickFocus] = useState<TaskFocus>("none");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -221,21 +215,9 @@ export default function Tasks() {
     create.reset();
   }
 
-  function handleQuickSubmit() {
-    if (!quickAdd.trim() || create.isPending) return;
-    create.mutate({
-      title: quickAdd.trim(),
-      description: quickDesc.trim() || undefined,
-      dueAt: quickDue ? quickDue.toISOString() : undefined,
-      focus: quickFocus,
-    });
-    setQuickAdd("");
-    setQuickDesc("");
-    setQuickDue(null);
-    setQuickFocus("none");
-    setQuickAddOpen(false);
+  function onQuickAdd(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && quickAdd.trim()) openCreate(quickAdd);
   }
-
 
   function submitDraft() {
     if (!draft?.title.trim() || create.isPending) return;
@@ -289,133 +271,54 @@ export default function Tasks() {
         layout === "matrix" && "max-w-5xl"
       )}
     >
-      {/* Sleek Minimal Header */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-xl font-medium tracking-tight">Tasks</h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Subtle minimal layout switcher */}
-          <div className="flex items-center p-0.5 rounded-xl border border-border/60 glass-strong shadow-xs">
-            {LAYOUTS.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                onClick={() => setLayout(l.id)}
-                className={clsx(
-                  "px-3 py-1 rounded-lg text-xs font-medium transition-all",
-                  layout === l.id
-                    ? "bg-surface-2 text-primary shadow-xs"
-                    : "text-secondary hover:text-primary"
-                )}
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
-
-          <Link
-            to="/recycle-bin?tab=tasks"
-            title="Recycle bin"
-            className="p-1.5 rounded-xl border border-border/50 glass text-secondary hover:text-primary hover:border-border transition-colors"
-          >
-            <Trash2 size={15} />
-          </Link>
-        </div>
+      <div className="text-center mb-4">
+        <h1 className="text-xl font-medium">Tasks</h1>
+        <p className="text-sm text-secondary mt-1">
+          Star to pin · Focus for important × urgent
+        </p>
       </div>
 
-      {/* Google Keep / Tasks Minimal Quick Creator */}
+      <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
+        <Link
+          to="/recycle-bin?tab=tasks"
+          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
+        >
+          <Trash2 size={13} />
+          Recycle bin
+        </Link>
+      </div>
+
+      <div className="flex justify-center gap-1 mb-5 p-1 rounded-xl border border-border glass-strong w-fit mx-auto shadow-card">
+        {LAYOUTS.map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            onClick={() => setLayout(l.id)}
+            className={clsx(
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+              layout === l.id
+                ? "bg-accent text-surface-0 shadow-sm"
+                : "text-secondary hover:text-primary hover:bg-surface-2/80"
+            )}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+
       <div
         className={clsx(
           "mb-6 mx-auto w-full",
           layout === "list" ? "max-w-2xl" : "max-w-xl"
         )}
       >
-        {!quickAddOpen ? (
-          <div
-            onClick={() => setQuickAddOpen(true)}
-            className="flex items-center justify-between rounded-xl border border-border/70 glass hover:border-border/90 px-4 py-2.5 shadow-xs cursor-pointer transition-all"
-          >
-            <div className="flex items-center gap-2.5 text-secondary/70">
-              <Plus size={16} className="text-secondary/60" />
-              <span className="text-sm font-normal">Add a task…</span>
-            </div>
-            <span className="text-xs text-secondary/40 font-mono hidden sm:inline">↵</span>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-border/80 glass-strong p-3.5 shadow-sm transition-all space-y-2.5">
-            <input
-              autoFocus
-              placeholder="Task title…"
-              value={quickAdd}
-              onChange={(e) => setQuickAdd(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && quickAdd.trim()) {
-                  e.preventDefault();
-                  handleQuickSubmit();
-                } else if (e.key === "Escape") {
-                  setQuickAddOpen(false);
-                  setQuickAdd("");
-                  setQuickDesc("");
-                  setQuickDue(null);
-                  setQuickFocus("none");
-                }
-              }}
-              className="w-full bg-transparent text-sm font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
-            />
-            <textarea
-              rows={2}
-              placeholder="Details (optional)"
-              value={quickDesc}
-              onChange={(e) => setQuickDesc(e.target.value)}
-              className="w-full bg-transparent text-xs text-primary placeholder:text-secondary/50 focus:outline-none border-0 p-0 resize-none leading-relaxed"
-            />
-            <div className="flex items-center justify-between pt-2 border-t border-border/30">
-              <div className="flex items-center gap-2">
-                <DateTimePicker
-                  value={quickDue}
-                  onChange={setQuickDue}
-                />
-                <button
-                  type="button"
-                  title="More options (repeat, priority)"
-                  onClick={() => {
-                    const currentTitle = quickAdd;
-                    setQuickAddOpen(false);
-                    openCreate(currentTitle);
-                  }}
-                  className="text-xs text-secondary/60 hover:text-primary px-2 py-1 rounded-lg hover:bg-surface-2 transition-colors"
-                >
-                  More options
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="ghost"
-                  className="text-xs px-2.5 py-1 h-7"
-                  onClick={() => {
-                    setQuickAddOpen(false);
-                    setQuickAdd("");
-                    setQuickDesc("");
-                    setQuickDue(null);
-                    setQuickFocus("none");
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="accent"
-                  className="text-xs px-3 py-1 h-7 font-medium"
-                  disabled={!quickAdd.trim() || create.isPending}
-                  onClick={handleQuickSubmit}
-                >
-                  Add
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        <Input
+          placeholder="What's next? Press Enter"
+          value={quickAdd}
+          onChange={(e) => setQuickAdd(e.target.value)}
+          onKeyDown={onQuickAdd}
+          className="text-center"
+        />
       </div>
 
       {tasks && tasks.length === 0 && (
@@ -490,7 +393,7 @@ export default function Tasks() {
             >
               {name}
             </h2>
-            <div className="rounded-2xl border border-border/60 glass-strong shadow-xs divide-y divide-border/30 overflow-hidden">
+            <div className="rounded-2xl border border-border glass-strong shadow-card divide-y divide-[color-mix(in_srgb,var(--border)_70%,transparent)] overflow-hidden">
               {list.map((task) => (
                 <TaskRow
                   key={task.id}
@@ -527,13 +430,13 @@ export default function Tasks() {
               type="button"
               onClick={() => setShowCompleted((v) => !v)}
               className="w-full flex items-center justify-center gap-1.5 text-xs font-medium uppercase tracking-wide
-                         text-secondary/70 hover:text-primary mb-2 py-1"
+                         text-secondary hover:text-primary mb-2 py-1"
             >
               {showCompleted ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               Completed ({completed.length})
             </button>
             {showCompleted && (
-              <div className="rounded-2xl border border-border/50 glass shadow-xs divide-y divide-border/30 overflow-hidden">
+              <div className="rounded-xl border border-border glass shadow-card divide-y divide-[var(--border)] overflow-hidden">
                 {completed.map((task) => (
                   <TaskRow
                     key={task.id}
@@ -576,68 +479,63 @@ export default function Tasks() {
           }
         }}
       >
-        <DialogContent
-          hideHeader
-          title="New task"
-          className="w-[min(94vw,34rem)] max-w-lg p-5 sm:p-6 rounded-3xl border border-border/80 shadow-2xl glass-strong flex flex-col"
-        >
+        <DialogContent title="New task" className="max-w-md">
           {draft && (
-            <div className="space-y-3.5">
-              <input
+            <div className="space-y-3">
+              <Input
                 autoFocus
                 placeholder="What's the plan?"
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                className="w-full bg-transparent text-lg font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
+                className="text-center"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && draft.title.trim()) submitDraft();
                 }}
               />
               <textarea
-                className="w-full bg-transparent text-sm text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0 resize-none min-h-[60px] max-h-[30vh] leading-relaxed"
+                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
+                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto text-center"
                 placeholder="A little context, if you like"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
-              <div className="pt-2 border-t border-border/30 space-y-3">
-                <DateTimePicker
-                  value={draft.due}
-                  onChange={(due) =>
-                    setDraft({
-                      ...draft,
-                      due,
-                      ...(due
-                        ? {}
-                        : {
-                            repeat: null,
-                            repeatDays: null,
-                            repeatInterval: 1,
-                            repeatEnd: null,
-                            repeatUntil: null,
-                            repeatCount: null,
-                          }),
-                    })
-                  }
+              <DateTimePicker
+                value={draft.due}
+                onChange={(due) =>
+                  setDraft({
+                    ...draft,
+                    due,
+                    ...(due
+                      ? {}
+                      : {
+                          repeat: null,
+                          repeatDays: null,
+                          repeatInterval: 1,
+                          repeatEnd: null,
+                          repeatUntil: null,
+                          repeatCount: null,
+                        }),
+                  })
+                }
+              />
+              {draft.due ? (
+                <RepeatField
+                  due={draft.due}
+                  value={draft}
+                  onChange={(next) => setDraft({ ...draft, ...next })}
                 />
-                {draft.due ? (
-                  <RepeatField
-                    due={draft.due}
-                    value={draft}
-                    onChange={(next) => setDraft({ ...draft, ...next })}
-                  />
-                ) : (
-                  <RepeatField due={null} value={draft} onChange={() => {}} disabled />
-                )}
-                <FocusField value={draft.focus} onChange={(focus) => setDraft({ ...draft, focus })} />
-              </div>
-              {createError && <p className="text-xs text-danger text-center">{createError}</p>}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/30">
-                <Button variant="ghost" className="text-xs font-semibold px-3 py-1.5" onClick={() => setDraft(null)}>
+              ) : (
+                <RepeatField due={null} value={draft} onChange={() => {}} disabled />
+              )}
+              <FocusField value={draft.focus} onChange={(focus) => setDraft({ ...draft, focus })} />
+              {createError && <p className="text-sm text-danger text-center">{createError}</p>}
+              <div className="flex gap-2 pt-1">
+                <Button className="flex-1" variant="ghost" onClick={() => setDraft(null)}>
                   Cancel
                 </Button>
                 <Button
+                  className="flex-1"
                   variant="accent"
-                  className="text-xs font-semibold px-4 py-1.5"
                   disabled={!draft.title.trim() || create.isPending}
                   onClick={submitDraft}
                 >
@@ -658,111 +556,76 @@ export default function Tasks() {
           }
         }}
       >
-        <DialogContent
-          hideHeader
-          title="Edit task"
-          className="w-[min(94vw,34rem)] max-w-lg p-5 sm:p-6 rounded-3xl border border-border/80 shadow-2xl glass-strong flex flex-col"
-        >
+        <DialogContent title="Edit task" className="max-w-md">
           {editing && (
-            <div className="space-y-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  autoFocus
-                  placeholder="Task title"
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                  className="w-full bg-transparent text-lg font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
-                />
-                <button
-                  type="button"
-                  title={editing.starred ? "Unstar task" : "Star task"}
-                  onClick={() => {
-                    const nextStarred = !editing.starred;
-                    setEditing({ ...editing, starred: nextStarred });
-                    update.mutate({ id: editing.id, patch: { starred: nextStarred } });
-                  }}
-                  className="p-1.5 rounded-full text-secondary hover:text-primary hover:bg-surface-2 transition-colors shrink-0"
-                >
-                  <Star
-                    size={18}
-                    className={clsx(
-                      editing.starred ? "text-accent fill-accent" : "text-secondary hover:text-primary"
-                    )}
-                  />
-                </button>
-              </div>
-
+            <div className="space-y-3">
+              <Input
+                placeholder="What's the plan?"
+                value={editing.title}
+                onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                className="text-center"
+              />
               <textarea
-                className="w-full bg-transparent text-sm text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0 resize-none min-h-[60px] max-h-[30vh] leading-relaxed"
+                className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary
+                           placeholder:text-secondary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto text-center"
                 placeholder="A little context, if you like"
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               />
-
-              <div className="pt-2 border-t border-border/30 space-y-3">
-                <DateTimePicker
-                  value={editing.due}
-                  onChange={(due) =>
-                    setEditing({
-                      ...editing,
-                      due,
-                      ...(due
-                        ? {}
-                        : {
-                            repeat: null,
-                            repeatDays: null,
-                            repeatInterval: 1,
-                            repeatEnd: null,
-                            repeatUntil: null,
-                            repeatCount: null,
-                          }),
-                    })
-                  }
+              <DateTimePicker
+                value={editing.due}
+                onChange={(due) =>
+                  setEditing({
+                    ...editing,
+                    due,
+                    ...(due
+                      ? {}
+                      : {
+                          repeat: null,
+                          repeatDays: null,
+                          repeatInterval: 1,
+                          repeatEnd: null,
+                          repeatUntil: null,
+                          repeatCount: null,
+                        }),
+                  })
+                }
+              />
+              {editing.due ? (
+                <RepeatField
+                  due={editing.due}
+                  value={editing}
+                  onChange={(next) => setEditing({ ...editing, ...next })}
                 />
-                {editing.due ? (
-                  <RepeatField
-                    due={editing.due}
-                    value={editing}
-                    onChange={(next) => setEditing({ ...editing, ...next })}
-                  />
-                ) : (
-                  <RepeatField due={null} value={editing} onChange={() => {}} disabled />
-                )}
-                <FocusField
-                  value={editing.focus}
-                  onChange={(focus) => setEditing({ ...editing, focus })}
-                />
-              </div>
-
-              {editError && <p className="text-xs text-danger text-center">{editError}</p>}
-
-              <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/30">
+              ) : (
+                <RepeatField due={null} value={editing} onChange={() => {}} disabled />
+              )}
+              <FocusField
+                value={editing.focus}
+                onChange={(focus) => setEditing({ ...editing, focus })}
+              />
+              {editError && <p className="text-sm text-danger text-center">{editError}</p>}
+              <div className="flex items-center gap-1.5 pt-1">
                 <button
                   type="button"
                   title="Delete task"
-                  className="p-2 rounded-lg text-secondary hover:text-danger hover:bg-surface-2 transition-colors"
+                  className="p-1.5 rounded-md text-secondary hover:text-danger transition-colors"
                   onClick={() => setConfirmDeleteTask(true)}
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={14} />
                 </button>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    className="text-xs font-semibold px-3 py-1.5"
-                    onClick={() => setEditing(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="accent"
-                    className="text-xs font-semibold px-4 py-1.5"
-                    disabled={!editing.title.trim() || saveEdit.isPending}
-                    onClick={submitEdit}
-                  >
-                    {saveEdit.isPending ? "Saving…" : "Save"}
-                  </Button>
-                </div>
+                <span className="flex-1" />
+                <Button className="flex-1 max-w-[10rem]" variant="ghost" onClick={() => setEditing(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="accent"
+                  disabled={!editing.title.trim() || saveEdit.isPending}
+                  onClick={submitEdit}
+                >
+                  {saveEdit.isPending ? "Saving…" : "Save"}
+                </Button>
               </div>
             </div>
           )}
@@ -835,29 +698,21 @@ function TaskRow({
 
   return (
     <div
-      className={clsx("px-3.5 py-2.5 transition-colors group", task.starred && !task.done && "row-starred")}
+      className={clsx("px-3.5 py-2.5 transition-colors", task.starred && !task.done && "row-starred")}
       onMouseEnter={() => onHover?.()}
     >
-      <div className="flex items-center gap-2.5">
-        {subtasks.length > 0 ? (
-          <button
-            type="button"
-            className="text-secondary/60 hover:text-primary transition-colors shrink-0"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-        ) : (
-          <span className="w-3.5 shrink-0" />
-        )}
+      <div className="group flex items-center gap-2.5">
+        <button className="text-secondary hover:text-primary" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
         <Checkbox checked={task.done} onToggle={() => onPatch(task.id, { done: !task.done })} />
         <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
           <span className="flex items-center gap-1.5 min-w-0">
             <FocusDot focus={task.focus} />
             <span
               className={clsx(
-                "block text-sm truncate transition-all duration-200 font-medium pr-1",
-                task.done ? "line-through text-secondary/60 opacity-70" : "text-primary"
+                "block text-sm truncate transition-all duration-300 font-medium pr-1",
+                task.done && "line-through text-secondary opacity-70"
               )}
             >
               {task.title}
@@ -871,7 +726,7 @@ function TaskRow({
                   e.stopPropagation();
                   setExpanded((v) => !v);
                 }}
-                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border/60 bg-accent-soft/40 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent-soft/70 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-accent-soft/60 px-1.5 py-0.5 text-[10px] font-semibold text-accent hover:bg-accent-soft"
               >
                 <CheckSquare size={10} />
                 {subtasks.filter((s) => s.done).length}/{subtasks.length}
@@ -879,7 +734,7 @@ function TaskRow({
             )}
           </span>
           {task.description ? (
-            <span className="block text-xs text-secondary/70 truncate mt-0.5">{task.description}</span>
+            <span className="block text-xs text-secondary truncate mt-0.5">{task.description}</span>
           ) : null}
           {task.dueAt ? (
             <span className="mt-1 inline-flex">
@@ -901,33 +756,30 @@ function TaskRow({
             </span>
           ) : null}
         </button>
-        <div className={clsx("row-actions flex items-center gap-0.5 shrink-0", task.starred && "!opacity-100")}>
+        <div className={clsx("row-actions flex items-center gap-1 shrink-0", task.starred && "!opacity-100")}>
           <button
-            type="button"
             title={task.starred ? "Unstar" : "Star"}
             className={clsx(
-              "p-1.5 rounded-lg transition-colors",
-              task.starred ? "text-accent" : "text-secondary/60 hover:text-primary hover:bg-surface-2"
+              "p-1 rounded-md",
+              task.starred ? "text-accent bg-accent-soft" : "text-secondary hover:text-primary"
             )}
             onClick={() => onPatch(task.id, { starred: !task.starred })}
           >
-            <Star size={13} fill={task.starred ? "currentColor" : "none"} />
+            <Star size={14} fill={task.starred ? "currentColor" : "none"} />
           </button>
           <button
-            type="button"
             title="Edit"
-            className="p-1.5 rounded-lg text-secondary/60 hover:text-primary hover:bg-surface-2 transition-colors"
+            className="p-1 rounded-md text-secondary hover:text-primary"
             onClick={onEdit}
           >
-            <Pencil size={13} />
+            <Pencil size={14} />
           </button>
           <button
-            type="button"
             title="Delete"
-            className="p-1.5 rounded-lg text-secondary/60 hover:text-danger hover:bg-surface-2 transition-colors"
+            className="p-1 rounded-md text-secondary hover:text-primary"
             onClick={() => onDelete(task.id)}
           >
-            <Trash2 size={13} />
+            <Trash2 size={14} />
           </button>
         </div>
       </div>
