@@ -33,20 +33,20 @@ import { animateListChange } from "../lib/motion";
 
 const ACCENT_BAR: Record<string, string> = {
   gray: "transparent",
-  yellow: "rgb(250, 184, 8)",
-  green: "rgb(16, 185, 129)",
-  blue: "rgb(59, 130, 246)",
-  red: "rgb(244, 63, 94)",
-  purple: "rgb(168, 85, 247)",
+  yellow: "rgba(234, 179, 8, 0.65)",
+  green: "rgba(34, 197, 94, 0.65)",
+  blue: "rgba(56, 189, 248, 0.65)",
+  red: "rgba(244, 63, 94, 0.65)",
+  purple: "rgba(168, 85, 247, 0.65)",
 };
 
 const DOT_COLORS: Record<string, string> = {
   gray: "#8a8d93",
-  yellow: "rgb(250, 184, 8)",
-  green: "rgb(16, 185, 129)",
-  blue: "rgb(59, 130, 246)",
-  red: "rgb(244, 63, 94)",
-  purple: "rgb(168, 85, 247)",
+  yellow: "rgba(234, 179, 8, 0.85)",
+  green: "rgba(34, 197, 94, 0.85)",
+  blue: "rgba(56, 189, 248, 0.85)",
+  red: "rgba(244, 63, 94, 0.85)",
+  purple: "rgba(168, 85, 247, 0.85)",
 };
 
 const GRID_GAP = 10;

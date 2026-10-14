@@ -70,12 +70,12 @@ export function getNoteGlassStyle(color?: string) {
 }
 
 const DOT_COLORS: Record<string, string> = {
-  gray: "rgba(128, 128, 128, 0.6)",
-  yellow: "#eab308",
-  green: "#22c55e",
-  blue: "#3b82f6",
-  red: "#f43f5e",
-  purple: "#a855f7",
+  gray: "rgba(128, 128, 128, 0.55)",
+  yellow: "rgba(234, 179, 8, 0.85)",
+  green: "rgba(34, 197, 94, 0.85)",
+  blue: "rgba(56, 189, 248, 0.85)",
+  red: "rgba(244, 63, 94, 0.85)",
+  purple: "rgba(168, 85, 247, 0.85)",
 };
 
 function newItemId() {
