@@ -1,5 +1,5 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
@@ -7,8 +7,6 @@ import {
   ArrowLeft,
   CheckSquare,
   FileDown,
-  ListTodo,
-  Plus,
   Printer,
   Square,
   Star,
@@ -42,6 +40,17 @@ const PALETTE: Record<string, string> = {
   red: "var(--note-red)",
   purple: "var(--note-purple)",
 };
+
+export function getNoteGlassStyle(color?: string) {
+  const isColored = color && color !== "gray" && PALETTE[color];
+  return {
+    backgroundColor: isColored
+      ? `color-mix(in srgb, var(--surface-1) 82%, ${PALETTE[color]})`
+      : "color-mix(in srgb, var(--surface-1) 88%, transparent)",
+    backdropFilter: "blur(24px) saturate(1.5)",
+    WebkitBackdropFilter: "blur(24px) saturate(1.5)",
+  };
+}
 
 const DOT_COLORS: Record<string, string> = {
   gray: "rgba(128, 128, 128, 0.6)",
@@ -101,16 +110,27 @@ function isEmptyEdit(e: EditState) {
 
 export default function QuickNotes() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftColor, setDraftColor] = useState("gray");
   const [takeNoteOpen, setTakeNoteOpen] = useState(false);
-  const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [confirmDeleteEdit, setConfirmDeleteEdit] = useState(false);
   const [hoverNoteId, setHoverNoteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "new-list") {
+      setSearchParams({}, { replace: true });
+      createBlank.mutate("list");
+    } else if (action === "new-note") {
+      setSearchParams({}, { replace: true });
+      createBlank.mutate("note");
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {
@@ -494,7 +514,7 @@ export default function QuickNotes() {
   return (
     <div className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-14 xl:px-16 py-10 pb-28">
       {showArchived ? (
-        /* Minimalist Archive View: No note composer, only clean header and floating FAB */
+        /* Minimalist Archive View: Clean header without clutter or duplicate buttons */
         <div className="flex items-center justify-between max-w-4xl mx-auto mb-8 px-2">
           <button
             type="button"
@@ -504,10 +524,30 @@ export default function QuickNotes() {
             <ArrowLeft size={14} />
             Back to Notes
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-primary">
               Archive {archivedCount > 0 ? `(${archivedCount})` : ""}
             </span>
+            <div className="flex items-center gap-1.5 border-l border-border/60 pl-3">
+              <button
+                type="button"
+                disabled={createBlank.isPending}
+                onClick={() => createBlank.mutate("note")}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface-1 hover:bg-surface-2 px-2.5 py-1 text-xs font-medium text-secondary hover:text-primary transition-colors"
+              >
+                <StickyNote size={13} />
+                + Note
+              </button>
+              <button
+                type="button"
+                disabled={createBlank.isPending}
+                onClick={() => createBlank.mutate("list")}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface-1 hover:bg-surface-2 px-2.5 py-1 text-xs font-medium text-secondary hover:text-primary transition-colors"
+              >
+                <CheckSquare size={13} />
+                + List
+              </button>
+            </div>
           </div>
           <Link
             to="/recycle-bin"
@@ -518,12 +558,12 @@ export default function QuickNotes() {
           </Link>
         </div>
       ) : (
-        /* Google Keep Style Minimal "Take a note..." Bar */
+        /* Google Keep Style Minimal "Take a note..." Bar with Translucent Glassmorphism */
         <div className="max-w-2xl mx-auto mb-8">
           {!takeNoteOpen ? (
             <div
               onClick={() => setTakeNoteOpen(true)}
-              className="flex items-center justify-between rounded-xl border border-border/70 bg-surface-1 hover:border-border px-4 py-3 shadow-sm cursor-pointer transition-colors"
+              className="flex items-center justify-between rounded-xl border border-border/80 glass hover:border-border px-4 py-3 shadow-sm cursor-pointer transition-colors"
             >
               <span className="text-sm text-secondary/70 font-normal">Take a note…</span>
               <div className="flex items-center gap-1 text-secondary" onClick={(e) => e.stopPropagation()}>
@@ -549,8 +589,8 @@ export default function QuickNotes() {
             </div>
           ) : (
             <div
-              className="rounded-2xl border border-border/90 bg-surface-1 p-4 shadow-md transition-all"
-              style={{ background: draftColor !== "gray" ? PALETTE[draftColor] : undefined }}
+              className="rounded-2xl border border-border/90 glass-strong p-4 shadow-md transition-all"
+              style={draftColor !== "gray" ? getNoteGlassStyle(draftColor) : undefined}
             >
               <textarea
                 autoFocus
@@ -613,48 +653,6 @@ export default function QuickNotes() {
               Recycle bin
             </Link>
           </div>
-        </div>
-      )}
-
-      {/* Floating Action Button (FAB) inside Archive to create archived notes */}
-      {showArchived && (
-        <div className="fixed bottom-8 right-8 z-40 flex flex-col items-end gap-2">
-          {fabMenuOpen && (
-            <div className="flex flex-col gap-1.5 mb-2 p-2 rounded-2xl bg-surface-1 border border-border shadow-xl backdrop-blur-md">
-              <button
-                type="button"
-                disabled={createBlank.isPending}
-                onClick={() => {
-                  setFabMenuOpen(false);
-                  createBlank.mutate("note");
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-primary hover:bg-surface-2 transition-colors"
-              >
-                <StickyNote size={15} className="text-accent" />
-                New note
-              </button>
-              <button
-                type="button"
-                disabled={createBlank.isPending}
-                onClick={() => {
-                  setFabMenuOpen(false);
-                  createBlank.mutate("list");
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-primary hover:bg-surface-2 transition-colors"
-              >
-                <ListTodo size={15} className="text-accent" />
-                New checklist
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setFabMenuOpen((o) => !o)}
-            title="Create note in archive"
-            className="h-12 w-12 rounded-full bg-accent text-accent-fg shadow-lg hover:scale-105 active:scale-95 flex items-center justify-center transition-all"
-          >
-            <Plus size={22} className={clsx("transition-transform duration-200", fabMenuOpen && "rotate-45")} />
-          </button>
         </div>
       )}
 
@@ -789,16 +787,16 @@ export default function QuickNotes() {
         <DialogContent
           hideHeader
           title={editing?.kind === "list" ? "List" : "Note"}
-          className="max-w-2xl p-5 rounded-2xl bg-surface-1 border border-border/80 shadow-2xl"
-          style={{ background: editing?.color && editing.color !== "gray" ? PALETTE[editing.color] : undefined }}
+          className="w-[min(94vw,56rem)] max-w-4xl p-6 sm:p-8 rounded-3xl border border-border/80 shadow-2xl glass-strong"
+          style={getNoteGlassStyle(editing?.color || "gray")}
         >
           {editing && (
-            <div className="flex flex-col min-h-[16rem] max-h-[calc(min(90dvh,46rem)_-_6rem)]">
+            <div className="flex flex-col h-[min(82vh,46rem)] min-h-[26rem]">
               {/* Google Keep Header: Title + Star/Pin Icon */}
-              <div className="flex items-center justify-between gap-3 mb-2 shrink-0">
+              <div className="flex items-center justify-between gap-3 mb-3 shrink-0">
                 <input
                   autoFocus={!!editing.isNew}
-                  className="w-full bg-transparent text-lg font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
+                  className="w-full bg-transparent text-xl font-medium text-primary placeholder:text-secondary/60 focus:outline-none border-0 p-0"
                   placeholder={editing.kind === "list" ? "Title" : "Title"}
                   value={editing.title}
                   onChange={(e) => persistEdit({ ...editing, title: e.target.value })}
@@ -810,7 +808,7 @@ export default function QuickNotes() {
                   className="p-1.5 rounded-full text-secondary hover:text-primary hover:bg-surface-2 transition-colors shrink-0"
                 >
                   <Star
-                    size={18}
+                    size={20}
                     className={clsx(
                       editingNotePinned ? "text-accent fill-accent" : "text-secondary hover:text-primary"
                     )}
@@ -818,9 +816,9 @@ export default function QuickNotes() {
                 </button>
               </div>
 
-              {/* Note Content / Checklist items */}
+              {/* Note Content / Checklist items - adaptable to viewport */}
               {editing.kind === "list" ? (
-                <div className="space-y-1.5 flex-1 min-h-[12rem] overflow-y-auto py-2">
+                <div className="space-y-1.5 flex-1 min-h-[16rem] overflow-y-auto py-2 pr-1">
                   {[...editing.items]
                     .sort((a, b) => Number(a.done) - Number(b.done))
                     .map((item) => (
@@ -914,7 +912,7 @@ export default function QuickNotes() {
               ) : (
                 <textarea
                   autoFocus={!!editing.isNew && !editing.title}
-                  className="w-full flex-1 min-h-[12rem] bg-transparent border-0 outline-none p-0 text-[15px] text-primary leading-relaxed
+                  className="w-full flex-1 min-h-[16rem] bg-transparent border-0 outline-none p-0 text-base text-primary leading-relaxed
                              placeholder:text-secondary/60 focus:ring-0 resize-none overflow-y-auto"
                   placeholder="Note"
                   value={editing.content}
@@ -1041,10 +1039,10 @@ function NoteCard({
       onPointerCancel={clearHold}
       onPointerLeave={clearHold}
       className={clsx(
-        "relative rounded-xl border glass p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
+        "relative rounded-xl border glass-strong p-4 shadow-card transition-all duration-300 min-h-[72px] flex flex-col",
         selected ? "border-accent border-2" : "border-border hover:shadow-pop hover:-translate-y-0.5"
       )}
-      style={{ background: note.color !== "gray" ? PALETTE[note.color] : undefined }}
+      style={getNoteGlassStyle(note.color)}
     >
       <button
         type="button"

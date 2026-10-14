@@ -405,6 +405,7 @@ export default function QuickNoteDetailScreen({ route, navigation }: any) {
         ]}
       >
         <GlassCard
+          strong
           style={{ flex: 1 }}
           contentStyle={[
             styles.editorCard,

@@ -452,11 +452,11 @@ export default function QuickNotesScreen({ navigation }: any) {
                       ref={composerRef}
                       style={{
                         color: colors.textPrimary,
-                        fontSize: 15,
-                        minHeight: 56,
-                        maxHeight: 180,
+                        fontSize: 16,
+                        minHeight: 88,
+                        maxHeight: 240,
                         textAlign: "left",
-                        lineHeight: 22,
+                        lineHeight: 24,
                       }}
                       placeholder="What's on your mind?"
                       placeholderTextColor={colors.textSecondary}
@@ -846,6 +846,7 @@ function NoteCard({
   return (
     <Animated.View style={{ width, transform: [{ scale: cardScale }] }}>
       <GlassCard
+        strong
         style={{
           width: "100%",
           borderColor: selected ? colors.accent : colors.glassBorder,

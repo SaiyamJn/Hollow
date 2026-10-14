@@ -11,7 +11,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
+import { createTask, createQuickNote, deleteTask, fetchTasks, updateTask } from "../lib/api";
 import { dismissTaskNotifications } from "../lib/notifications";
 import { animateListChange, animateTaskComplete } from "../lib/motion";
 import type { Task } from "../lib/types";
@@ -112,6 +112,29 @@ export default function TasksScreen() {
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+
+  const createListMutation = useMutation({
+    mutationFn: () =>
+      createQuickNote({
+        title: "",
+        content: " ",
+        color: "green",
+        kind: "list",
+        items: [{ id: `i-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, text: "", done: false }],
+        archived: false,
+      }),
+    onSuccess: (note) => {
+      queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+      navigation.navigate("QuickNote", {
+        noteId: note.id,
+        title: note.title ?? "",
+        content: (note.content ?? "").trim(),
+        color: note.color,
+        kind: "list",
+        autoFocus: true,
+      });
+    },
+  });
 
   const create = useMutation({
     mutationFn: createTask,
@@ -569,7 +592,15 @@ export default function TasksScreen() {
 
       <Fab
         actions={[
-          { key: "task", label: "New task", icon: "check-square", onPress: () => openCreate("") },
+          { key: "task", label: "New task", icon: "check-circle", onPress: () => openCreate("") },
+          {
+            key: "list",
+            label: "New list",
+            icon: "check-square",
+            onPress: () => {
+              if (!createListMutation.isPending) createListMutation.mutate();
+            },
+          },
         ]}
       />
 

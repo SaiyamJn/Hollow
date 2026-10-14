@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createNotebook, createPage, createSection, deleteNotebook, fetchNotebooks, lockNotebook, renameNotebook, removeNotebookLock, unlockNotebook } from "../lib/api";
+import { createNotebook, createPage, createQuickNote, createSection, deleteNotebook, fetchNotebooks, lockNotebook, renameNotebook, removeNotebookLock, unlockNotebook } from "../lib/api";
 import type { Notebook } from "../lib/types";
 import { getNavMemory } from "../lib/navMemory";
 import { useTheme } from "../contexts/theme";
@@ -35,6 +35,29 @@ export default function NotebooksScreen({ navigation }: any) {
   const [deleteTarget, setDeleteTarget] = useState<Notebook | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+
+  const createListMutation = useMutation({
+    mutationFn: () =>
+      createQuickNote({
+        title: "",
+        content: " ",
+        color: "green",
+        kind: "list",
+        items: [{ id: `i-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, text: "", done: false }],
+        archived: false,
+      }),
+    onSuccess: (note) => {
+      queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+      navigation.navigate("QuickNote", {
+        noteId: note.id,
+        title: note.title ?? "",
+        content: (note.content ?? "").trim(),
+        color: note.color,
+        kind: "list",
+        autoFocus: true,
+      });
+    },
+  });
 
   function openNotebook(nb: Notebook) {
     if (nb.isLocked && !unlock.unlockedNotebooks[nb.id]) {
@@ -116,6 +139,14 @@ export default function NotebooksScreen({ navigation }: any) {
     const memory = getNavMemory();
     const actions: FabAction[] = [
       { key: "notebook", label: "New notebook", icon: "book", onPress: () => setPrompt({ kind: "new-notebook" }) },
+      {
+        key: "list",
+        label: "New list",
+        icon: "check-square",
+        onPress: () => {
+          if (!createListMutation.isPending) createListMutation.mutate();
+        },
+      },
     ];
     if (memory.notebook?.id && memory.notebook?.title) {
       const nb = memory.notebook;

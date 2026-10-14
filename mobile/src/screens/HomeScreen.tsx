@@ -118,6 +118,29 @@ export default function HomeScreen({ navigation }: any) {
     },
   });
 
+  const createListMutation = useMutation({
+    mutationFn: () =>
+      createQuickNote({
+        title: "",
+        content: " ",
+        color: "green",
+        kind: "list",
+        items: [{ id: `i-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, text: "", done: false }],
+        archived: false,
+      }),
+    onSuccess: (note) => {
+      queryClient.invalidateQueries({ queryKey: ["quicknotes"] });
+      navigation.navigate("QuickNote", {
+        noteId: note.id,
+        title: note.title ?? "",
+        content: (note.content ?? "").trim(),
+        color: note.color,
+        kind: "list",
+        autoFocus: true,
+      });
+    },
+  });
+
   const toggleTask = useMutation({
     mutationFn: (id: string) => updateTask(id, { done: true }),
     onMutate: async (id) => {
@@ -578,9 +601,17 @@ export default function HomeScreen({ navigation }: any) {
       actions={[
         { key: "note", label: "Quick note", icon: "file-text", onPress: () => captureRef.current?.focus() },
         {
+          key: "list",
+          label: "New list",
+          icon: "check-square",
+          onPress: () => {
+            if (!createListMutation.isPending) createListMutation.mutate();
+          },
+        },
+        {
           key: "task",
           label: "New task",
-          icon: "check-square",
+          icon: "check-circle",
           onPress: () =>
             setTaskDraft({
               title: "",

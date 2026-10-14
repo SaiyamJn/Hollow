@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Book, Calendar, CheckSquare, FileText, Plus } from "lucide-react";
+import { Book, Calendar, CheckSquare, FileText, ListTodo, Plus } from "lucide-react";
 import { createNotebook, openDailyNote } from "../lib/api";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { Input } from "./ui/input";
@@ -45,7 +45,8 @@ export function QuickCreate() {
 
   const items = [
     { label: "Today's note", icon: Calendar, onClick: () => daily.mutate() },
-    { label: "Quick note", icon: FileText, onClick: () => navigate("/quick-notes") },
+    { label: "Quick note", icon: FileText, onClick: () => navigate("/quick-notes?action=new-note") },
+    { label: "New list", icon: ListTodo, onClick: () => navigate("/quick-notes?action=new-list") },
     { label: "New task", icon: CheckSquare, onClick: () => navigate("/tasks") },
     { label: "New notebook", icon: Book, onClick: () => setNotebookDialog(true) },
   ];

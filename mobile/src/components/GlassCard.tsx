@@ -23,7 +23,16 @@ export function GlassCard({ children, style, contentStyle, strong }: GlassCardPr
         <BlurView
           intensity={blur}
           tint={theme === "dark" ? "dark" : "light"}
-          style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: strong
+                ? theme === "dark"
+                  ? "rgba(18, 26, 24, 0.82)"
+                  : "rgba(255, 255, 255, 0.88)"
+                : colors.glass,
+            },
+          ]}
         />
       ) : (
         <View
