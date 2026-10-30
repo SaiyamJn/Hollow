@@ -456,6 +456,13 @@ button, input, select, textarea, .glass, .glass-input {
     transparent 40%
   );
 }
+.task-row-starred {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 5%, transparent),
+    transparent 50%
+  );
+}
 .chip-idle {
   border: 1px solid var(--border);
   color: var(--text-secondary);

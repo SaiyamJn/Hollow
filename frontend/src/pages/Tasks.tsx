@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
@@ -75,16 +75,19 @@ function groupOpenTasks(tasks: Task[]): [GroupName, Task[]][] {
   return ordered;
 }
 
+/* ── Circular checkbox (Microsoft To-Do style) ─────────────────────────── */
 function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
   return (
     <button
-      onClick={onToggle}
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
       className={clsx(
-        "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-all duration-300",
-        checked ? "bg-accent border-accent text-surface-0 scale-95" : "border-border hover:border-secondary"
+        "h-[18px] w-[18px] shrink-0 rounded-full border-[1.5px] flex items-center justify-center transition-all duration-300",
+        checked
+          ? "bg-accent border-accent text-surface-0 scale-95"
+          : "border-secondary/40 hover:border-accent"
       )}
     >
-      {checked && <Check size={11} strokeWidth={3} className="animate-fade-in" />}
+      {checked && <Check size={10} strokeWidth={3} className="animate-fade-in" />}
     </button>
   );
 }
@@ -103,15 +106,27 @@ type Draft = {
 };
 type EditDraft = Draft & { id: string };
 
+/* ── Group icon for section headers ─────────────────────────────────────── */
+function groupDotClass(name: GroupName) {
+  if (name === "Overdue") return "bg-danger";
+  if (name === "Today") return "bg-accent";
+  if (name === "Starred") return "bg-accent";
+  if (name === "Upcoming") return "bg-warn";
+  return "bg-secondary/50";
+}
+
 export default function Tasks() {
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [layout, setLayout] = useState<TasksLayout>("list");
   const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<GroupName>>(new Set());
+  const quickAddRef = useRef<HTMLInputElement>(null);
 
   /** Board fills the viewport — lock shell scroll so only columns scroll. */
   useEffect(() => {
@@ -217,6 +232,10 @@ export default function Tasks() {
 
   function onQuickAdd(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" && quickAdd.trim()) openCreate(quickAdd);
+    if (e.key === "Escape") {
+      setQuickAddOpen(false);
+      setQuickAdd("");
+    }
   }
 
   function submitDraft() {
@@ -244,6 +263,15 @@ export default function Tasks() {
     });
   }
 
+  function toggleGroup(name: GroupName) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
   const createError =
     (create.error as any)?.response?.data?.error ?? (create.error ? "Couldn't add task." : null);
   const editError =
@@ -262,33 +290,40 @@ export default function Tasks() {
     return (tasks ?? []).filter((t) => !isDeferredRepeat(t, endOfToday));
   }, [tasks]);
 
+  const totalOpen = openGroups.reduce((sum, [, list]) => sum + list.length, 0);
+
   return (
     <div
       className={clsx(
-        "mx-auto",
+        "mx-auto animate-rise-in",
         layout === "kanban" ? "px-5 py-5 max-w-[1280px]" : "px-7 py-10",
         layout === "list" && "max-w-2xl",
         layout === "matrix" && "max-w-5xl"
       )}
     >
-      <div className="text-center mb-4">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="text-center mb-6">
         <h1 className="text-xl font-medium">Tasks</h1>
-        <p className="text-sm text-secondary mt-1">
-          Star to pin · Focus for important × urgent
-        </p>
+        {tasks && tasks.length > 0 && (
+          <p className="text-sm text-secondary mt-1">
+            {totalOpen} open{completed.length > 0 ? ` · ${completed.length} completed` : ""}
+          </p>
+        )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
+      {/* ── Quick links ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-2 mb-5">
         <Link
           to="/recycle-bin?tab=tasks"
-          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary"
+          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary transition-colors"
         >
           <Trash2 size={13} />
           Recycle bin
         </Link>
       </div>
 
-      <div className="flex justify-center gap-1 mb-5 p-1 rounded-xl border border-border glass-strong w-fit mx-auto shadow-card">
+      {/* ── Layout switcher — pill toggle ───────────────────────── */}
+      <div className="flex justify-center gap-1 mb-6 p-1 rounded-xl border border-border/60 glass w-fit mx-auto">
         {LAYOUTS.map((l) => (
           <button
             key={l.id}
@@ -298,7 +333,7 @@ export default function Tasks() {
               "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
               layout === l.id
                 ? "bg-accent text-surface-0 shadow-sm"
-                : "text-secondary hover:text-primary hover:bg-surface-2/80"
+                : "text-secondary hover:text-primary hover:bg-surface-2/60"
             )}
           >
             {l.label}
@@ -306,21 +341,51 @@ export default function Tasks() {
         ))}
       </div>
 
-      <div
-        className={clsx(
-          "mb-6 mx-auto w-full",
-          layout === "list" ? "max-w-2xl" : "max-w-xl"
+      {/* ── "Add a task" bar — Google Tasks / Notes style ────────── */}
+      <div className={clsx(
+        "mb-8 mx-auto w-full",
+        layout === "list" ? "max-w-2xl" : "max-w-xl"
+      )}>
+        {!quickAddOpen ? (
+          <div
+            onClick={() => {
+              setQuickAddOpen(true);
+              setTimeout(() => quickAddRef.current?.focus(), 0);
+            }}
+            className="flex items-center gap-3 rounded-xl border border-border/60 glass hover:border-border px-4 py-3 cursor-pointer transition-all group"
+          >
+            <Plus size={16} className="text-accent shrink-0" />
+            <span className="text-sm text-secondary/70 font-normal flex-1">Add a task…</span>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border/80 glass-strong px-4 py-3.5 shadow-md transition-all animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="h-[18px] w-[18px] shrink-0 rounded-full border-[1.5px] border-secondary/30" />
+              <input
+                ref={quickAddRef}
+                autoFocus
+                className="flex-1 bg-transparent text-sm text-primary placeholder:text-secondary/60 focus:outline-none font-medium"
+                placeholder="What needs to be done?"
+                value={quickAdd}
+                onChange={(e) => setQuickAdd(e.target.value)}
+                onKeyDown={onQuickAdd}
+                onBlur={() => {
+                  if (!quickAdd.trim()) {
+                    setQuickAddOpen(false);
+                  }
+                }}
+              />
+            </div>
+            {quickAdd.trim() && (
+              <p className="text-[11px] text-secondary/60 mt-2 ml-[30px]">
+                Press Enter to add details · Escape to cancel
+              </p>
+            )}
+          </div>
         )}
-      >
-        <Input
-          placeholder="What's next? Press Enter"
-          value={quickAdd}
-          onChange={(e) => setQuickAdd(e.target.value)}
-          onKeyDown={onQuickAdd}
-          className="text-center"
-        />
       </div>
 
+      {/* ── Empty state ─────────────────────────────────────────── */}
       {tasks && tasks.length === 0 && (
         <EmptyState
           icon={CheckSquare}
@@ -330,6 +395,7 @@ export default function Tasks() {
         />
       )}
 
+      {/* ── Matrix layout ───────────────────────────────────────── */}
       {layout === "matrix" && tasks && (
         <EisenhowerBoard
           tasks={boardTasks}
@@ -355,6 +421,7 @@ export default function Tasks() {
         />
       )}
 
+      {/* ── Kanban layout ───────────────────────────────────────── */}
       {layout === "kanban" && tasks && (
         <KanbanBoard
           tasks={boardTasks}
@@ -380,88 +447,124 @@ export default function Tasks() {
         />
       )}
 
+      {/* ── List layout ─────────────────────────────────────────── */}
       {layout === "list" && (
-      <div className="space-y-6">
-        {openGroups.map(([name, list]) => (
-          <section key={name}>
-            <h2
-              className={clsx("section-label mb-2", {
-                "section-label-danger": name === "Overdue",
-                "section-label-warn": name === "Upcoming",
-                "section-label-muted": name === "No date",
-              })}
-            >
-              {name}
-            </h2>
-            <div className="rounded-2xl border border-border glass-strong shadow-card divide-y divide-[color-mix(in_srgb,var(--border)_70%,transparent)] overflow-hidden">
-              {list.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  onPatch={(id, patch) => update.mutate({ id, patch })}
-                  onDelete={(id) => remove.mutate(id)}
-                  onHover={() => setHoverTaskId(task.id)}
-                  onEdit={() => {
-                    saveEdit.reset();
-                    setEditing({
-                      id: task.id,
-                      title: task.title,
-                      description: task.description ?? "",
-                      due: task.dueAt ? new Date(task.dueAt) : null,
-                      focus: normalizeFocus(task.focus),
-                      repeat: task.repeatRule ?? null,
-                      repeatDays: task.repeatDays ?? null,
-                      repeatInterval: task.repeatInterval ?? 1,
-                      repeatEnd: task.repeatEnd ?? null,
-                      repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
-                      repeatCount: task.repeatCount ?? null,
-                    });
-                  }}
-                  onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+      <div className="space-y-5">
+        {openGroups.map(([name, list]) => {
+          const collapsed = collapsedGroups.has(name);
+          return (
+            <section key={name}>
+              {/* Group header — minimal, clickable to collapse */}
+              <button
+                type="button"
+                onClick={() => toggleGroup(name)}
+                className="flex items-center gap-2.5 mb-1.5 px-1 group/hdr w-full text-left"
+              >
+                <span className={clsx(
+                  "h-1.5 w-1.5 rounded-full shrink-0 transition-colors",
+                  groupDotClass(name)
+                )} />
+                <span className={clsx(
+                  "text-xs font-semibold uppercase tracking-wider transition-colors",
+                  name === "Overdue" ? "text-danger" : "text-secondary",
+                )}>
+                  {name}
+                </span>
+                <span className="text-[10px] text-secondary/60 font-medium tabular-nums">
+                  {list.length}
+                </span>
+                <span className="flex-1" />
+                <span className="text-secondary/40 group-hover/hdr:text-secondary transition-colors">
+                  {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                </span>
+              </button>
 
+              {/* Task rows — clean, borderless, spacious */}
+              {!collapsed && (
+                <div className="rounded-2xl border border-border/50 glass overflow-hidden">
+                  {list.map((task, i) => (
+                    <div key={task.id}>
+                      {i > 0 && <div className="mx-4 border-t border-border/30" />}
+                      <TaskRow
+                        task={task}
+                        onPatch={(id, patch) => update.mutate({ id, patch })}
+                        onDelete={(id) => remove.mutate(id)}
+                        onHover={() => setHoverTaskId(task.id)}
+                        onEdit={() => {
+                          saveEdit.reset();
+                          setEditing({
+                            id: task.id,
+                            title: task.title,
+                            description: task.description ?? "",
+                            due: task.dueAt ? new Date(task.dueAt) : null,
+                            focus: normalizeFocus(task.focus),
+                            repeat: task.repeatRule ?? null,
+                            repeatDays: task.repeatDays ?? null,
+                            repeatInterval: task.repeatInterval ?? 1,
+                            repeatEnd: task.repeatEnd ?? null,
+                            repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+                            repeatCount: task.repeatCount ?? null,
+                          });
+                        }}
+                        onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+
+        {/* ── Completed section ──────────────────────────────────── */}
         {completed.length > 0 && (
           <section>
             <button
               type="button"
               onClick={() => setShowCompleted((v) => !v)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium uppercase tracking-wide
-                         text-secondary hover:text-primary mb-2 py-1"
+              className="flex items-center gap-2.5 mb-1.5 px-1 w-full text-left group/hdr"
             >
-              {showCompleted ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              Completed ({completed.length})
+              <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-accent/40" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-secondary">
+                Completed
+              </span>
+              <span className="text-[10px] text-secondary/60 font-medium tabular-nums">
+                {completed.length}
+              </span>
+              <span className="flex-1" />
+              <span className="text-secondary/40 group-hover/hdr:text-secondary transition-colors">
+                {showCompleted ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </span>
             </button>
             {showCompleted && (
-              <div className="rounded-xl border border-border glass shadow-card divide-y divide-[var(--border)] overflow-hidden">
-                {completed.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onPatch={(id, patch) => update.mutate({ id, patch })}
-                    onDelete={(id) => remove.mutate(id)}
-                    onHover={() => setHoverTaskId(task.id)}
-                    onEdit={() => {
-                      saveEdit.reset();
-                      setEditing({
-                        id: task.id,
-                        title: task.title,
-                        description: task.description ?? "",
-                        due: task.dueAt ? new Date(task.dueAt) : null,
-                        focus: normalizeFocus(task.focus),
-                        repeat: task.repeatRule ?? null,
-                        repeatDays: task.repeatDays ?? null,
-                        repeatInterval: task.repeatInterval ?? 1,
-                        repeatEnd: task.repeatEnd ?? null,
-                        repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
-                        repeatCount: task.repeatCount ?? null,
-                      });
-                    }}
-                    onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
-                  />
+              <div className="rounded-2xl border border-border/40 glass overflow-hidden opacity-80">
+                {completed.map((task, i) => (
+                  <div key={task.id}>
+                    {i > 0 && <div className="mx-4 border-t border-border/20" />}
+                    <TaskRow
+                      task={task}
+                      onPatch={(id, patch) => update.mutate({ id, patch })}
+                      onDelete={(id) => remove.mutate(id)}
+                      onHover={() => setHoverTaskId(task.id)}
+                      onEdit={() => {
+                        saveEdit.reset();
+                        setEditing({
+                          id: task.id,
+                          title: task.title,
+                          description: task.description ?? "",
+                          due: task.dueAt ? new Date(task.dueAt) : null,
+                          focus: normalizeFocus(task.focus),
+                          repeat: task.repeatRule ?? null,
+                          repeatDays: task.repeatDays ?? null,
+                          repeatInterval: task.repeatInterval ?? 1,
+                          repeatEnd: task.repeatEnd ?? null,
+                          repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+                          repeatCount: task.repeatCount ?? null,
+                        });
+                      }}
+                      onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
+                    />
+                  </div>
                 ))}
               </div>
             )}
@@ -470,6 +573,7 @@ export default function Tasks() {
       </div>
       )}
 
+      {/* ── New task dialog ──────────────────────────────────────── */}
       <Dialog
         open={draft !== null}
         onOpenChange={(o) => {
@@ -547,6 +651,7 @@ export default function Tasks() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Edit task dialog ─────────────────────────────────────── */}
       <Dialog
         open={editing !== null}
         onOpenChange={(o) => {
@@ -632,6 +737,7 @@ export default function Tasks() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Confirm delete dialog ────────────────────────────────── */}
       <Dialog open={confirmDeleteTask} onOpenChange={setConfirmDeleteTask}>
         <DialogContent title="Move to recycle bin?">
           <div className="space-y-3">
@@ -661,6 +767,7 @@ export default function Tasks() {
   );
 }
 
+/* ── Task row — clean, spacious, Microsoft To-Do inspired ──────────────── */
 function TaskRow({
   task,
   onPatch,
@@ -688,6 +795,7 @@ function TaskRow({
   const [expanded, setExpanded] = useState(false);
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const subtasks = sortTasksByPriority(task.subtasks ?? []);
+  const completedSubtasks = subtasks.filter((s) => s.done).length;
 
   function onSubtaskKey(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" && subtaskDraft.trim()) {
@@ -698,46 +806,41 @@ function TaskRow({
 
   return (
     <div
-      className={clsx("px-3.5 py-2.5 transition-colors", task.starred && !task.done && "row-starred")}
+      className={clsx(
+        "px-4 py-3 transition-all duration-200",
+        task.starred && !task.done && "task-row-starred"
+      )}
       onMouseEnter={() => onHover?.()}
     >
-      <div className="group flex items-center gap-2.5">
-        <button className="text-secondary hover:text-primary" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
-        <Checkbox checked={task.done} onToggle={() => onPatch(task.id, { done: !task.done })} />
+      {/* Main row */}
+      <div className="group flex items-start gap-3">
+        {/* Circular checkbox */}
+        <div className="pt-0.5">
+          <Checkbox checked={task.done} onToggle={() => onPatch(task.id, { done: !task.done })} />
+        </div>
+
+        {/* Content area — click to edit */}
         <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
           <span className="flex items-center gap-1.5 min-w-0">
             <FocusDot focus={task.focus} />
             <span
               className={clsx(
-                "block text-sm truncate transition-all duration-300 font-medium pr-1",
-                task.done && "line-through text-secondary opacity-70"
+                "text-sm leading-snug font-medium transition-all duration-300",
+                task.done ? "line-through text-secondary/60" : "text-primary"
               )}
             >
               {task.title}
             </span>
-            <FocusChip focus={task.focus} className="shrink-0" />
-            {subtasks.length > 0 && (
-              <button
-                type="button"
-                title={expanded ? "Hide subtasks" : "View subtasks"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpanded((v) => !v);
-                }}
-                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-accent-soft/60 px-1.5 py-0.5 text-[10px] font-semibold text-accent hover:bg-accent-soft"
-              >
-                <CheckSquare size={10} />
-                {subtasks.filter((s) => s.done).length}/{subtasks.length}
-              </button>
-            )}
           </span>
-          {task.description ? (
-            <span className="block text-xs text-secondary truncate mt-0.5">{task.description}</span>
-          ) : null}
-          {task.dueAt ? (
-            <span className="mt-1 inline-flex">
+
+          {/* Meta line — description, chips */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-0.5 empty:hidden">
+            {task.description && !task.done && (
+              <span className="text-xs text-secondary/70 truncate max-w-[200px]">
+                {task.description}
+              </span>
+            )}
+            {task.dueAt && (
               <DueChip
                 dueAt={task.dueAt}
                 prefix={
@@ -753,15 +856,32 @@ function TaskRow({
                     : undefined
                 }
               />
-            </span>
-          ) : null}
+            )}
+            <FocusChip focus={task.focus} className="shrink-0" />
+            {subtasks.length > 0 && (
+              <button
+                type="button"
+                title={expanded ? "Hide subtasks" : "View subtasks"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+                className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-accent-soft/40 px-1.5 py-0.5 text-[10px] font-semibold text-accent hover:bg-accent-soft transition-colors"
+              >
+                <CheckSquare size={9} />
+                {completedSubtasks}/{subtasks.length}
+              </button>
+            )}
+          </div>
         </button>
-        <div className={clsx("row-actions flex items-center gap-1 shrink-0", task.starred && "!opacity-100")}>
+
+        {/* Right-side actions — hover reveal (Microsoft To-Do style) */}
+        <div className={clsx("row-actions flex items-center gap-0.5 shrink-0 pt-0.5", task.starred && "!opacity-100")}>
           <button
             title={task.starred ? "Unstar" : "Star"}
             className={clsx(
-              "p-1 rounded-md",
-              task.starred ? "text-accent bg-accent-soft" : "text-secondary hover:text-primary"
+              "p-1.5 rounded-lg transition-all",
+              task.starred ? "text-accent" : "text-secondary/50 hover:text-accent"
             )}
             onClick={() => onPatch(task.id, { starred: !task.starred })}
           >
@@ -769,42 +889,56 @@ function TaskRow({
           </button>
           <button
             title="Edit"
-            className="p-1 rounded-md text-secondary hover:text-primary"
+            className="p-1.5 rounded-lg text-secondary/50 hover:text-primary transition-colors"
             onClick={onEdit}
           >
-            <Pencil size={14} />
+            <Pencil size={13} />
           </button>
           <button
             title="Delete"
-            className="p-1 rounded-md text-secondary hover:text-primary"
+            className="p-1.5 rounded-lg text-secondary/50 hover:text-danger transition-colors"
             onClick={() => onDelete(task.id)}
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} />
           </button>
         </div>
+
+        {/* Expand toggle for subtasks */}
+        {subtasks.length > 0 && (
+          <button
+            className="text-secondary/40 hover:text-secondary pt-1 shrink-0 transition-colors"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        )}
       </div>
 
+      {/* Subtasks — indented, minimal */}
       {expanded && (
-        <div className="ml-10 mt-2 space-y-1.5">
+        <div className="ml-[30px] mt-2.5 space-y-1 animate-fade-in">
           {subtasks.map((sub) => (
-            <div key={sub.id} className="group flex items-center gap-2.5">
+            <div key={sub.id} className="group flex items-center gap-2.5 py-1 px-1 rounded-lg hover:bg-surface-2/40 transition-colors">
               <Checkbox checked={sub.done} onToggle={() => onPatch(sub.id, { done: !sub.done })} />
-              <span className={clsx("flex-1 text-sm truncate", sub.done && "line-through text-secondary")}>
+              <span className={clsx(
+                "flex-1 text-sm truncate transition-all duration-200",
+                sub.done ? "line-through text-secondary/50" : "text-primary"
+              )}>
                 {sub.title}
               </span>
               <button
                 title="Delete subtask"
-                className="row-actions p-1 rounded-md text-secondary hover:text-primary"
+                className="row-actions p-1 rounded-md text-secondary/40 hover:text-danger transition-colors"
                 onClick={() => onDelete(sub.id)}
               >
-                <Trash2 size={13} />
+                <Trash2 size={12} />
               </button>
             </div>
           ))}
-          <div className="flex items-center gap-2.5">
-            <Plus size={13} className="text-secondary" />
+          <div className="flex items-center gap-2.5 py-1 px-1">
+            <Plus size={12} className="text-secondary/40" />
             <input
-              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-secondary"
+              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-secondary/40 text-primary"
               placeholder="Add subtask"
               value={subtaskDraft}
               onChange={(e) => setSubtaskDraft(e.target.value)}
