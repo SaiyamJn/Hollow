@@ -93,6 +93,7 @@ export interface Task {
   id: string;
   title: string;
   description: string;
+  group?: string;
   done: boolean;
   completedAt?: string | null;
   starred: boolean;

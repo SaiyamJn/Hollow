@@ -159,6 +159,7 @@ model Task {
   id           String    @id @default(uuid())
   title        String
   description  String    @default("")
+  group        String    @default("")
   done         Boolean   @default(false)
   completedAt  DateTime?
   starred      Boolean   @default(false)

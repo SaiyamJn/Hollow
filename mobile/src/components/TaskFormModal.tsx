@@ -83,6 +83,7 @@ function ModalPanel({
 export type TaskDraft = {
   title: string;
   description: string;
+  group?: string;
   due: Date | null;
   focus?: TaskFocus;
   repeat: TaskRepeatRule | null;
@@ -132,6 +133,7 @@ export function TaskFormModal({
   draft,
   busy,
   autoFocus = false,
+  availableGroups,
   onClose,
   onChange,
   onSubmit,
@@ -143,6 +145,7 @@ export function TaskFormModal({
   draft: TaskDraft | null;
   busy: boolean;
   autoFocus?: boolean;
+  availableGroups?: string[];
   onClose: () => void;
   onChange: (next: TaskDraft | null) => void;
   onSubmit: () => void;
@@ -253,6 +256,51 @@ export function TaskFormModal({
                   { color: colors.textPrimary, borderColor: colors.glassBorder, backgroundColor: colors.glass },
                 ]}
               />
+
+              <TextInput
+                value={current.group ?? ""}
+                onChangeText={(group) => onChange({ ...current, group })}
+                placeholder="Group / Class (e.g. Work, School, Personal)"
+                placeholderTextColor={colors.textSecondary}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.textPrimary,
+                    borderColor: colors.glassBorder,
+                    backgroundColor: colors.glass,
+                    marginBottom: availableGroups && availableGroups.length > 0 ? 6 : 10,
+                  },
+                ]}
+              />
+              {availableGroups && availableGroups.length > 0 && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                  {availableGroups.map((g) => {
+                    const active = (current.group ?? "").trim().toLowerCase() === g.toLowerCase();
+                    return (
+                      <Pressable
+                        key={g}
+                        onPress={() => onChange({ ...current, group: active ? "" : g })}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 8,
+                          backgroundColor: active ? colors.accentSoft : colors.surface2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: active ? "700" : "500",
+                            color: active ? colors.accent : colors.textSecondary,
+                          }}
+                        >
+                          {g}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
 
               <Pressable
                 onPress={openDuePicker}

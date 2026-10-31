@@ -4,10 +4,17 @@ module.exports = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      borderColor: ({ theme }) => ({
+        ...theme("colors"),
+        DEFAULT: "var(--border)",
+      }),
       colors: {
         surface: { 0: "var(--surface-0)", 1: "var(--surface-1)", 2: "var(--surface-2)" },
-        border: "var(--border)",
-        accent: { DEFAULT: "var(--accent)", soft: "var(--accent-soft)" },
+        border: "color-mix(in srgb, var(--border) calc(<alpha-value> * 100%), transparent)",
+        accent: {
+          DEFAULT: "color-mix(in srgb, var(--accent) calc(<alpha-value> * 100%), transparent)",
+          soft: "var(--accent-soft)",
+        },
         danger: "var(--danger)",
         primary: "var(--text-primary)",
         secondary: "var(--text-secondary)",

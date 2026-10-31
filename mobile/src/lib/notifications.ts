@@ -214,29 +214,63 @@ export function notificationIdForTask(taskId: string) {
 
 let boundNotificationResponse = false;
 
-// Set default notification behavior at module load time so incoming notifications
-// are presented immediately even if the app was backgrounded or cold-started.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
+let latestTasksCache: Task[] | null = null;
+
+export async function checkIfTaskDone(taskId: string): Promise<boolean> {
+  try {
+    if (latestTasksCache) {
+      const found = latestTasksCache.find((t) => t.id === taskId);
+      if (found && (found.done || found.deletedAt)) return true;
+    }
+    await ensureApiToken();
+    const { fetchTask } = await import("./api");
+    const task = await fetchTask(taskId);
+    return Boolean(task.done || task.deletedAt);
+  } catch (err: any) {
+    if (err?.response?.status === 404) return true;
+    return false;
+  }
+}
+
+async function handleIncomingNotification(notification: Notifications.Notification) {
+  try {
+    const rawId = notification.request.identifier;
+    const taskId = (notification.request.content.data as any)?.taskId || rawId.replace(/^hollowtask_/, "");
+    if (taskId) {
+      const isDone = await checkIfTaskDone(taskId);
+      if (isDone) {
+        await dismissTaskNotifications(taskId, rawId);
+        return {
+          shouldShowAlert: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+        };
+      }
+    }
+  } catch {
+    // continue to default
+  }
+  return {
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
     priority: Notifications.AndroidNotificationPriority.MAX,
-  }),
+  };
+}
+
+// Set default notification behavior at module load time so incoming notifications
+// are presented immediately even if the app was backgrounded or cold-started.
+Notifications.setNotificationHandler({
+  handleNotification: handleIncomingNotification,
 });
 
 export async function initNotifications() {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      priority: Notifications.AndroidNotificationPriority.MAX,
-    }),
+    handleNotification: handleIncomingNotification,
   });
   await registerTaskCategory();
   if (Platform.OS === "android") {
@@ -507,6 +541,7 @@ export async function snoozeTaskReminder(taskId: string, title: string, kind: Re
  * - Done tasks → drop any leftover tray / scheduled notifications.
  */
 export async function syncTaskReminders(tasks: Task[] | undefined) {
+  latestTasksCache = tasks ?? null;
   let enabled = await getNotificationsEnabled();
   if (!enabled) {
     const pref = await AsyncStorage.getItem(PREF_KEY);

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import { useAuth } from "../contexts/auth";
 import { fetchTasks } from "../lib/api";
+import { getSocket } from "../lib/socket";
 import {
   completeTask,
   dismissTaskNotifications,
@@ -30,8 +31,33 @@ export function ReminderHost() {
     queryKey: ["tasks"],
     queryFn: fetchTasks,
     enabled: status === "signedIn",
-    staleTime: 30_000,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
   });
+
+  // Real-time task synchronization across Web and Mobile
+  useEffect(() => {
+    if (status !== "signedIn") return;
+    const socket = getSocket();
+    const onTasksChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    };
+    const onTaskDone = ({ taskId, done }: { taskId: string; done: boolean }) => {
+      if (done) {
+        void dismissTaskNotifications(taskId);
+        setPrompt((cur) => (cur?.taskId === taskId ? null : cur));
+      }
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    };
+
+    socket.on("tasks:changed", onTasksChanged);
+    socket.on("tasks:done", onTaskDone);
+
+    return () => {
+      socket.off("tasks:changed", onTasksChanged);
+      socket.off("tasks:done", onTaskDone);
+    };
+  }, [status, queryClient]);
 
   useEffect(() => {
     if (status === "signedIn") {
@@ -85,7 +111,10 @@ export function ReminderHost() {
     };
     flushLast();
     const appState = AppState.addEventListener("change", (next) => {
-      if (next === "active") flushLast();
+      if (next === "active") {
+        flushLast();
+        void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      }
     });
 
     return () => {

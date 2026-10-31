@@ -59,6 +59,20 @@ function CompactCard({
           {task.title}
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+          {!!task.group && (
+            <View
+              style={{
+                paddingHorizontal: 5,
+                paddingVertical: 1,
+                borderRadius: 4,
+                backgroundColor: colors.surface2,
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: "600" }}>
+                {task.group}
+              </Text>
+            </View>
+          )}
           {!!task.dueAt && (
             <Text
               style={{ color: tint || colors.textSecondary, fontSize: 10, fontWeight: "600" }}

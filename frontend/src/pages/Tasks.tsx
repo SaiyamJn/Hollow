@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
@@ -15,6 +15,7 @@ import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import { EisenhowerBoard, KanbanBoard } from "../components/TaskBoards";
 import { FocusChip, FocusDot, FocusField } from "../components/FocusField";
+import { GroupFilterBar, GroupSelector } from "../components/GroupSelector";
 import { DueChip } from "../components/StatusChip";
 import { EmptyState } from "../components/EmptyState";
 import { normalizeFocus, sortTasksByPriority, type TaskFocus } from "../lib/taskFocus";
@@ -95,6 +96,7 @@ function Checkbox({ checked, onToggle }: { checked: boolean; onToggle: () => voi
 type Draft = {
   title: string;
   description: string;
+  group: string;
   due: Date | null;
   focus: TaskFocus;
   repeat: TaskRepeatRule | null;
@@ -118,7 +120,6 @@ function groupDotClass(name: GroupName) {
 export default function Tasks() {
   const queryClient = useQueryClient();
   const [quickAdd, setQuickAdd] = useState("");
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -126,7 +127,6 @@ export default function Tasks() {
   const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<GroupName>>(new Set());
-  const quickAddRef = useRef<HTMLInputElement>(null);
 
   /** Board fills the viewport — lock shell scroll so only columns scroll. */
   useEffect(() => {
@@ -170,6 +170,11 @@ export default function Tasks() {
         dueAt?: string | null;
       };
     }) => updateTask(id, patch),
+    onMutate: ({ id, patch }) => {
+      if (patch.done) {
+        dismissTaskNotification(id);
+      }
+    },
     onSuccess: invalidate,
   });
   const saveEdit = useMutation({
@@ -181,6 +186,7 @@ export default function Tasks() {
       patch: {
         title: string;
         description: string;
+        group?: string;
         dueAt: string | null;
         focus?: TaskFocus;
         repeatRule?: TaskRepeatRule | null;
@@ -214,10 +220,52 @@ export default function Tasks() {
     return () => window.removeEventListener("keydown", onKey);
   }, [hoverTaskId, remove]);
 
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    (tasks ?? []).forEach((t) => {
+      const g = t.group?.trim();
+      if (g) set.add(g);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
+
+  const [selectedGroup, setSelectedGroup] = useState<string>("All");
+
+  useEffect(() => {
+    if (selectedGroup !== "All" && !availableGroups.includes(selectedGroup)) {
+      setSelectedGroup("All");
+    }
+  }, [availableGroups, selectedGroup]);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    if (selectedGroup === "All") return tasks;
+    return tasks.filter((t) => (t.group || "").trim() === selectedGroup);
+  }, [tasks, selectedGroup]);
+
+  function openEdit(task: Task) {
+    saveEdit.reset();
+    setEditing({
+      id: task.id,
+      title: task.title,
+      description: task.description ?? "",
+      group: task.group ?? "",
+      due: task.dueAt ? new Date(task.dueAt) : null,
+      focus: normalizeFocus(task.focus),
+      repeat: task.repeatRule ?? null,
+      repeatDays: task.repeatDays ?? null,
+      repeatInterval: task.repeatInterval ?? 1,
+      repeatEnd: task.repeatEnd ?? null,
+      repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
+      repeatCount: task.repeatCount ?? null,
+    });
+  }
+
   function openCreate(title: string) {
     setDraft({
       title: title.trim(),
       description: "",
+      group: selectedGroup !== "All" ? selectedGroup : "",
       due: null,
       focus: "none",
       repeat: null,
@@ -232,10 +280,6 @@ export default function Tasks() {
 
   function onQuickAdd(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" && quickAdd.trim()) openCreate(quickAdd);
-    if (e.key === "Escape") {
-      setQuickAddOpen(false);
-      setQuickAdd("");
-    }
   }
 
   function submitDraft() {
@@ -243,6 +287,7 @@ export default function Tasks() {
     create.mutate({
       title: draft.title.trim(),
       description: draft.description.trim() || undefined,
+      group: draft.group.trim() || undefined,
       dueAt: draft.due ? draft.due.toISOString() : undefined,
       focus: draft.focus,
       ...repeatPayload(draft),
@@ -256,6 +301,7 @@ export default function Tasks() {
       patch: {
         title: editing.title.trim(),
         description: editing.description.trim(),
+        group: editing.group.trim(),
         dueAt: editing.due ? editing.due.toISOString() : null,
         focus: editing.focus,
         ...repeatPayload(editing),
@@ -277,8 +323,8 @@ export default function Tasks() {
   const editError =
     (saveEdit.error as any)?.response?.data?.error ?? (saveEdit.error ? "Couldn't save." : null);
 
-  const openGroups = groupOpenTasks(tasks ?? []);
-  const completed = [...(tasks ?? []).filter((t) => t.done)].sort((a, b) => {
+  const openGroups = groupOpenTasks(filteredTasks);
+  const completed = [...filteredTasks.filter((t) => t.done)].sort((a, b) => {
     const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
     const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
     return timeB - timeA;
@@ -287,8 +333,8 @@ export default function Tasks() {
     const endOfToday = new Date();
     endOfToday.setHours(0, 0, 0, 0);
     endOfToday.setDate(endOfToday.getDate() + 1);
-    return (tasks ?? []).filter((t) => !isDeferredRepeat(t, endOfToday));
-  }, [tasks]);
+    return filteredTasks.filter((t) => !isDeferredRepeat(t, endOfToday));
+  }, [filteredTasks]);
 
   const totalOpen = openGroups.reduce((sum, [, list]) => sum + list.length, 0);
 
@@ -322,18 +368,18 @@ export default function Tasks() {
         </Link>
       </div>
 
-      {/* ── Layout switcher — pill toggle ───────────────────────── */}
-      <div className="flex justify-center gap-1 mb-6 p-1 rounded-xl border border-border/60 glass w-fit mx-auto">
+      {/* Layout switcher */}
+      <div className="flex justify-center gap-1 mb-5">
         {LAYOUTS.map((l) => (
           <button
             key={l.id}
             type="button"
             onClick={() => setLayout(l.id)}
             className={clsx(
-              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+              "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
               layout === l.id
-                ? "bg-accent text-surface-0 shadow-sm"
-                : "text-secondary hover:text-primary hover:bg-surface-2/60"
+                ? "bg-accent-soft text-accent"
+                : "text-secondary hover:text-primary hover:bg-surface-2"
             )}
           >
             {l.label}
@@ -341,48 +387,27 @@ export default function Tasks() {
         ))}
       </div>
 
-      {/* ── "Add a task" bar — Google Tasks / Notes style ────────── */}
-      <div className={clsx(
-        "mb-8 mx-auto w-full",
-        layout === "list" ? "max-w-2xl" : "max-w-xl"
-      )}>
-        {!quickAddOpen ? (
-          <div
-            onClick={() => {
-              setQuickAddOpen(true);
-              setTimeout(() => quickAddRef.current?.focus(), 0);
-            }}
-            className="flex items-center gap-3 rounded-xl border border-border/60 glass hover:border-border px-4 py-3 cursor-pointer transition-all group"
-          >
-            <Plus size={16} className="text-accent shrink-0" />
-            <span className="text-sm text-secondary/70 font-normal flex-1">Add a task…</span>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border/80 glass-strong px-4 py-3.5 shadow-md transition-all animate-fade-in">
-            <div className="flex items-center gap-3">
-              <div className="h-[18px] w-[18px] shrink-0 rounded-full border-[1.5px] border-secondary/30" />
-              <input
-                ref={quickAddRef}
-                autoFocus
-                className="flex-1 bg-transparent text-sm text-primary placeholder:text-secondary/60 focus:outline-none font-medium"
-                placeholder="What needs to be done?"
-                value={quickAdd}
-                onChange={(e) => setQuickAdd(e.target.value)}
-                onKeyDown={onQuickAdd}
-                onBlur={() => {
-                  if (!quickAdd.trim()) {
-                    setQuickAddOpen(false);
-                  }
-                }}
-              />
-            </div>
-            {quickAdd.trim() && (
-              <p className="text-[11px] text-secondary/60 mt-2 ml-[30px]">
-                Press Enter to add details · Escape to cancel
-              </p>
-            )}
-          </div>
+      {/* Group / Class filter */}
+      <GroupFilterBar
+        groups={availableGroups}
+        selected={selectedGroup}
+        onSelect={setSelectedGroup}
+        className="mb-5"
+      />
+
+      <div
+        className={clsx(
+          "mb-6 mx-auto w-full",
+          layout === "list" ? "max-w-2xl" : "max-w-xl"
         )}
+      >
+        <Input
+          placeholder={selectedGroup !== "All" ? `Add to "${selectedGroup}"… Press Enter` : "What's next? Press Enter"}
+          value={quickAdd}
+          onChange={(e) => setQuickAdd(e.target.value)}
+          onKeyDown={onQuickAdd}
+          className="text-center"
+        />
       </div>
 
       {/* ── Empty state ─────────────────────────────────────────── */}
@@ -394,6 +419,14 @@ export default function Tasks() {
           className="mb-6"
         />
       )}
+      {tasks && tasks.length > 0 && filteredTasks.length === 0 && (
+        <EmptyState
+          icon={CheckSquare}
+          title={`No tasks in "${selectedGroup}"`}
+          subtitle="Try selecting another group or add a new task to this group."
+          className="mb-6"
+        />
+      )}
 
       {/* ── Matrix layout ───────────────────────────────────────── */}
       {layout === "matrix" && tasks && (
@@ -402,22 +435,7 @@ export default function Tasks() {
           onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
           onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
           onHover={(t) => setHoverTaskId(t.id)}
-          onEdit={(task) => {
-            saveEdit.reset();
-            setEditing({
-              id: task.id,
-              title: task.title,
-              description: task.description ?? "",
-              due: task.dueAt ? new Date(task.dueAt) : null,
-              focus: normalizeFocus(task.focus),
-              repeat: task.repeatRule ?? null,
-              repeatDays: task.repeatDays ?? null,
-              repeatInterval: task.repeatInterval ?? 1,
-              repeatEnd: task.repeatEnd ?? null,
-              repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
-              repeatCount: task.repeatCount ?? null,
-            });
-          }}
+          onEdit={(task) => openEdit(task)}
         />
       )}
 
@@ -428,22 +446,7 @@ export default function Tasks() {
           onSetFocus={(id, focus) => update.mutate({ id, patch: { focus } })}
           onToggle={(t) => update.mutate({ id: t.id, patch: { done: !t.done } })}
           onHover={(t) => setHoverTaskId(t.id)}
-          onEdit={(task) => {
-            saveEdit.reset();
-            setEditing({
-              id: task.id,
-              title: task.title,
-              description: task.description ?? "",
-              due: task.dueAt ? new Date(task.dueAt) : null,
-              focus: normalizeFocus(task.focus),
-              repeat: task.repeatRule ?? null,
-              repeatDays: task.repeatDays ?? null,
-              repeatInterval: task.repeatInterval ?? 1,
-              repeatEnd: task.repeatEnd ?? null,
-              repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
-              repeatCount: task.repeatCount ?? null,
-            });
-          }}
+          onEdit={(task) => openEdit(task)}
         />
       )}
 
@@ -481,31 +484,16 @@ export default function Tasks() {
 
               {/* Task rows — clean, borderless, spacious */}
               {!collapsed && (
-                <div className="rounded-2xl border border-border/50 glass overflow-hidden">
+                <div className="rounded-2xl border border-border/30 glass-strong shadow-xs overflow-hidden">
                   {list.map((task, i) => (
                     <div key={task.id}>
-                      {i > 0 && <div className="mx-4 border-t border-border/30" />}
+                      {i > 0 && <div className="mx-4 border-t border-border/20" />}
                       <TaskRow
                         task={task}
                         onPatch={(id, patch) => update.mutate({ id, patch })}
                         onDelete={(id) => remove.mutate(id)}
                         onHover={() => setHoverTaskId(task.id)}
-                        onEdit={() => {
-                          saveEdit.reset();
-                          setEditing({
-                            id: task.id,
-                            title: task.title,
-                            description: task.description ?? "",
-                            due: task.dueAt ? new Date(task.dueAt) : null,
-                            focus: normalizeFocus(task.focus),
-                            repeat: task.repeatRule ?? null,
-                            repeatDays: task.repeatDays ?? null,
-                            repeatInterval: task.repeatInterval ?? 1,
-                            repeatEnd: task.repeatEnd ?? null,
-                            repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
-                            repeatCount: task.repeatCount ?? null,
-                          });
-                        }}
+                        onEdit={() => openEdit(task)}
                         onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
                       />
                     </div>
@@ -537,7 +525,7 @@ export default function Tasks() {
               </span>
             </button>
             {showCompleted && (
-              <div className="rounded-2xl border border-border/40 glass overflow-hidden opacity-80">
+              <div className="rounded-2xl border border-border/25 glass overflow-hidden opacity-80">
                 {completed.map((task, i) => (
                   <div key={task.id}>
                     {i > 0 && <div className="mx-4 border-t border-border/20" />}
@@ -546,22 +534,7 @@ export default function Tasks() {
                       onPatch={(id, patch) => update.mutate({ id, patch })}
                       onDelete={(id) => remove.mutate(id)}
                       onHover={() => setHoverTaskId(task.id)}
-                      onEdit={() => {
-                        saveEdit.reset();
-                        setEditing({
-                          id: task.id,
-                          title: task.title,
-                          description: task.description ?? "",
-                          due: task.dueAt ? new Date(task.dueAt) : null,
-                          focus: normalizeFocus(task.focus),
-                          repeat: task.repeatRule ?? null,
-                          repeatDays: task.repeatDays ?? null,
-                          repeatInterval: task.repeatInterval ?? 1,
-                          repeatEnd: task.repeatEnd ?? null,
-                          repeatUntil: task.repeatUntil ? new Date(task.repeatUntil) : null,
-                          repeatCount: task.repeatCount ?? null,
-                        });
-                      }}
+                      onEdit={() => openEdit(task)}
                       onAddSubtask={(title) => createSubtask.mutate({ title, parentTaskId: task.id })}
                     />
                   </div>
@@ -602,6 +575,11 @@ export default function Tasks() {
                 placeholder="A little context, if you like"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              />
+              <GroupSelector
+                value={draft.group}
+                onChange={(group) => setDraft({ ...draft, group })}
+                availableGroups={availableGroups}
               />
               <DateTimePicker
                 value={draft.due}
@@ -676,6 +654,11 @@ export default function Tasks() {
                 placeholder="A little context, if you like"
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+              />
+              <GroupSelector
+                value={editing.group}
+                onChange={(group) => setEditing({ ...editing, group })}
+                availableGroups={availableGroups}
               />
               <DateTimePicker
                 value={editing.due}
@@ -835,6 +818,11 @@ function TaskRow({
 
           {/* Meta line — description, chips */}
           <div className="flex flex-wrap items-center gap-1.5 mt-0.5 empty:hidden">
+            {task.group && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-2 text-secondary shrink-0">
+                {task.group}
+              </span>
+            )}
             {task.description && !task.done && (
               <span className="text-xs text-secondary/70 truncate max-w-[200px]">
                 {task.description}

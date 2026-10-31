@@ -392,6 +392,11 @@ export async function fetchTasks() {
   return data;
 }
 
+export async function fetchTask(id: string) {
+  const { data } = await api.get<Task>(`/tasks/${id}`);
+  return data;
+}
+
 export async function fetchTrashedTasks() {
   const { data } = await api.get<Task[]>("/tasks", { params: { trashed: "true" } });
   return data;
@@ -400,6 +405,7 @@ export async function fetchTrashedTasks() {
 export async function createTask(input: {
   title: string;
   description?: string;
+  group?: string;
   dueAt?: string;
   parentTaskId?: string;
   starred?: boolean;
@@ -420,6 +426,7 @@ export async function updateTask(
   patch: {
     title?: string;
     description?: string;
+    group?: string;
     done?: boolean;
     starred?: boolean;
     focus?: TaskFocus;

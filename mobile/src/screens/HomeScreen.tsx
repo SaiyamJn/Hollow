@@ -24,6 +24,7 @@ import {
   updateTask,
 } from "../lib/api";
 import type { RecentPage, Task } from "../lib/types";
+import { dismissTaskNotifications } from "../lib/notifications";
 import { useTheme } from "../contexts/theme";
 import { useAuth } from "../contexts/auth";
 import { useUnlock } from "../contexts/unlock";
@@ -144,6 +145,7 @@ export default function HomeScreen({ navigation }: any) {
   const toggleTask = useMutation({
     mutationFn: (id: string) => updateTask(id, { done: true }),
     onMutate: async (id) => {
+      void dismissTaskNotifications(id);
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const prev = queryClient.getQueryData<Task[]>(["tasks"]);
       // Optimistic: mark done so the row can animate out without a flicker/reappear.

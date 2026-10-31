@@ -214,9 +214,19 @@ export function notifyDueTasks(tasks: Task[]) {
     if (due > now) {
       const ms = due - now;
       if (ms <= 24 * 60 * 60 * 1000 && !upcomingTimers.has(task.id)) {
-        const timer = window.setTimeout(() => {
+        const timer = window.setTimeout(async () => {
           upcomingTimers.delete(task.id);
-          notifyDueTasks([task]);
+          try {
+            const { fetchTask } = await import("./api");
+            const fresh = await fetchTask(task.id);
+            if (fresh && !fresh.done && !fresh.deletedAt) {
+              notifyDueTasks([fresh]);
+            } else {
+              dismissTaskNotification(task.id);
+            }
+          } catch {
+            dismissTaskNotification(task.id);
+          }
         }, ms);
         upcomingTimers.set(task.id, timer);
       }

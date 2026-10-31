@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -113,6 +114,23 @@ export default function TasksScreen() {
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
+  const [selectedGroup, setSelectedGroup] = useState<string>("All");
+
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks ?? []) {
+      const g = (t.group ?? "").trim();
+      if (g) set.add(g);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    if (selectedGroup === "All") return tasks;
+    return tasks.filter((t) => (t.group ?? "").trim().toLowerCase() === selectedGroup.toLowerCase());
+  }, [tasks, selectedGroup]);
+
   const createListMutation = useMutation({
     mutationFn: () =>
       createQuickNote({
@@ -163,6 +181,7 @@ export default function TasksScreen() {
     onMutate: async ({ id, patch }) => {
       if (patch.done !== undefined) animateTaskComplete();
       else animateListChange();
+      if (patch.done) void dismissTaskNotifications(id);
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const prev = queryClient.getQueryData<Task[]>(["tasks"]);
       if (patch.done !== undefined || patch.starred !== undefined || patch.focus !== undefined) {
@@ -196,6 +215,7 @@ export default function TasksScreen() {
       patch: {
         title: string;
         description: string;
+        group?: string;
         dueAt: string | null;
         focus?: "none" | "critical" | "steady" | "swift" | "quiet";
         repeatRule: "daily" | "weekly" | "monthly" | "yearly" | null;
@@ -225,6 +245,7 @@ export default function TasksScreen() {
     setDraft({
       title: title.trim(),
       description: "",
+      group: selectedGroup !== "All" ? selectedGroup : "",
       due: null,
       focus: "none",
       repeat: null,
@@ -241,6 +262,7 @@ export default function TasksScreen() {
       id: task.id,
       title: task.title,
       description: task.description ?? "",
+      group: task.group ?? "",
       due: task.dueAt ? new Date(task.dueAt) : null,
       focus: task.focus ?? "none",
       repeat: task.repeatRule ?? null,
@@ -269,18 +291,18 @@ export default function TasksScreen() {
         ? colors.accent
         : colors.textSecondary;
 
-  const sections = groupTasks(tasks ?? [], showCompleted);
+  const sections = groupTasks(filteredTasks, showCompleted);
   const endOfTodayForCount = (() => {
     const s = new Date();
     s.setHours(0, 0, 0, 0);
     s.setDate(s.getDate() + 1);
     return s;
   })();
-  const boardTasks = (tasks ?? []).filter((t) => !isDeferredRepeat(t, endOfTodayForCount));
-  const openCount = (tasks ?? []).filter((t) => !t.done && !isDeferredRepeat(t, endOfTodayForCount)).length;
-  const completedCount = (tasks ?? []).filter((t) => t.done).length;
-  const allDone = (tasks?.length ?? 0) > 0 && openCount === 0;
-  const noneYet = (tasks?.length ?? 0) === 0;
+  const boardTasks = filteredTasks.filter((t) => !isDeferredRepeat(t, endOfTodayForCount));
+  const openCount = filteredTasks.filter((t) => !t.done && !isDeferredRepeat(t, endOfTodayForCount)).length;
+  const completedCount = filteredTasks.filter((t) => t.done).length;
+  const allDone = filteredTasks.length > 0 && openCount === 0;
+  const noneYet = filteredTasks.length === 0;
 
   return (
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
@@ -342,6 +364,39 @@ export default function TasksScreen() {
               </Text>
               <Feather name="chevron-right" size={14} color={colors.textSecondary} />
             </Pressable>
+            {availableGroups.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 6, paddingVertical: 4, marginBottom: 8 }}
+              >
+                {["All", ...availableGroups].map((g) => {
+                  const active = selectedGroup === g;
+                  return (
+                    <Pressable
+                      key={g}
+                      onPress={() => setSelectedGroup(g)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 999,
+                        backgroundColor: active ? colors.accentSoft : colors.surface2,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: active ? "700" : "500",
+                          color: active ? colors.accent : colors.textSecondary,
+                        }}
+                      >
+                        {g}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
             <GlassCard
               style={{ alignSelf: "stretch", width: "100%" }}
               contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}
@@ -455,6 +510,20 @@ export default function TasksScreen() {
                     >
                       {task.title}
                     </Text>
+                    {!!task.group && (
+                      <View
+                        style={{
+                          paddingHorizontal: 6,
+                          paddingVertical: 1.5,
+                          borderRadius: 6,
+                          backgroundColor: colors.surface2,
+                        }}
+                      >
+                        <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: "600" }}>
+                          {task.group}
+                        </Text>
+                      </View>
+                    )}
                     {subtasks.length > 0 && (
                       <Pressable
                         onPress={() =>
@@ -607,6 +676,7 @@ export default function TasksScreen() {
       <TaskFormModal
         visible={draft !== null}
         title="New task"
+        availableGroups={availableGroups}
         submitLabel={create.isPending ? "Adding…" : "Add task"}
         draft={draft}
         busy={create.isPending}
@@ -618,6 +688,7 @@ export default function TasksScreen() {
           create.mutate({
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
+            group: draft.group?.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
             focus: draft.focus ?? "none",
             ...repeatPayload(draft),
@@ -628,6 +699,7 @@ export default function TasksScreen() {
       <TaskFormModal
         visible={editing !== null}
         title="Edit task"
+        availableGroups={availableGroups}
         submitLabel={saveEdit.isPending ? "Saving…" : "Save"}
         draft={editing}
         busy={saveEdit.isPending}
@@ -640,6 +712,7 @@ export default function TasksScreen() {
             patch: {
               title: editing.title.trim(),
               description: editing.description.trim(),
+              group: editing.group?.trim() || "",
               dueAt: editing.due ? editing.due.toISOString() : null,
               focus: editing.focus ?? "none",
               ...repeatPayload(editing),

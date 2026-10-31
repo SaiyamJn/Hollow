@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Plus, Repeat } from "lucide-react";
 import clsx from "clsx";
 import { createTask, fetchTasks, updateTask } from "../lib/api";
+import { dismissTaskNotification } from "../lib/notify";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -10,6 +11,7 @@ import { DateTimePicker } from "../components/DateTimePicker";
 import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import { FocusField } from "../components/FocusField";
+import { GroupFilterBar, GroupSelector } from "../components/GroupSelector";
 import type { RepeatEnd } from "../lib/taskRepeat";
 import {
   FOCUS_DOT,
@@ -42,6 +44,7 @@ type CalView = "month" | "schedule" | "week" | "day" | "agenda";
 type Draft = {
   title: string;
   description: string;
+  group: string;
   due: Date | null;
   focus: TaskFocus;
   repeat: TaskRepeatRule | null;
@@ -98,7 +101,30 @@ export default function CalendarPage() {
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
-  const dated = useMemo(() => datedTasks(tasks), [tasks]);
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    (tasks ?? []).forEach((t) => {
+      const g = t.group?.trim();
+      if (g) set.add(g);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
+
+  const [selectedGroup, setSelectedGroup] = useState<string>("All");
+
+  useEffect(() => {
+    if (selectedGroup !== "All" && !availableGroups.includes(selectedGroup)) {
+      setSelectedGroup("All");
+    }
+  }, [availableGroups, selectedGroup]);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    if (selectedGroup === "All") return tasks;
+    return tasks.filter((t) => (t.group || "").trim() === selectedGroup);
+  }, [tasks, selectedGroup]);
+
+  const dated = useMemo(() => datedTasks(filteredTasks), [filteredTasks]);
   // Wide window so schedule indicators + agenda cover far-out repeats.
   const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -40), [cursor]);
   const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 12)), -1), [cursor]);
@@ -127,6 +153,7 @@ export default function CalendarPage() {
       patch: {
         title?: string;
         description?: string;
+        group?: string;
         done?: boolean;
         dueAt?: string | null;
         focus?: TaskFocus;
@@ -194,6 +221,7 @@ export default function CalendarPage() {
     setDraft({
       title: "",
       description: "",
+      group: selectedGroup !== "All" ? selectedGroup : "",
       due: dateOnlyDue(day),
       focus: "none",
       repeat: null,
@@ -233,6 +261,7 @@ export default function CalendarPage() {
       id: t.sourceId ?? t.id,
       title: t.title,
       description: t.description ?? "",
+      group: t.group ?? "",
       due: seriesDue,
       focus: normalizeFocus(t.focus),
       repeat: t.repeatRule ?? null,
@@ -246,6 +275,7 @@ export default function CalendarPage() {
 
   function toggleTask(t: CalendarTask) {
     if (t.virtual) return;
+    if (!t.done) dismissTaskNotification(t.id);
     update.mutate({ id: t.id, patch: { done: !t.done } });
   }
 
@@ -499,6 +529,14 @@ export default function CalendarPage() {
           )}
         </div>
       </div>
+
+      {/* Group / Class filter */}
+      <GroupFilterBar
+        groups={availableGroups}
+        selected={selectedGroup}
+        onSelect={setSelectedGroup}
+        className="mb-3"
+      />
 
       {isLoading && !tasks ? (
         <p className="text-sm text-secondary text-center py-16">Loading…</p>
@@ -791,6 +829,11 @@ export default function CalendarPage() {
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
+              <GroupSelector
+                value={draft.group}
+                onChange={(group) => setDraft({ ...draft, group })}
+                availableGroups={availableGroups}
+              />
               <DateTimePicker
                 value={draft.due}
                 onChange={(due) =>
@@ -832,6 +875,7 @@ export default function CalendarPage() {
                     create.mutate({
                       title: draft.title.trim(),
                       description: draft.description.trim() || undefined,
+                      group: draft.group.trim() || undefined,
                       dueAt: draft.due ? draft.due.toISOString() : undefined,
                       focus: draft.focus,
                       ...repeatPayload(draft),
@@ -855,6 +899,11 @@ export default function CalendarPage() {
                 className="w-full rounded-lg border border-border glass-input px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent resize-none min-h-[72px] max-h-[40vh] overflow-y-auto"
                 value={editing.description}
                 onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+              />
+              <GroupSelector
+                value={editing.group}
+                onChange={(group) => setEditing({ ...editing, group })}
+                availableGroups={availableGroups}
               />
               <DateTimePicker
                 value={editing.due}
@@ -902,6 +951,7 @@ export default function CalendarPage() {
                       patch: {
                         title: editing.title.trim(),
                         description: editing.description.trim(),
+                        group: editing.group.trim(),
                         dueAt: editing.due ? editing.due.toISOString() : null,
                         focus: editing.focus,
                         ...repeatPayload(editing),
@@ -962,6 +1012,11 @@ function TaskRow({
         <span className={clsx("text-sm text-primary font-medium truncate flex-1", task.done && "line-through text-secondary")}>
           {task.title}
         </span>
+        {task.group && (
+          <span className="text-[10px] font-medium px-1.5 py-px rounded bg-surface-2 text-secondary border border-border/40 shrink-0">
+            {task.group}
+          </span>
+        )}
         {focus !== "none" && (
           <span className={clsx("focus-chip", `focus-chip-${focus}`)}>
             <span className={clsx("h-1.5 w-1.5 rounded-full", FOCUS_DOT[focus])} />

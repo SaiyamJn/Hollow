@@ -58,7 +58,16 @@ function schedulePersist(pageId: string, entry: DocEntry) {
   entry.saveTimer = setTimeout(() => void persist(pageId, entry), PERSIST_DEBOUNCE_MS);
 }
 
+let globalIo: Server | null = null;
+
+export function emitToUser(userId: string, event: string, data: any) {
+  if (globalIo) {
+    globalIo.to(`user:${userId}`).emit(event, data);
+  }
+}
+
 export function registerCollab(io: Server) {
+  globalIo = io;
   // Same JWT + AuthSession check as REST, but carried in the Socket.io handshake.
   io.use((socket: AuthedSocket, next) => {
     void (async () => {
@@ -86,6 +95,9 @@ export function registerCollab(io: Server) {
   });
 
   io.on("connection", (socket: AuthedSocket) => {
+    if (socket.userId) {
+      socket.join(`user:${socket.userId}`);
+    }
     const joinedPages = new Set<string>();
 
     socket.on(

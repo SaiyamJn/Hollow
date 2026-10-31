@@ -62,6 +62,11 @@ function BoardCard({
             {task.title}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+            {task.group && (
+              <span className="text-[9px] font-medium px-1.5 py-px rounded bg-surface-2/80 text-secondary border border-border/40">
+                {task.group}
+              </span>
+            )}
             {task.dueAt && (
               <span className={clsx("text-[10px] tabular-nums", FOCUS_TEXT[focus])}>
                 {formatDueLabel(task.dueAt)}

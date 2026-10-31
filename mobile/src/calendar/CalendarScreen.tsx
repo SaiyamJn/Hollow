@@ -5,6 +5,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { createTask, fetchTasks, updateTask } from "../lib/api";
+import { dismissTaskNotifications } from "../lib/notifications";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
@@ -80,7 +82,24 @@ export default function CalendarScreen() {
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
-  const dated = useMemo(() => datedTasks(tasks), [tasks]);
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks ?? []) {
+      const g = (t.group ?? "").trim();
+      if (g) set.add(g);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
+
+  const [selectedGroup, setSelectedGroup] = useState<string>("All");
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    if (selectedGroup === "All") return tasks;
+    return tasks.filter((t) => (t.group ?? "").trim().toLowerCase() === selectedGroup.toLowerCase());
+  }, [tasks, selectedGroup]);
+
+  const dated = useMemo(() => datedTasks(filteredTasks), [filteredTasks]);
   // Wide window so month indicators + agenda cover far-out repeats.
   const rangeStart = useMemo(() => addDays(startOfMonth(cursor), -40), [cursor]);
   const rangeEnd = useMemo(() => addDays(startOfMonth(addMonths(cursor, 12)), -1), [cursor]);
@@ -115,9 +134,10 @@ export default function CalendarScreen() {
       id: string;
       patch: {
         title?: string;
-        done?: boolean;
-        dueAt?: string | null;
         description?: string;
+        group?: string;
+        dueAt?: string | null;
+        done?: boolean;
         focus?: Task["focus"];
         repeatRule?: Task["repeatRule"];
         repeatDays?: number[] | null;
@@ -168,6 +188,7 @@ export default function CalendarScreen() {
     setDraft({
       title: "",
       description: "",
+      group: selectedGroup !== "All" ? selectedGroup : "",
       due: dateOnlyDue(day),
       focus: "none",
       repeat: null,
@@ -181,6 +202,7 @@ export default function CalendarScreen() {
 
   function toggleTask(t: CalendarTask) {
     if (t.virtual) return;
+    if (!t.done) void dismissTaskNotifications(t.id);
     update.mutate({ id: t.id, patch: { done: !t.done } });
   }
 
@@ -191,6 +213,7 @@ export default function CalendarScreen() {
       id: task.sourceId ?? task.id,
       title: task.title,
       description: task.description ?? "",
+      group: task.group ?? "",
       due: seriesDue,
       focus: task.focus ?? "none",
       repeat: task.repeatRule,
@@ -308,6 +331,40 @@ export default function CalendarScreen() {
           </Pressable>
         </View>
       </View>
+
+      {availableGroups.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 6, paddingHorizontal: screenPad, paddingVertical: 8 }}
+        >
+          {["All", ...availableGroups].map((g) => {
+            const active = selectedGroup === g;
+            return (
+              <Pressable
+                key={g}
+                onPress={() => setSelectedGroup(g)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 999,
+                  backgroundColor: active ? colors.accentSoft : colors.surface2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: active ? "700" : "500",
+                    color: active ? colors.accent : colors.textSecondary,
+                  }}
+                >
+                  {g}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {isLoading && !tasks ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
@@ -629,6 +686,7 @@ export default function CalendarScreen() {
       <TaskFormModal
         visible={draft !== null}
         title="New task"
+        availableGroups={availableGroups}
         submitLabel={create.isPending ? "Adding…" : "Add task"}
         draft={draft}
         busy={create.isPending}
@@ -640,6 +698,7 @@ export default function CalendarScreen() {
           create.mutate({
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
+            group: draft.group?.trim() || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
             focus: draft.focus ?? "none",
             ...repeatPayload(draft),
@@ -650,6 +709,7 @@ export default function CalendarScreen() {
       <TaskFormModal
         visible={editing !== null}
         title="Edit task"
+        availableGroups={availableGroups}
         submitLabel={update.isPending ? "Saving…" : "Save"}
         draft={editing}
         busy={update.isPending}
@@ -662,6 +722,7 @@ export default function CalendarScreen() {
             patch: {
               title: editing.title.trim(),
               description: editing.description.trim(),
+              group: editing.group?.trim() || "",
               dueAt: editing.due ? editing.due.toISOString() : null,
               focus: editing.focus ?? "none",
               ...repeatPayload(editing),
@@ -733,6 +794,20 @@ function TaskRow({
           {task.title}
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+          {!!task.group && (
+            <View
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 1.5,
+                borderRadius: 6,
+                backgroundColor: colors.surface2,
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: "600" }}>
+                {task.group}
+              </Text>
+            </View>
+          )}
           {focus !== "none" && (
             <View
               style={{

@@ -14,6 +14,7 @@ import {
   type RepeatRule,
 } from "../lib/taskRepeat";
 import { normalizeFocus, compareTaskPriority } from "../lib/taskFocus";
+import { emitToUser } from "../sockets/collab";
 
 const router = Router();
 router.use(requireAuth);
@@ -42,6 +43,7 @@ const focusSchema = z.enum(["none", "critical", "steady", "swift", "quiet"]);
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
+  group: z.string().max(50).optional(),
   dueAt: isoDate.optional(),
   parentTaskId: z.string().uuid().optional(),
   starred: z.boolean().optional(),
@@ -57,6 +59,7 @@ const createSchema = z.object({
 const patchSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
+  group: z.string().max(50).nullable().optional(),
   done: z.boolean().optional(),
   starred: z.boolean().optional(),
   focus: focusSchema.optional(),
@@ -198,12 +201,24 @@ router.get("/", async (req: AuthedRequest, res) => {
   res.json(publicList);
 });
 
+router.get("/:id", async (req: AuthedRequest, res) => {
+  const task = await prisma.task.findUnique({
+    where: { id: req.params.id },
+    include: { subtasks: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } } },
+  });
+  if (!task || task.ownerId !== req.userId || task.deletedAt) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  res.json(publicTask(task));
+});
+
 router.post("/", async (req: AuthedRequest, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
   const {
     title,
     description,
+    group,
     dueAt,
     parentTaskId,
     starred,
@@ -238,6 +253,7 @@ router.post("/", async (req: AuthedRequest, res) => {
     data: {
       title: sealAtRest(title),
       description: sealAtRest(description?.trim() ?? ""),
+      group: (group ?? "").trim(),
       ownerId: req.userId!,
       dueAt: due,
       repeatRule: rule,
@@ -253,7 +269,9 @@ router.post("/", async (req: AuthedRequest, res) => {
     },
     include: { subtasks: true },
   });
-  res.status(201).json(publicTask(task));
+  const pub = publicTask(task);
+  emitToUser(req.userId!, "tasks:changed", { action: "create", task: pub });
+  res.status(201).json(pub);
 });
 
 router.patch("/:id", async (req: AuthedRequest, res) => {
@@ -265,6 +283,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
   const {
     title,
     description,
+    group,
     done,
     starred,
     focus,
@@ -344,6 +363,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
       data: {
         ...(title !== undefined ? { title: sealAtRest(title) } : {}),
         ...(description !== undefined ? { description: sealAtRest(description) } : {}),
+        ...(group !== undefined ? { group: (group ?? "").trim() } : {}),
         ...(done !== undefined ? { done, completedAt: done ? new Date() : null } : {}),
         ...(starred !== undefined ? { starred } : {}),
         ...(focus !== undefined ? { focus: normalizeFocus(focus) } : {}),
@@ -386,6 +406,7 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
           data: {
             title: task.title,
             description: task.description,
+            group: task.group,
             starred: task.starred,
             focus: normalizeFocus(task.focus),
             dueAt: next,
@@ -406,7 +427,12 @@ router.patch("/:id", async (req: AuthedRequest, res) => {
     return row;
   });
 
-  res.json(publicTask(updated));
+  const pub = publicTask(updated);
+  emitToUser(req.userId!, "tasks:changed", { action: "update", task: pub, patch: parsed.data });
+  if (parsed.data.done !== undefined) {
+    emitToUser(req.userId!, "tasks:done", { taskId: req.params.id, done: pub.done });
+  }
+  res.json(pub);
 });
 
 router.delete("/:id", async (req: AuthedRequest, res) => {
@@ -433,6 +459,8 @@ router.delete("/:id", async (req: AuthedRequest, res) => {
       }),
     ]);
   }
+  emitToUser(req.userId!, "tasks:changed", { action: "delete", taskId: req.params.id });
+  emitToUser(req.userId!, "tasks:done", { taskId: req.params.id, done: true });
   res.status(204).end();
 });
 
@@ -456,7 +484,10 @@ router.post("/:id/restore", async (req: AuthedRequest, res) => {
     where: { id: task.id },
     include: { subtasks: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } } },
   });
-  res.json(publicTask(restored!));
+  const pub = publicTask(restored!);
+  emitToUser(req.userId!, "tasks:changed", { action: "restore", task: pub });
+  emitToUser(req.userId!, "tasks:done", { taskId: req.params.id, done: false });
+  res.json(pub);
 });
 
 export default router;

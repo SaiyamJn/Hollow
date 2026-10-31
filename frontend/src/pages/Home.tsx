@@ -25,6 +25,7 @@ import {
   unlockSection,
   updateTask,
 } from "../lib/api";
+import { dismissTaskNotification } from "../lib/notify";
 import type { RecentPage, Task } from "../lib/types";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
@@ -431,6 +432,7 @@ function TodayTasks() {
   const toggle = useMutation({
     mutationFn: (id: string) => updateTask(id, { done: true }),
     onMutate: async (id) => {
+      dismissTaskNotification(id);
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const prev = queryClient.getQueryData<Task[]>(["tasks"]);
       queryClient.setQueryData<Task[]>(["tasks"], (old) =>

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "group" TEXT NOT NULL DEFAULT '';
+

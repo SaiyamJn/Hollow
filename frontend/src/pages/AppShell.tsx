@@ -7,10 +7,10 @@ import { useTheme } from "../theme/ThemeProvider";
 import { useAuthStore } from "../stores/auth";
 import { useUnlockStore } from "../stores/unlock";
 import { useUiStore } from "../stores/ui";
-import { disconnectSocket } from "../lib/socket";
+import { disconnectSocket, getSocket } from "../lib/socket";
 import { fetchNotebooks, fetchTasks, logoutAuthSession, openDailyNote, initOfflineSync } from "../lib/api";
 import { subscribeOfflineStatus } from "../lib/offlineQueue";
-import { notifyDueTasks } from "../lib/notify";
+import { dismissTaskNotification, notifyDueTasks } from "../lib/notify";
 import { TaskReminderDialog } from "../components/TaskReminderDialog";
 import { formatCombo, matchesCombo, useKeybindsStore, type KeybindId } from "../lib/keybinds";
 import { Sidebar } from "../components/Sidebar";
@@ -105,11 +105,33 @@ export default function AppShell() {
     queryKey: ["tasks"],
     queryFn: fetchTasks,
     enabled: taskPollReady,
-    refetchInterval: 60_000,
+    refetchInterval: 10_000,
   });
   useEffect(() => {
     if (tasks) notifyDueTasks(tasks);
   }, [tasks]);
+
+  // Real-time task synchronization across Web and Mobile
+  useEffect(() => {
+    const socket = getSocket();
+    const onTasksChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    };
+    const onTaskDone = ({ taskId, done }: { taskId: string; done: boolean }) => {
+      if (done) {
+        dismissTaskNotification(taskId);
+      }
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    };
+
+    socket.on("tasks:changed", onTasksChanged);
+    socket.on("tasks:done", onTaskDone);
+
+    return () => {
+      socket.off("tasks:changed", onTasksChanged);
+      socket.off("tasks:done", onTaskDone);
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     async function openDaily() {
