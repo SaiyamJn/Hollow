@@ -1,7 +1,7 @@
 {
   "name": "hollow-frontend",
   "private": true,
-  "version": "1.4.3",
+  "version": "1.4.4",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
