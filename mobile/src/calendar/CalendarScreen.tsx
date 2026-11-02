@@ -181,6 +181,11 @@ export default function CalendarScreen() {
     void Haptics.selectionAsync();
   }
 
+  function shiftWeek(dir: -1 | 1) {
+    const next = addDays(selected, dir * 7);
+    selectDay(next);
+  }
+
   function jumpToday() {
     const t = startOfDay(new Date());
     setCursor(startOfMonth(t));
@@ -308,9 +313,14 @@ export default function CalendarScreen() {
           {view !== "agenda" && (
             <Pressable
               onPress={() => {
-                if (view === "schedule") shiftMonth(-1);
-                else if (view === "week") selectDay(addDays(selected, -7));
-                else selectDay(addDays(selected, -1));
+                if (view === "schedule") {
+                  if (expanded) shiftMonth(-1);
+                  else shiftWeek(-1);
+                } else if (view === "week") {
+                  selectDay(addDays(selected, -7));
+                } else {
+                  selectDay(addDays(selected, -1));
+                }
               }}
               hitSlop={10}
               style={styles.navBtn}
@@ -319,16 +329,21 @@ export default function CalendarScreen() {
             </Pressable>
           )}
           <Pressable onPress={jumpToday} style={{ flex: 1 }} hitSlop={6}>
-            <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: "600", textAlign: "center" }} numberOfLines={1}>
+            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }} numberOfLines={1}>
               {headerTitle}
             </Text>
           </Pressable>
           {view !== "agenda" && (
             <Pressable
               onPress={() => {
-                if (view === "schedule") shiftMonth(1);
-                else if (view === "week") selectDay(addDays(selected, 7));
-                else selectDay(addDays(selected, 1));
+                if (view === "schedule") {
+                  if (expanded) shiftMonth(1);
+                  else shiftWeek(1);
+                } else if (view === "week") {
+                  selectDay(addDays(selected, 7));
+                } else {
+                  selectDay(addDays(selected, 1));
+                }
               }}
               hitSlop={10}
               style={styles.navBtn}
@@ -346,61 +361,64 @@ export default function CalendarScreen() {
       </View>
 
       {availableGroups.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 6, paddingHorizontal: screenPad, paddingVertical: 8 }}
-        >
-          {["All", ...availableGroups].map((g) => {
-            const active = selectedGroup === g;
-            const isDef = g !== "All" && defaultClass && g.toLowerCase() === defaultClass.toLowerCase();
-            return (
-              <Pressable
-                key={g}
-                onPress={() => setSelectedGroup(g)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 999,
-                  backgroundColor: active ? colors.accentSoft : colors.surface2,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <Text
+        <View style={{ flexShrink: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{ gap: 6, paddingHorizontal: screenPad, paddingVertical: 8 }}
+          >
+            {["All", ...availableGroups].map((g) => {
+              const active = selectedGroup === g;
+              const isDef = g !== "All" && defaultClass && g.toLowerCase() === defaultClass.toLowerCase();
+              return (
+                <Pressable
+                  key={g}
+                  onPress={() => setSelectedGroup(g)}
                   style={{
-                    fontSize: 12,
-                    fontWeight: active ? "700" : "500",
-                    color: active ? colors.accent : colors.textSecondary,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    backgroundColor: active ? colors.accentSoft : colors.surface2,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
                   }}
                 >
-                  {g}
-                </Text>
-                {isDef && (
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: active ? colors.accent : colors.textSecondary }} />
-                )}
-              </Pressable>
-            );
-          })}
-          <Pressable
-            onPress={() => setManageClassesOpen(true)}
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-              borderRadius: 999,
-              backgroundColor: colors.surface2,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <Feather name="sliders" size={12} color={colors.textSecondary} />
-            <Text style={{ fontSize: 12, fontWeight: "500", color: colors.textSecondary }}>
-              Classes
-            </Text>
-          </Pressable>
-        </ScrollView>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: active ? "700" : "500",
+                      color: active ? colors.accent : colors.textSecondary,
+                    }}
+                  >
+                    {g}
+                  </Text>
+                  {isDef && (
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: active ? colors.accent : colors.textSecondary }} />
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => setManageClassesOpen(true)}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: colors.surface2,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <Feather name="sliders" size={12} color={colors.textSecondary} />
+              <Text style={{ fontSize: 12, fontWeight: "500", color: colors.textSecondary }}>
+                Classes
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
       )}
 
       {isLoading && !tasks ? (
@@ -421,7 +439,10 @@ export default function CalendarScreen() {
                   onExpandedChange={setCalendarExpanded}
                   onSelectDay={selectDay}
                   onCreateDay={openCreate}
-                  onSwipeMonth={shiftMonth}
+                  onSwipeMonth={(dir) => {
+                    if (expanded) shiftMonth(dir);
+                    else shiftWeek(dir);
+                  }}
                 />
               </Animated.View>
 
@@ -441,6 +462,7 @@ export default function CalendarScreen() {
               <FlatList
                 data={dayTasks}
                 keyExtractor={(t) => t.id}
+                style={{ flex: 1 }}
                 contentContainerStyle={{
                   paddingHorizontal: screenPad,
                   paddingTop: 8,
@@ -516,6 +538,7 @@ export default function CalendarScreen() {
             <FlatList
               data={weekStrip}
               keyExtractor={(d) => dayKey(d)}
+              style={{ flex: 1 }}
               contentContainerStyle={{ paddingHorizontal: screenPad, paddingBottom: listBottomClearance(false) + 24 }}
               renderItem={({ item: day }) => {
                 const list = sortByFocusPriority(tasksOnDay(byDay, day));
@@ -537,7 +560,7 @@ export default function CalendarScreen() {
                     ]}
                   >
                     <View style={styles.weekBlockHead}>
-                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "500" }}>
                         {day.toLocaleDateString(undefined, { weekday: "short" })}
                       </Text>
                       <View
@@ -550,7 +573,7 @@ export default function CalendarScreen() {
                           style={{
                             color: isToday ? colors.surface0 : colors.textPrimary,
                             fontWeight: "600",
-                            fontSize: 14,
+                            fontSize: 13,
                           }}
                         >
                           {day.getDate()}
@@ -602,6 +625,7 @@ export default function CalendarScreen() {
             <FlatList
               data={dayTasks}
               keyExtractor={(t) => t.id}
+              style={{ flex: 1 }}
               contentContainerStyle={{
                 paddingHorizontal: screenPad,
                 paddingTop: 12,
@@ -641,10 +665,12 @@ export default function CalendarScreen() {
             <FlatList
               data={agendaKeys}
               keyExtractor={(k) => k}
+              style={{ flex: 1 }}
               contentContainerStyle={{
                 paddingHorizontal: screenPad,
                 paddingTop: 8,
                 paddingBottom: listBottomClearance(false) + 24,
+                flexGrow: 1,
               }}
               ListEmptyComponent={
                 <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 24, textAlign: "center" }}>
@@ -810,8 +836,9 @@ function TaskRow({
   const time = formatTime(task.due);
   const focus = normalizeFocus(task.focus);
   const { colorFor, washFor } = useFocusColors();
-  const tint = colorFor(focus) || colors.border;
+  const tint = colorFor(focus);
   const wash = washFor(focus);
+  const hasFocus = focus !== "none" && !!tint;
   return (
     <Pressable
       onPress={onPress}
@@ -820,10 +847,10 @@ function TaskRow({
         styles.taskRow,
         {
           backgroundColor: wash !== "transparent" ? wash : colors.glass,
-          borderColor: tint ? withAlpha(tint, 0.4) : colors.glassBorder,
-          borderWidth: 1,
-          borderLeftWidth: 4,
-          borderLeftColor: tint,
+          borderColor: hasFocus ? withAlpha(tint, 0.4) : colors.glassBorder,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderLeftWidth: hasFocus ? 3 : StyleSheet.hairlineWidth,
+          borderLeftColor: hasFocus ? tint : colors.glassBorder,
         },
       ]}
     >
@@ -868,7 +895,7 @@ function TaskRow({
               </Text>
             </View>
           )}
-          {focus !== "none" && (
+          {focus !== "none" && tint && (
             <View
               style={{
                 flexDirection: "row",
@@ -889,7 +916,7 @@ function TaskRow({
             </View>
           )}
           {!!time && (
-            <Text style={{ color: tint, fontSize: 12, fontWeight: "600" }}>{time}</Text>
+            <Text style={{ color: tint || colors.accent, fontSize: 12, fontWeight: "600" }}>{time}</Text>
           )}
           {!!task.repeatRule && (
             <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
@@ -956,14 +983,18 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
-  weekBlockHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  weekBlockHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
   miniBubble: {
     width: 28,
     height: 28,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    flex: 1,
   },
   weekChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
   chipDot: { width: 6, height: 6, borderRadius: 3 },

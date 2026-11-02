@@ -14,7 +14,6 @@ import {
   dayKey,
   monthGrid,
   sameDay,
-  startOfWeek,
   weekDays,
 } from "./dateUtils";
 import type { CalendarTask } from "./taskIndex";
@@ -58,10 +57,11 @@ export function CollapsibleMonth({
   const heightAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
   const cells = useMemo(() => monthGrid(anchor), [anchor]);
-  const weekStrip = useMemo(() => {
-    const start = startOfWeek(selected, 0);
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, [selected]);
+
+  const selectedRowIndex = useMemo(() => {
+    const idx = cells.findIndex((d) => sameDay(d, selected));
+    return idx >= 0 ? Math.floor(idx / 7) : 0;
+  }, [cells, selected]);
 
   const weekLabels = useMemo(
     () => weekDays(today).map((d) => d.toLocaleDateString(undefined, { weekday: "narrow" })),
@@ -82,6 +82,13 @@ export function CollapsibleMonth({
     inputRange: [0, 1],
     outputRange: [ROW_H, ROW_H * ROWS],
   });
+
+  const translateY = useMemo(() => {
+    return heightAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-selectedRowIndex * ROW_H, 0],
+    });
+  }, [heightAnim, selectedRowIndex]);
 
   const handleRot = heightAnim.interpolate({
     inputRange: [0, 1],
@@ -203,15 +210,13 @@ export function CollapsibleMonth({
       </View>
 
       <Animated.View style={[styles.clip, { height }]} {...pan.panHandlers}>
-        {expanded ? (
-          Array.from({ length: ROWS }, (_, row) => (
+        <Animated.View style={{ transform: [{ translateY }] }}>
+          {Array.from({ length: ROWS }, (_, row) => (
             <View key={row} style={styles.row}>
               {cells.slice(row * 7, row * 7 + 7).map((day) => renderDay(day))}
             </View>
-          ))
-        ) : (
-          <View style={styles.row}>{weekStrip.map((day) => renderDay(day))}</View>
-        )}
+          ))}
+        </Animated.View>
       </Animated.View>
 
       <Pressable
@@ -268,14 +273,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bars: {
-    marginTop: 2,
-    width: "75%",
-    gap: 2.5,
+    marginTop: 3,
+    width: "65%",
+    gap: 2,
     alignItems: "stretch",
   },
   bar: {
-    height: 4,
-    borderRadius: 2,
+    height: 3,
+    borderRadius: 1.5,
   },
   handle: {
     height: HANDLE_H,
