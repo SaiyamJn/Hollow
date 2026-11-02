@@ -1,6 +1,6 @@
 {
   "name": "hollow-backend",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
