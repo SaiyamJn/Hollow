@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckSquare, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { Link } from "react-router-dom";
-import { createTask, deleteTask, fetchTasks, updateTask } from "../lib/api";
+import { createTask, deleteTask, fetchTasks, updateTask, fetchTaskClasses, updateTaskClassesOrder, renameTaskClass, deleteTaskClass } from "../lib/api";
 import { dismissTaskNotification } from "../lib/notify";
 import type { Task } from "../lib/types";
 import { Input } from "../components/ui/input";
@@ -15,7 +15,7 @@ import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import { EisenhowerBoard, KanbanBoard } from "../components/TaskBoards";
 import { FocusChip, FocusDot, FocusField } from "../components/FocusField";
-import { GroupFilterBar, GroupSelector } from "../components/GroupSelector";
+import { GroupFilterBar, GroupSelector, ManageClassesDialog } from "../components/GroupSelector";
 import { DueChip } from "../components/StatusChip";
 import { EmptyState } from "../components/EmptyState";
 import { normalizeFocus, sortTasksByPriority, type TaskFocus } from "../lib/taskFocus";
@@ -127,6 +127,7 @@ export default function Tasks() {
   const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<GroupName>>(new Set());
+  const [manageClassesOpen, setManageClassesOpen] = useState(false);
 
   /** Board fills the viewport — lock shell scroll so only columns scroll. */
   useEffect(() => {
@@ -141,7 +142,11 @@ export default function Tasks() {
   }, [layout]);
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  const { data: classesData } = useQuery({ queryKey: ["task-classes"], queryFn: fetchTaskClasses });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+  };
 
   const create = useMutation({
     mutationFn: createTask,
@@ -220,14 +225,21 @@ export default function Tasks() {
     return () => window.removeEventListener("keydown", onKey);
   }, [hoverTaskId, remove]);
 
+  const defaultClass = classesData?.defaultClass || "";
+
   const availableGroups = useMemo(() => {
-    const set = new Set<string>();
+    const configured = classesData?.classes ?? [];
+    const set = new Set<string>(configured);
+    const extra: string[] = [];
     (tasks ?? []).forEach((t) => {
       const g = t.group?.trim();
-      if (g) set.add(g);
+      if (g && !set.has(g)) {
+        set.add(g);
+        extra.push(g);
+      }
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [tasks]);
+    return [...configured, ...extra];
+  }, [classesData, tasks]);
 
   const [selectedGroup, setSelectedGroup] = useState<string>("All");
 
@@ -265,7 +277,7 @@ export default function Tasks() {
     setDraft({
       title: title.trim(),
       description: "",
-      group: selectedGroup !== "All" ? selectedGroup : "",
+      group: selectedGroup !== "All" ? selectedGroup : defaultClass,
       due: null,
       focus: "none",
       repeat: null,
@@ -392,6 +404,8 @@ export default function Tasks() {
         groups={availableGroups}
         selected={selectedGroup}
         onSelect={setSelectedGroup}
+        onManage={() => setManageClassesOpen(true)}
+        defaultGroup={defaultClass}
         className="mb-5"
       />
 
@@ -402,7 +416,13 @@ export default function Tasks() {
         )}
       >
         <Input
-          placeholder={selectedGroup !== "All" ? `Add to "${selectedGroup}"… Press Enter` : "What's next? Press Enter"}
+          placeholder={
+            selectedGroup !== "All"
+              ? `Add to "${selectedGroup}"… Press Enter`
+              : defaultClass
+                ? `Add to "${defaultClass}"… Press Enter`
+                : "What's next? Press Enter"
+          }
           value={quickAdd}
           onChange={(e) => setQuickAdd(e.target.value)}
           onKeyDown={onQuickAdd}
@@ -484,10 +504,10 @@ export default function Tasks() {
 
               {/* Task rows — clean, borderless, spacious */}
               {!collapsed && (
-                <div className="rounded-2xl border border-border/30 glass-strong shadow-xs overflow-hidden">
+                <div className="rounded-2xl glass-strong shadow-xs overflow-hidden">
                   {list.map((task, i) => (
                     <div key={task.id}>
-                      {i > 0 && <div className="mx-4 border-t border-border/20" />}
+                      {i > 0 && <div className="mx-4 border-t border-border/15" />}
                       <TaskRow
                         task={task}
                         onPatch={(id, patch) => update.mutate({ id, patch })}
@@ -525,10 +545,10 @@ export default function Tasks() {
               </span>
             </button>
             {showCompleted && (
-              <div className="rounded-2xl border border-border/25 glass overflow-hidden opacity-80">
+              <div className="rounded-2xl glass shadow-xs overflow-hidden opacity-80">
                 {completed.map((task, i) => (
                   <div key={task.id}>
-                    {i > 0 && <div className="mx-4 border-t border-border/20" />}
+                    {i > 0 && <div className="mx-4 border-t border-border/15" />}
                     <TaskRow
                       task={task}
                       onPatch={(id, patch) => update.mutate({ id, patch })}
@@ -580,6 +600,7 @@ export default function Tasks() {
                 value={draft.group}
                 onChange={(group) => setDraft({ ...draft, group })}
                 availableGroups={availableGroups}
+                defaultGroup={defaultClass}
               />
               <DateTimePicker
                 value={draft.due}
@@ -659,6 +680,7 @@ export default function Tasks() {
                 value={editing.group}
                 onChange={(group) => setEditing({ ...editing, group })}
                 availableGroups={availableGroups}
+                defaultGroup={defaultClass}
               />
               <DateTimePicker
                 value={editing.due}
@@ -746,6 +768,29 @@ export default function Tasks() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* ── Manage classes dialog ───────────────────────────────── */}
+      <ManageClassesDialog
+        open={manageClassesOpen}
+        onOpenChange={setManageClassesOpen}
+        classes={availableGroups}
+        defaultClass={defaultClass}
+        onSaveOrder={async (newOrder, newDef) => {
+          await updateTaskClassesOrder(newOrder, newDef);
+          void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+        }}
+        onRenameClass={async (oldName, newName) => {
+          await renameTaskClass(oldName, newName);
+          void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          if (selectedGroup === oldName) setSelectedGroup(newName);
+        }}
+        onDeleteClass={async (name) => {
+          await deleteTaskClass(name);
+          void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          if (selectedGroup === name) setSelectedGroup("All");
+        }}
+      />
     </div>
   );
 }

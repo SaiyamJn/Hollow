@@ -116,6 +116,7 @@ export default function AppShell() {
     const socket = getSocket();
     const onTasksChanged = () => {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
     };
     const onTaskDone = ({ taskId, done }: { taskId: string; done: boolean }) => {
       if (done) {

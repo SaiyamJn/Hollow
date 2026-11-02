@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Plus, Repeat } from "lucide-react";
 import clsx from "clsx";
-import { createTask, fetchTasks, updateTask } from "../lib/api";
+import { createTask, fetchTasks, updateTask, fetchTaskClasses, updateTaskClassesOrder, renameTaskClass, deleteTaskClass } from "../lib/api";
 import { dismissTaskNotification } from "../lib/notify";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent } from "../components/ui/dialog";
@@ -11,7 +11,7 @@ import { DateTimePicker } from "../components/DateTimePicker";
 import type { TaskRepeatRule } from "../lib/types";
 import { RepeatField, repeatPayload } from "../components/RepeatPanel";
 import { FocusField } from "../components/FocusField";
-import { GroupFilterBar, GroupSelector } from "../components/GroupSelector";
+import { GroupFilterBar, GroupSelector, ManageClassesDialog } from "../components/GroupSelector";
 import type { RepeatEnd } from "../lib/taskRepeat";
 import {
   FOCUS_DOT,
@@ -98,17 +98,29 @@ export default function CalendarPage() {
     };
   }, [view]);
 
+  const [manageClassesOpen, setManageClassesOpen] = useState(false);
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  const { data: classesData } = useQuery({ queryKey: ["task-classes"], queryFn: fetchTaskClasses });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+  };
+
+  const defaultClass = classesData?.defaultClass || "";
 
   const availableGroups = useMemo(() => {
-    const set = new Set<string>();
+    const configured = classesData?.classes ?? [];
+    const set = new Set<string>(configured);
+    const extra: string[] = [];
     (tasks ?? []).forEach((t) => {
       const g = t.group?.trim();
-      if (g) set.add(g);
+      if (g && !set.has(g)) {
+        set.add(g);
+        extra.push(g);
+      }
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [tasks]);
+    return [...configured, ...extra];
+  }, [classesData, tasks]);
 
   const [selectedGroup, setSelectedGroup] = useState<string>("All");
 
@@ -221,7 +233,7 @@ export default function CalendarPage() {
     setDraft({
       title: "",
       description: "",
-      group: selectedGroup !== "All" ? selectedGroup : "",
+      group: selectedGroup !== "All" ? selectedGroup : defaultClass,
       due: dateOnlyDue(day),
       focus: "none",
       repeat: null,
@@ -535,6 +547,8 @@ export default function CalendarPage() {
         groups={availableGroups}
         selected={selectedGroup}
         onSelect={setSelectedGroup}
+        onManage={() => setManageClassesOpen(true)}
+        defaultGroup={defaultClass}
         className="mb-3"
       />
 
@@ -833,6 +847,7 @@ export default function CalendarPage() {
                 value={draft.group}
                 onChange={(group) => setDraft({ ...draft, group })}
                 availableGroups={availableGroups}
+                defaultGroup={defaultClass}
               />
               <DateTimePicker
                 value={draft.due}
@@ -904,6 +919,7 @@ export default function CalendarPage() {
                 value={editing.group}
                 onChange={(group) => setEditing({ ...editing, group })}
                 availableGroups={availableGroups}
+                defaultGroup={defaultClass}
               />
               <DateTimePicker
                 value={editing.due}
@@ -966,6 +982,30 @@ export default function CalendarPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Manage classes dialog ───────────────────────────────── */}
+      <ManageClassesDialog
+        open={manageClassesOpen}
+        onOpenChange={setManageClassesOpen}
+        classes={availableGroups}
+        defaultClass={defaultClass}
+        onSaveOrder={async (newOrder, newDef) => {
+          await updateTaskClassesOrder(newOrder, newDef);
+          void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+        }}
+        onRenameClass={async (oldName, newName) => {
+          await renameTaskClass(oldName, newName);
+          void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          if (selectedGroup === oldName) setSelectedGroup(newName);
+        }}
+        onDeleteClass={async (name) => {
+          await deleteTaskClass(name);
+          void queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          if (selectedGroup === name) setSelectedGroup("All");
+        }}
+      />
     </div>
   );
 }

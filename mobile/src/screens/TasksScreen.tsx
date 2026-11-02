@@ -12,7 +12,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { createTask, createQuickNote, deleteTask, fetchTasks, updateTask } from "../lib/api";
+import { createTask, createQuickNote, deleteTask, fetchTasks, updateTask, fetchTaskClasses, updateTaskClassesOrder, renameTaskClass, deleteTaskClass } from "../lib/api";
 import { dismissTaskNotifications } from "../lib/notifications";
 import { animateListChange, animateTaskComplete } from "../lib/motion";
 import type { Task } from "../lib/types";
@@ -22,6 +22,7 @@ import EmptyState from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { formatDueLabel } from "../components/GlassDateTimePicker";
 import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
+import { ManageClassesModal } from "../components/ManageClassesModal";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { FocusDot } from "../components/FocusField";
 import { FocusBoardMobile } from "../components/TaskBoards";
@@ -107,23 +108,35 @@ export default function TasksScreen() {
   const [layout, setLayout] = useState<TasksLayout>("list");
   const [reclassTask, setReclassTask] = useState<Task | null>(null);
   const [confirmDeleteEdit, setConfirmDeleteEdit] = useState(false);
+  const [manageClassesOpen, setManageClassesOpen] = useState(false);
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  const { data: classesData } = useQuery({ queryKey: ["task-classes"], queryFn: fetchTaskClasses });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+  };
+
+  const defaultClass = classesData?.defaultClass || "";
 
   const [selectedGroup, setSelectedGroup] = useState<string>("All");
 
   const availableGroups = useMemo(() => {
-    const set = new Set<string>();
+    const configured = classesData?.classes ?? [];
+    const set = new Set<string>(configured);
+    const extra: string[] = [];
     for (const t of tasks ?? []) {
       const g = (t.group ?? "").trim();
-      if (g) set.add(g);
+      if (g && !set.has(g)) {
+        set.add(g);
+        extra.push(g);
+      }
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [tasks]);
+    return [...configured, ...extra];
+  }, [classesData, tasks]);
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
@@ -245,7 +258,7 @@ export default function TasksScreen() {
     setDraft({
       title: title.trim(),
       description: "",
-      group: selectedGroup !== "All" ? selectedGroup : "",
+      group: selectedGroup !== "All" ? selectedGroup : defaultClass,
       due: null,
       focus: "none",
       repeat: null,
@@ -364,39 +377,61 @@ export default function TasksScreen() {
               </Text>
               <Feather name="chevron-right" size={14} color={colors.textSecondary} />
             </Pressable>
-            {availableGroups.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 6, paddingVertical: 4, marginBottom: 8 }}
-              >
-                {["All", ...availableGroups].map((g) => {
-                  const active = selectedGroup === g;
-                  return (
-                    <Pressable
-                      key={g}
-                      onPress={() => setSelectedGroup(g)}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, paddingVertical: 4, marginBottom: 8 }}
+            >
+              {["All", ...availableGroups].map((g) => {
+                const active = selectedGroup === g;
+                const isDef = g !== "All" && defaultClass && g.toLowerCase() === defaultClass.toLowerCase();
+                return (
+                  <Pressable
+                    key={g}
+                    onPress={() => setSelectedGroup(g)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 999,
+                      backgroundColor: active ? colors.accentSoft : colors.surface2,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Text
                       style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 5,
-                        borderRadius: 999,
-                        backgroundColor: active ? colors.accentSoft : colors.surface2,
+                        fontSize: 12,
+                        fontWeight: active ? "700" : "500",
+                        color: active ? colors.accent : colors.textSecondary,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: active ? "700" : "500",
-                          color: active ? colors.accent : colors.textSecondary,
-                        }}
-                      >
-                        {g}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
+                      {g}
+                    </Text>
+                    {isDef && (
+                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: active ? colors.accent : colors.textSecondary }} />
+                    )}
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                onPress={() => setManageClassesOpen(true)}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 999,
+                  backgroundColor: colors.surface2,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Feather name="sliders" size={12} color={colors.textSecondary} />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: colors.textSecondary }}>
+                  Classes
+                </Text>
+              </Pressable>
+            </ScrollView>
             <GlassCard
               style={{ alignSelf: "stretch", width: "100%" }}
               contentStyle={{ paddingHorizontal: 12, paddingVertical: 2 }}
@@ -404,7 +439,15 @@ export default function TasksScreen() {
               <TextInput
                 ref={quickAddRef}
                 style={[styles.quickAdd, { color: colors.textPrimary, textAlign: "center" }]}
-                placeholder={isNarrow ? "What's next?" : "What's next? Hit return"}
+                placeholder={
+                  selectedGroup !== "All"
+                    ? `Add to "${selectedGroup}"…`
+                    : defaultClass
+                      ? `Add to "${defaultClass}"…`
+                      : isNarrow
+                        ? "What's next?"
+                        : "What's next? Hit return"
+                }
                 placeholderTextColor={colors.textSecondary}
                 value={quickAdd}
                 onChangeText={setQuickAdd}
@@ -677,6 +720,7 @@ export default function TasksScreen() {
         visible={draft !== null}
         title="New task"
         availableGroups={availableGroups}
+        defaultGroup={defaultClass}
         submitLabel={create.isPending ? "Adding…" : "Add task"}
         draft={draft}
         busy={create.isPending}
@@ -700,6 +744,7 @@ export default function TasksScreen() {
         visible={editing !== null}
         title="Edit task"
         availableGroups={availableGroups}
+        defaultGroup={defaultClass}
         submitLabel={saveEdit.isPending ? "Saving…" : "Save"}
         draft={editing}
         busy={saveEdit.isPending}
@@ -785,6 +830,26 @@ export default function TasksScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <ManageClassesModal
+        visible={manageClassesOpen}
+        classes={availableGroups}
+        defaultClass={defaultClass}
+        onClose={() => setManageClassesOpen(false)}
+        onSaveOrder={async (newOrder, newDef) => {
+          await updateTaskClassesOrder(newOrder, newDef);
+          invalidate();
+        }}
+        onRenameClass={async (oldName, newName) => {
+          await renameTaskClass(oldName, newName);
+          invalidate();
+          if (selectedGroup === oldName) setSelectedGroup(newName);
+        }}
+        onDeleteClass={async (name) => {
+          await deleteTaskClass(name);
+          invalidate();
+          if (selectedGroup === name) setSelectedGroup("All");
+        }}
+      />
     </KeyboardSafe>
   );
 }

@@ -13,11 +13,12 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { createTask, fetchTasks, updateTask } from "../lib/api";
+import { createTask, fetchTasks, updateTask, fetchTaskClasses, updateTaskClassesOrder, renameTaskClass, deleteTaskClass } from "../lib/api";
 import { dismissTaskNotifications } from "../lib/notifications";
 import type { Task } from "../lib/types";
 import { useTheme } from "../contexts/theme";
 import { TaskFormModal, formatRepeatLabel, repeatPayload, type TaskDraft } from "../components/TaskFormModal";
+import { ManageClassesModal } from "../components/ManageClassesModal";
 import { KeyboardSafe } from "../components/KeyboardSafe";
 import { useLayout } from "../lib/layout";
 import {
@@ -73,6 +74,7 @@ export default function CalendarScreen() {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
   const [editing, setEditing] = useState<EditDraft | null>(null);
+  const [manageClassesOpen, setManageClassesOpen] = useState(false);
 
   const scrollY = useRef(0);
   const listDragging = useRef(false);
@@ -80,16 +82,27 @@ export default function CalendarScreen() {
   const fade = useRef(new Animated.Value(1)).current;
 
   const { data: tasks, isLoading } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  const { data: classesData } = useQuery({ queryKey: ["task-classes"], queryFn: fetchTaskClasses });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+  };
+
+  const defaultClass = classesData?.defaultClass || "";
 
   const availableGroups = useMemo(() => {
-    const set = new Set<string>();
+    const configured = classesData?.classes ?? [];
+    const set = new Set<string>(configured);
+    const extra: string[] = [];
     for (const t of tasks ?? []) {
       const g = (t.group ?? "").trim();
-      if (g) set.add(g);
+      if (g && !set.has(g)) {
+        set.add(g);
+        extra.push(g);
+      }
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [tasks]);
+    return [...configured, ...extra];
+  }, [classesData, tasks]);
 
   const [selectedGroup, setSelectedGroup] = useState<string>("All");
 
@@ -188,7 +201,7 @@ export default function CalendarScreen() {
     setDraft({
       title: "",
       description: "",
-      group: selectedGroup !== "All" ? selectedGroup : "",
+      group: selectedGroup !== "All" ? selectedGroup : defaultClass,
       due: dateOnlyDue(day),
       focus: "none",
       repeat: null,
@@ -340,6 +353,7 @@ export default function CalendarScreen() {
         >
           {["All", ...availableGroups].map((g) => {
             const active = selectedGroup === g;
+            const isDef = g !== "All" && defaultClass && g.toLowerCase() === defaultClass.toLowerCase();
             return (
               <Pressable
                 key={g}
@@ -349,6 +363,9 @@ export default function CalendarScreen() {
                   paddingVertical: 5,
                   borderRadius: 999,
                   backgroundColor: active ? colors.accentSoft : colors.surface2,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
                 <Text
@@ -360,9 +377,29 @@ export default function CalendarScreen() {
                 >
                   {g}
                 </Text>
+                {isDef && (
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: active ? colors.accent : colors.textSecondary }} />
+                )}
               </Pressable>
             );
           })}
+          <Pressable
+            onPress={() => setManageClassesOpen(true)}
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 999,
+              backgroundColor: colors.surface2,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <Feather name="sliders" size={12} color={colors.textSecondary} />
+            <Text style={{ fontSize: 12, fontWeight: "500", color: colors.textSecondary }}>
+              Classes
+            </Text>
+          </Pressable>
         </ScrollView>
       )}
 
@@ -687,6 +724,7 @@ export default function CalendarScreen() {
         visible={draft !== null}
         title="New task"
         availableGroups={availableGroups}
+        defaultGroup={defaultClass}
         submitLabel={create.isPending ? "Adding…" : "Add task"}
         draft={draft}
         busy={create.isPending}
@@ -710,6 +748,7 @@ export default function CalendarScreen() {
         visible={editing !== null}
         title="Edit task"
         availableGroups={availableGroups}
+        defaultGroup={defaultClass}
         submitLabel={update.isPending ? "Saving…" : "Save"}
         draft={editing}
         busy={update.isPending}
@@ -728,6 +767,27 @@ export default function CalendarScreen() {
               ...repeatPayload(editing),
             },
           });
+        }}
+      />
+
+      <ManageClassesModal
+        visible={manageClassesOpen}
+        classes={availableGroups}
+        defaultClass={defaultClass}
+        onClose={() => setManageClassesOpen(false)}
+        onSaveOrder={async (newOrder, newDef) => {
+          await updateTaskClassesOrder(newOrder, newDef);
+          invalidate();
+        }}
+        onRenameClass={async (oldName, newName) => {
+          await renameTaskClass(oldName, newName);
+          invalidate();
+          if (selectedGroup === oldName) setSelectedGroup(newName);
+        }}
+        onDeleteClass={async (name) => {
+          await deleteTaskClass(name);
+          invalidate();
+          if (selectedGroup === name) setSelectedGroup("All");
         }}
       />
     </KeyboardSafe>

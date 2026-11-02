@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Pressable,
@@ -18,6 +18,7 @@ import {
   fetchNotebooks,
   fetchRecentPages,
   fetchTasks,
+  fetchTaskClasses,
   openDailyNote,
   unlockNotebook,
   unlockSection,
@@ -82,7 +83,24 @@ export default function HomeScreen({ navigation }: any) {
     refetch,
   } = useQuery({ queryKey: ["recent-pages"], queryFn: () => fetchRecentPages(8) });
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
+  const { data: classesData } = useQuery({ queryKey: ["task-classes"], queryFn: fetchTaskClasses });
   const { data: notebooks } = useQuery({ queryKey: ["notebooks"], queryFn: fetchNotebooks });
+
+  const defaultClass = classesData?.defaultClass || "";
+
+  const availableGroups = useMemo(() => {
+    const configured = classesData?.classes ?? [];
+    const set = new Set<string>(configured);
+    const extra: string[] = [];
+    for (const t of tasks ?? []) {
+      const g = (t.group ?? "").trim();
+      if (g && !set.has(g)) {
+        set.add(g);
+        extra.push(g);
+      }
+    }
+    return [...configured, ...extra];
+  }, [classesData, tasks]);
   const [unlockTarget, setUnlockTarget] = useState<{
     type: "notebook" | "section";
     id: string;
@@ -618,6 +636,7 @@ export default function HomeScreen({ navigation }: any) {
             setTaskDraft({
               title: "",
               description: "",
+              group: defaultClass,
               due: null,
               focus: "none",
               repeat: null,
@@ -635,6 +654,8 @@ export default function HomeScreen({ navigation }: any) {
     <TaskFormModal
       visible={taskDraft !== null}
       title="New task"
+      availableGroups={availableGroups}
+      defaultGroup={defaultClass}
       submitLabel={taskBusy ? "Adding…" : "Add task"}
       draft={taskDraft}
       busy={taskBusy}
@@ -648,11 +669,13 @@ export default function HomeScreen({ navigation }: any) {
           await createTask({
             title: taskDraft.title.trim(),
             description: taskDraft.description.trim() || undefined,
+            group: taskDraft.group?.trim() || undefined,
             dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
             focus: taskDraft.focus ?? "none",
             ...repeatPayload(taskDraft),
           });
           queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["task-classes"] });
           setTaskDraft(null);
         } finally {
           setTaskBusy(false);

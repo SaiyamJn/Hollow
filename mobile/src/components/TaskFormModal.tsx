@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -134,6 +134,7 @@ export function TaskFormModal({
   busy,
   autoFocus = false,
   availableGroups,
+  defaultGroup,
   onClose,
   onChange,
   onSubmit,
@@ -146,6 +147,7 @@ export function TaskFormModal({
   busy: boolean;
   autoFocus?: boolean;
   availableGroups?: string[];
+  defaultGroup?: string;
   onClose: () => void;
   onChange: (next: TaskDraft | null) => void;
   onSubmit: () => void;
@@ -158,6 +160,7 @@ export function TaskFormModal({
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const [untilOpen, setUntilOpen] = useState(false);
+  const [customGroupOpen, setCustomGroupOpen] = useState(false);
   const [dueDraft, setDueDraft] = useState<Date | null>(null);
   const [untilDraft, setUntilDraft] = useState<Date | null>(null);
 
@@ -167,12 +170,21 @@ export function TaskFormModal({
       setRepeatOpen(false);
       setFocusOpen(false);
       setUntilOpen(false);
+      setCustomGroupOpen(false);
     }
   }, [visible]);
 
   if (!draft) return null;
   const current = draft;
   const focus = normalizeFocus(current.focus);
+  const displayGroups = useMemo(() => {
+    const list = [...(availableGroups ?? [])];
+    const cur = (current.group ?? "").trim();
+    if (cur && !list.some((g) => g.toLowerCase() === cur.toLowerCase())) {
+      list.push(cur);
+    }
+    return list;
+  }, [availableGroups, current.group]);
   const { padTop, padBottom, maxCardH } = overlayPads(insets, height);
 
   function openDuePicker() {
@@ -257,50 +269,148 @@ export function TaskFormModal({
                 ]}
               />
 
-              <TextInput
-                value={current.group ?? ""}
-                onChangeText={(group) => onChange({ ...current, group })}
-                placeholder="Group / Class (e.g. Work, School, Personal)"
-                placeholderTextColor={colors.textSecondary}
-                style={[
-                  styles.input,
-                  {
-                    color: colors.textPrimary,
-                    borderColor: colors.glassBorder,
-                    backgroundColor: colors.glass,
-                    marginBottom: availableGroups && availableGroups.length > 0 ? 6 : 10,
-                  },
-                ]}
-              />
-              {availableGroups && availableGroups.length > 0 && (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-                  {availableGroups.map((g) => {
+              {/* Class / Group selection */}
+              <View style={{ marginBottom: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: colors.textSecondary, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                    Class / Group
+                  </Text>
+                  {(current.group ?? "").trim() ? (
+                    <Pressable onPress={() => onChange({ ...current, group: "" })} hitSlop={6}>
+                      <Text style={{ fontSize: 11, color: colors.accent, fontWeight: "600" }}>Clear</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, paddingVertical: 2 }}
+                >
+                  <Pressable
+                    onPress={() => {
+                      setCustomGroupOpen(false);
+                      onChange({ ...current, group: "" });
+                    }}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                      backgroundColor: !(current.group ?? "").trim() ? colors.accentSoft : colors.surface2,
+                      borderWidth: StyleSheet.hairlineWidth,
+                      borderColor: !(current.group ?? "").trim() ? colors.accent : "transparent",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: !(current.group ?? "").trim() ? "700" : "500",
+                        color: !(current.group ?? "").trim() ? colors.accent : colors.textSecondary,
+                      }}
+                    >
+                      None
+                    </Text>
+                  </Pressable>
+
+                  {displayGroups.map((g: string) => {
                     const active = (current.group ?? "").trim().toLowerCase() === g.toLowerCase();
+                    const isDef = defaultGroup && defaultGroup.toLowerCase() === g.toLowerCase();
                     return (
                       <Pressable
                         key={g}
-                        onPress={() => onChange({ ...current, group: active ? "" : g })}
+                        onPress={() => {
+                          setCustomGroupOpen(false);
+                          onChange({ ...current, group: active ? "" : g });
+                        }}
                         style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
                           borderRadius: 8,
                           backgroundColor: active ? colors.accentSoft : colors.surface2,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: active ? colors.accent : "transparent",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
                         }}
                       >
                         <Text
                           style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: active ? "700" : "500",
                             color: active ? colors.accent : colors.textSecondary,
                           }}
                         >
                           {g}
                         </Text>
+                        {isDef && (
+                          <View
+                            style={{
+                              width: 4,
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor: active ? colors.accent : colors.textSecondary,
+                            }}
+                          />
+                        )}
                       </Pressable>
                     );
                   })}
-                </View>
-              )}
+
+                  <Pressable
+                    onPress={() => setCustomGroupOpen((v) => !v)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                      backgroundColor: customGroupOpen ? colors.accentSoft : colors.surface2,
+                      borderWidth: StyleSheet.hairlineWidth,
+                      borderColor: customGroupOpen ? colors.accent : colors.glassBorder,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Feather
+                      name={customGroupOpen ? "x" : "plus"}
+                      size={12}
+                      color={customGroupOpen ? colors.accent : colors.textSecondary}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: customGroupOpen ? "700" : "500",
+                        color: customGroupOpen ? colors.accent : colors.textSecondary,
+                      }}
+                    >
+                      {customGroupOpen ? "Cancel" : "New"}
+                    </Text>
+                  </Pressable>
+                </ScrollView>
+
+                {customGroupOpen && (
+                  <View style={{ marginTop: 8 }}>
+                    <TextInput
+                      autoFocus
+                      value={current.group ?? ""}
+                      onChangeText={(group) => onChange({ ...current, group })}
+                      placeholder="Type class name…"
+                      placeholderTextColor={colors.textSecondary}
+                      style={[
+                        styles.input,
+                        {
+                          color: colors.textPrimary,
+                          borderColor: colors.accent,
+                          backgroundColor: colors.glass,
+                          marginBottom: 0,
+                          height: 38,
+                          fontSize: 13,
+                        },
+                      ]}
+                    />
+                  </View>
+                )}
+              </View>
 
               <Pressable
                 onPress={openDuePicker}

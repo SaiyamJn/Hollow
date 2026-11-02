@@ -201,6 +201,123 @@ router.get("/", async (req: AuthedRequest, res) => {
   res.json(publicList);
 });
 
+async function getUserPreferences(userId: string): Promise<Record<string, any>> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { preferences: true },
+  });
+  if (!user?.preferences) return {};
+  try {
+    return JSON.parse(user.preferences);
+  } catch {
+    return {};
+  }
+}
+
+async function saveUserPreferences(userId: string, prefs: Record<string, any>) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { preferences: JSON.stringify(prefs) },
+  });
+}
+
+router.get("/classes", async (req: AuthedRequest, res) => {
+  const prefs = await getUserPreferences(req.userId!);
+  const taskGroups: string[] = Array.isArray(prefs.taskGroups) ? [...prefs.taskGroups] : [];
+  const defaultClass: string = typeof prefs.defaultTaskGroup === "string" ? prefs.defaultTaskGroup : "";
+
+  // Also discover distinct groups present in user's non-deleted tasks
+  const tasks = await prisma.task.findMany({
+    where: { ownerId: req.userId!, deletedAt: null, group: { not: "" } },
+    select: { group: true },
+    distinct: ["group"],
+  });
+
+  const set = new Set<string>(taskGroups);
+  for (const t of tasks) {
+    const g = (t.group || "").trim();
+    if (g && !set.has(g)) {
+      taskGroups.push(g);
+      set.add(g);
+    }
+  }
+
+  res.json({ classes: taskGroups, defaultClass });
+});
+
+router.put("/classes/order", async (req: AuthedRequest, res) => {
+  const { classes, defaultClass } = req.body ?? {};
+  if (!Array.isArray(classes)) {
+    return res.status(400).json({ error: "classes must be an array of strings" });
+  }
+  const cleanClasses = classes.map((c: any) => String(c).trim()).filter(Boolean);
+  const prefs = await getUserPreferences(req.userId!);
+  prefs.taskGroups = cleanClasses;
+  if (defaultClass !== undefined) {
+    prefs.defaultTaskGroup = String(defaultClass).trim();
+  }
+  await saveUserPreferences(req.userId!, prefs);
+  emitToUser(req.userId!, "tasks:changed", {
+    action: "classes_reordered",
+    classes: cleanClasses,
+    defaultClass: prefs.defaultTaskGroup,
+  });
+  res.json({ ok: true, classes: cleanClasses, defaultClass: prefs.defaultTaskGroup || "" });
+});
+
+router.post("/classes/rename", async (req: AuthedRequest, res) => {
+  const oldName = String(req.body?.oldName || "").trim();
+  const newName = String(req.body?.newName || "").trim();
+  if (!oldName || !newName) {
+    return res.status(400).json({ error: "oldName and newName are required" });
+  }
+  if (oldName === newName) {
+    return res.json({ ok: true, oldName, newName });
+  }
+
+  await prisma.task.updateMany({
+    where: { ownerId: req.userId!, group: oldName },
+    data: { group: newName },
+  });
+
+  const prefs = await getUserPreferences(req.userId!);
+  if (Array.isArray(prefs.taskGroups)) {
+    prefs.taskGroups = prefs.taskGroups.map((g: string) => (g === oldName ? newName : g));
+    prefs.taskGroups = Array.from(new Set(prefs.taskGroups));
+  }
+  if (prefs.defaultTaskGroup === oldName) {
+    prefs.defaultTaskGroup = newName;
+  }
+  await saveUserPreferences(req.userId!, prefs);
+
+  emitToUser(req.userId!, "tasks:changed", { action: "class_renamed", oldName, newName });
+  res.json({ ok: true, oldName, newName });
+});
+
+router.post("/classes/delete", async (req: AuthedRequest, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) {
+    return res.status(400).json({ error: "name is required" });
+  }
+
+  await prisma.task.updateMany({
+    where: { ownerId: req.userId!, group: name },
+    data: { group: "" },
+  });
+
+  const prefs = await getUserPreferences(req.userId!);
+  if (Array.isArray(prefs.taskGroups)) {
+    prefs.taskGroups = prefs.taskGroups.filter((g: string) => g !== name);
+  }
+  if (prefs.defaultTaskGroup === name) {
+    prefs.defaultTaskGroup = "";
+  }
+  await saveUserPreferences(req.userId!, prefs);
+
+  emitToUser(req.userId!, "tasks:changed", { action: "class_deleted", name });
+  res.json({ ok: true, name });
+});
+
 router.get("/:id", async (req: AuthedRequest, res) => {
   const task = await prisma.task.findUnique({
     where: { id: req.params.id },

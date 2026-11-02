@@ -462,6 +462,39 @@ export async function restoreTask(id: string) {
   return data;
 }
 
+export interface TaskClassesData {
+  classes: string[];
+  defaultClass: string;
+}
+
+export async function fetchTaskClasses(): Promise<TaskClassesData> {
+  const { data } = await api.get<TaskClassesData>("/tasks/classes");
+  return data;
+}
+
+export async function updateTaskClassesOrder(classes: string[], defaultClass?: string) {
+  const { data } = await api.put<{ ok: boolean; classes: string[]; defaultClass: string }>("/tasks/classes/order", {
+    classes,
+    defaultClass,
+  });
+  return data;
+}
+
+export async function renameTaskClass(oldName: string, newName: string) {
+  const { data } = await api.post<{ ok: boolean; oldName: string; newName: string }>("/tasks/classes/rename", {
+    oldName,
+    newName,
+  });
+  return data;
+}
+
+export async function deleteTaskClass(name: string) {
+  const { data } = await api.post<{ ok: boolean; name: string }>("/tasks/classes/delete", {
+    name,
+  });
+  return data;
+}
+
 interface HealthInfo {
   ok: boolean;
   name?: string;
