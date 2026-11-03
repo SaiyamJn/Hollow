@@ -12,6 +12,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { createTask, createQuickNote, deleteTask, fetchTasks, updateTask, fetchTaskClasses, updateTaskClassesOrder, renameTaskClass, deleteTaskClass } from "../lib/api";
 import { dismissTaskNotifications } from "../lib/notifications";
 import { animateListChange, animateTaskComplete } from "../lib/motion";
@@ -334,52 +335,55 @@ export default function TasksScreen() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={{ marginBottom: 12 }}>
-            <View style={styles.layoutRow}>
-              {LAYOUTS.map((l) => {
-                const active = layout === l.id;
-                return (
-                  <Pressable
-                    key={l.id}
-                    onPress={() => setLayout(l.id)}
-                    style={[
-                      styles.layoutChip,
-                      {
-                        borderColor: active ? colors.accent : colors.glassBorder,
-                        backgroundColor: active ? colors.accentSoft : colors.glass,
-                      },
-                    ]}
-                  >
-                    <Feather name={l.icon} size={16} color={active ? colors.accent : colors.textSecondary} />
-                    <Text
-                      style={{
-                        color: active ? colors.accent : colors.textSecondary,
-                        fontSize: 14,
-                        fontWeight: "700",
-                      }}
+          <View style={{ marginBottom: 10 }}>
+            {/* Minimal top bar: segmented layout switcher + recycle bin */}
+            <View style={styles.topControlRow}>
+              <View style={[styles.segmentedPill, { backgroundColor: colors.surface1, borderColor: colors.glassBorder }]}>
+                {LAYOUTS.map((l) => {
+                  const active = layout === l.id;
+                  return (
+                    <Pressable
+                      key={l.id}
+                      onPress={() => setLayout(l.id)}
+                      style={[
+                        styles.segmentBtn,
+                        active && { backgroundColor: colors.accentSoft },
+                      ]}
                     >
-                      {l.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Feather name={l.icon} size={13} color={active ? colors.accent : colors.textSecondary} />
+                      <Text
+                        style={{
+                          color: active ? colors.accent : colors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: active ? "700" : "500",
+                        }}
+                      >
+                        {l.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                onPress={() => navigation.navigate("RecycleBin", { tab: "tasks" })}
+                style={[
+                  styles.compactBinBtn,
+                  { backgroundColor: colors.surface1, borderColor: colors.glassBorder },
+                ]}
+              >
+                <Feather name="trash-2" size={13} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: "500" }}>
+                  Recycle bin
+                </Text>
+              </Pressable>
             </View>
-            <Pressable
-              onPress={() => navigation.navigate("RecycleBin", { tab: "tasks" })}
-              style={[
-                styles.binChip,
-                { borderColor: colors.border, backgroundColor: colors.surface1 },
-              ]}
-            >
-              <Feather name="trash-2" size={14} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
-                Recycle bin
-              </Text>
-              <Feather name="chevron-right" size={14} color={colors.textSecondary} />
-            </Pressable>
+
+            {/* Horizontal classes chips row with long-press reorder support */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
               contentContainerStyle={{ gap: 6, paddingVertical: 4, marginBottom: 8 }}
             >
               {["All", ...availableGroups].map((g) => {
@@ -389,6 +393,13 @@ export default function TasksScreen() {
                   <Pressable
                     key={g}
                     onPress={() => setSelectedGroup(g)}
+                    onLongPress={() => {
+                      if (g !== "All") {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setManageClassesOpen(true);
+                      }
+                    }}
+                    delayLongPress={280}
                     style={{
                       paddingHorizontal: 12,
                       paddingVertical: 5,
@@ -855,32 +866,35 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  layoutRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-    justifyContent: "center",
-  },
-  layoutChip: {
+  topControlRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
-  binChip: {
+  segmentedPill: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
+    padding: 2,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 12,
+  },
+  segmentBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  compactBinBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   quickAdd: { paddingVertical: 10, fontSize: 14 },
   groupHeader: {

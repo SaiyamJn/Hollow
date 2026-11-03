@@ -375,6 +375,13 @@ export default function CalendarScreen() {
                 <Pressable
                   key={g}
                   onPress={() => setSelectedGroup(g)}
+                  onLongPress={() => {
+                    if (g !== "All") {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setManageClassesOpen(true);
+                    }
+                  }}
+                  delayLongPress={280}
                   style={{
                     paddingHorizontal: 12,
                     paddingVertical: 5,

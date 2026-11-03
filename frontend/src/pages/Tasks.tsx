@@ -360,54 +360,56 @@ export default function Tasks() {
       )}
     >
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-5">
         <h1 className="text-xl font-medium">Tasks</h1>
         {tasks && tasks.length > 0 && (
-          <p className="text-sm text-secondary mt-1">
-            {totalOpen} open{completed.length > 0 ? ` · ${completed.length} completed` : ""}
-          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-secondary mt-1">
+            <span>
+              {totalOpen} open{completed.length > 0 ? ` · ${completed.length} completed` : ""}
+            </span>
+            <span className="opacity-30">·</span>
+            <Link
+              to="/recycle-bin?tab=tasks"
+              className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+              title="Open recycle bin"
+            >
+              <Trash2 size={12} />
+              <span>Recycle bin</span>
+            </Link>
+          </div>
         )}
       </div>
 
-      {/* ── Quick links ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-center gap-2 mb-5">
-        <Link
-          to="/recycle-bin?tab=tasks"
-          className="inline-flex items-center gap-1.5 rounded-full chip-idle px-3 py-1.5 text-xs font-semibold hover:text-primary transition-colors"
-        >
-          <Trash2 size={13} />
-          Recycle bin
-        </Link>
-      </div>
+      {/* ── Minimalist Unified Toolbar ─────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-center gap-2.5 mb-6">
+        {/* Layout switcher */}
+        <div className="inline-flex items-center p-0.5 rounded-full bg-surface-1 border border-border/50 shadow-xs">
+          {LAYOUTS.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => setLayout(l.id)}
+              className={clsx(
+                "px-2.5 py-1 rounded-full text-xs font-medium transition-colors",
+                layout === l.id
+                  ? "bg-accent-soft text-accent font-semibold shadow-xs"
+                  : "text-secondary hover:text-primary hover:bg-surface-2/60"
+              )}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Layout switcher */}
-      <div className="flex justify-center gap-1 mb-5">
-        {LAYOUTS.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            onClick={() => setLayout(l.id)}
-            className={clsx(
-              "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-              layout === l.id
-                ? "bg-accent-soft text-accent"
-                : "text-secondary hover:text-primary hover:bg-surface-2"
-            )}
-          >
-            {l.label}
-          </button>
-        ))}
+        {/* Group / Class filter */}
+        <GroupFilterBar
+          groups={availableGroups}
+          selected={selectedGroup}
+          onSelect={setSelectedGroup}
+          onManage={() => setManageClassesOpen(true)}
+          defaultGroup={defaultClass}
+        />
       </div>
-
-      {/* Group / Class filter */}
-      <GroupFilterBar
-        groups={availableGroups}
-        selected={selectedGroup}
-        onSelect={setSelectedGroup}
-        onManage={() => setManageClassesOpen(true)}
-        defaultGroup={defaultClass}
-        className="mb-5"
-      />
 
       <div
         className={clsx(

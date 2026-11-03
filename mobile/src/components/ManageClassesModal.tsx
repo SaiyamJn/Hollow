@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -9,14 +12,22 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/theme";
 import { useLayout } from "../lib/layout";
 import { GlassCard } from "./GlassCard";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const ROW_STEP = 52;
 
 export type ManageClassesModalProps = {
   visible: boolean;
@@ -50,23 +61,85 @@ export function ManageClassesModal({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Drag-and-drop state
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const dragY = useRef(new Animated.Value(0)).current;
+  const dragScale = useRef(new Animated.Value(1)).current;
+
+  const draggingIndexRef = useRef<number | null>(null);
+  const hoverIndexRef = useRef<number | null>(null);
+  const currentClassesRef = useRef<string[]>(currentClasses);
+  currentClassesRef.current = currentClasses;
+
   useEffect(() => {
     setCurrentClasses(classes);
     setCurDefault(defaultClass);
     setEditingIndex(null);
     setConfirmDelete(null);
+    setDraggingIndex(null);
+    setHoverIndex(null);
+    draggingIndexRef.current = null;
+    hoverIndexRef.current = null;
   }, [classes, defaultClass, visible]);
 
-  async function moveClass(index: number, direction: "up" | "down") {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= currentClasses.length) return;
-    const next = [...currentClasses];
-    const [moved] = next.splice(index, 1);
-    next.splice(targetIndex, 0, moved);
-    setCurrentClasses(next);
-    try {
-      await onSaveOrder(next, curDefault);
-    } catch {}
+  function startDrag(idx: number) {
+    if (editingIndex !== null || currentClasses.length <= 1) return;
+    draggingIndexRef.current = idx;
+    hoverIndexRef.current = idx;
+    setDraggingIndex(idx);
+    setHoverIndex(idx);
+    dragY.setValue(0);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.spring(dragScale, {
+      toValue: 1.04,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 130,
+    }).start();
+  }
+
+  function onDragMove(dy: number) {
+    if (draggingIndexRef.current === null) return;
+    dragY.setValue(dy);
+    const fromIdx = draggingIndexRef.current;
+    const diff = Math.round(dy / ROW_STEP);
+    const targetIdx = Math.max(0, Math.min(currentClassesRef.current.length - 1, fromIdx + diff));
+
+    if (targetIdx !== hoverIndexRef.current) {
+      hoverIndexRef.current = targetIdx;
+      setHoverIndex(targetIdx);
+      void Haptics.selectionAsync();
+      try {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      } catch {}
+    }
+  }
+
+  function endDrag() {
+    const fromIdx = draggingIndexRef.current;
+    const toIdx = hoverIndexRef.current;
+
+    Animated.spring(dragScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+
+    if (fromIdx !== null && toIdx !== null && fromIdx !== toIdx) {
+      const next = [...currentClassesRef.current];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      setCurrentClasses(next);
+      void onSaveOrder(next, curDefault);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
+    draggingIndexRef.current = null;
+    hoverIndexRef.current = null;
+    setDraggingIndex(null);
+    setHoverIndex(null);
+    dragY.setValue(0);
   }
 
   async function toggleDefault(name: string) {
@@ -152,7 +225,7 @@ export function ManageClassesModal({
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>Manage Classes</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Reorder, rename, delete, or choose a default class.
+                Hold & drag to rearrange · Set default, rename, or delete
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
@@ -192,6 +265,7 @@ export function ManageClassesModal({
           {/* Classes list */}
           <ScrollView
             style={{ maxHeight: maxCardH - 170 }}
+            scrollEnabled={draggingIndex === null}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -205,124 +279,48 @@ export function ManageClassesModal({
               currentClasses.map((cls, idx) => {
                 const isDef = curDefault.toLowerCase() === cls.toLowerCase();
                 const isEditing = editingIndex === idx;
+                const isDragging = draggingIndex === idx;
+
+                let offsetY = 0;
+                if (draggingIndex !== null && hoverIndex !== null && !isDragging) {
+                  if (draggingIndex < hoverIndex) {
+                    if (idx > draggingIndex && idx <= hoverIndex) {
+                      offsetY = -ROW_STEP;
+                    }
+                  } else if (draggingIndex > hoverIndex) {
+                    if (idx >= hoverIndex && idx < draggingIndex) {
+                      offsetY = ROW_STEP;
+                    }
+                  }
+                }
 
                 return (
-                  <View
+                  <ClassRowItem
                     key={cls}
-                    style={[
-                      styles.row,
-                      {
-                        backgroundColor: colors.surface2,
-                        borderColor: isDef ? `${colors.accent}40` : "transparent",
-                      },
-                    ]}
-                  >
-                    {/* Up / Down reorder arrows */}
-                    <View style={styles.reorderCol}>
-                      <Pressable
-                        onPress={() => moveClass(idx, "up")}
-                        disabled={idx === 0}
-                        hitSlop={4}
-                        style={{ opacity: idx === 0 ? 0.2 : 0.8 }}
-                      >
-                        <Feather name="chevron-up" size={14} color={colors.textPrimary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => moveClass(idx, "down")}
-                        disabled={idx === currentClasses.length - 1}
-                        hitSlop={4}
-                        style={{ opacity: idx === currentClasses.length - 1 ? 0.2 : 0.8 }}
-                      >
-                        <Feather name="chevron-down" size={14} color={colors.textPrimary} />
-                      </Pressable>
-                    </View>
-
-                    {/* Class name or inline edit */}
-                    <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 8 }}>
-                      {isEditing ? (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <TextInput
-                            autoFocus
-                            value={editingValue}
-                            onChangeText={setEditingValue}
-                            style={[
-                              styles.inlineInput,
-                              {
-                                color: colors.textPrimary,
-                                borderColor: colors.accent,
-                                backgroundColor: colors.glass,
-                              },
-                            ]}
-                          />
-                          <Pressable
-                            onPress={() => handleRename(cls)}
-                            disabled={busy}
-                            hitSlop={4}
-                            style={[styles.actionIcon, { backgroundColor: colors.accentSoft }]}
-                          >
-                            <Feather name="check" size={14} color={colors.accent} />
-                          </Pressable>
-                          <Pressable
-                            onPress={() => setEditingIndex(null)}
-                            hitSlop={4}
-                            style={styles.actionIcon}
-                          >
-                            <Feather name="x" size={14} color={colors.textSecondary} />
-                          </Pressable>
-                        </View>
-                      ) : (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text
-                            numberOfLines={1}
-                            style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary, flexShrink: 1 }}
-                          >
-                            {cls}
-                          </Text>
-                          {isDef && (
-                            <View style={[styles.defaultBadge, { backgroundColor: colors.accentSoft }]}>
-                              <Text style={{ fontSize: 9, fontWeight: "700", color: colors.accent, letterSpacing: 0.5 }}>
-                                DEFAULT
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Action buttons: default star, edit, delete */}
-                    {!isEditing && (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <Pressable
-                          onPress={() => toggleDefault(cls)}
-                          hitSlop={6}
-                          style={styles.actionIcon}
-                        >
-                          <Feather
-                            name="star"
-                            size={14}
-                            color={isDef ? colors.accent : colors.textSecondary}
-                          />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            setEditingIndex(idx);
-                            setEditingValue(cls);
-                          }}
-                          hitSlop={6}
-                          style={styles.actionIcon}
-                        >
-                          <Feather name="edit-2" size={13} color={colors.textSecondary} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setConfirmDelete(cls)}
-                          hitSlop={6}
-                          style={styles.actionIcon}
-                        >
-                          <Feather name="trash-2" size={13} color={colors.danger} />
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
+                    cls={cls}
+                    idx={idx}
+                    isDef={isDef}
+                    isEditing={isEditing}
+                    isDragging={isDragging}
+                    offsetY={offsetY}
+                    dragY={dragY}
+                    dragScale={dragScale}
+                    onStartDrag={startDrag}
+                    onMoveDrag={onDragMove}
+                    onEndDrag={endDrag}
+                    onToggleDefault={() => toggleDefault(cls)}
+                    onStartEdit={() => {
+                      setEditingIndex(idx);
+                      setEditingValue(cls);
+                    }}
+                    onConfirmDelete={() => setConfirmDelete(cls)}
+                    editingValue={editingValue}
+                    setEditingValue={setEditingValue}
+                    onRename={() => handleRename(cls)}
+                    onCancelEdit={() => setEditingIndex(null)}
+                    busy={busy}
+                    colors={colors}
+                  />
                 );
               })
             )}
@@ -370,6 +368,219 @@ export function ManageClassesModal({
   );
 }
 
+function ClassRowItem({
+  cls,
+  idx,
+  isDef,
+  isEditing,
+  isDragging,
+  offsetY,
+  dragY,
+  dragScale,
+  onStartDrag,
+  onMoveDrag,
+  onEndDrag,
+  onToggleDefault,
+  onStartEdit,
+  onConfirmDelete,
+  editingValue,
+  setEditingValue,
+  onRename,
+  onCancelEdit,
+  busy,
+  colors,
+}: {
+  cls: string;
+  idx: number;
+  isDef: boolean;
+  isEditing: boolean;
+  isDragging: boolean;
+  offsetY: number;
+  dragY: Animated.Value;
+  dragScale: Animated.Value;
+  onStartDrag: (idx: number) => void;
+  onMoveDrag: (dy: number) => void;
+  onEndDrag: () => void;
+  onToggleDefault: () => void;
+  onStartEdit: () => void;
+  onConfirmDelete: () => void;
+  editingValue: string;
+  setEditingValue: (v: string) => void;
+  onRename: () => void;
+  onCancelEdit: () => void;
+  busy: boolean;
+  colors: ReturnType<typeof useTheme>["colors"];
+}) {
+  const gripResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !isEditing,
+        onStartShouldSetPanResponderCapture: () => !isEditing,
+        onMoveShouldSetPanResponder: () => !isEditing,
+        onMoveShouldSetPanResponderCapture: () => !isEditing,
+        onPanResponderGrant: () => {
+          onStartDrag(idx);
+        },
+        onPanResponderMove: (_, g) => {
+          onMoveDrag(g.dy);
+        },
+        onPanResponderRelease: () => {
+          onEndDrag();
+        },
+        onPanResponderTerminate: () => {
+          onEndDrag();
+        },
+      }),
+    [idx, isEditing, onStartDrag, onMoveDrag, onEndDrag]
+  );
+
+  const rowResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) => {
+          if (isEditing) return false;
+          return Math.abs(g.dy) > 10;
+        },
+        onPanResponderGrant: () => {
+          onStartDrag(idx);
+        },
+        onPanResponderMove: (_, g) => {
+          onMoveDrag(g.dy);
+        },
+        onPanResponderRelease: () => {
+          onEndDrag();
+        },
+        onPanResponderTerminate: () => {
+          onEndDrag();
+        },
+      }),
+    [idx, isEditing, onStartDrag, onMoveDrag, onEndDrag]
+  );
+
+  return (
+    <Animated.View
+      {...(isEditing ? {} : rowResponder.panHandlers)}
+      style={[
+        styles.row,
+        {
+          backgroundColor: isDragging ? colors.surface1 : colors.surface2,
+          borderColor: isDragging
+            ? colors.accent
+            : isDef
+              ? `${colors.accent}40`
+              : colors.glassBorder,
+          zIndex: isDragging ? 999 : 1,
+          elevation: isDragging ? 8 : 0,
+          shadowColor: isDragging ? "#000" : "transparent",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: isDragging ? 0.35 : 0,
+          shadowRadius: 8,
+          transform: isDragging
+            ? [{ translateY: dragY }, { scale: dragScale }]
+            : [{ translateY: offsetY }],
+        },
+      ]}
+    >
+      <Pressable
+        onLongPress={() => onStartDrag(idx)}
+        delayLongPress={220}
+        style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+      >
+        {/* Drag handle */}
+        {!isEditing && (
+          <View {...gripResponder.panHandlers} style={styles.dragHandle} hitSlop={6}>
+            <Feather
+              name="menu"
+              size={15}
+              color={isDragging ? colors.accent : colors.textSecondary}
+            />
+          </View>
+        )}
+
+        {/* Class name or inline edit */}
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+          {isEditing ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <TextInput
+                autoFocus
+                value={editingValue}
+                onChangeText={setEditingValue}
+                style={[
+                  styles.inlineInput,
+                  {
+                    color: colors.textPrimary,
+                    borderColor: colors.accent,
+                    backgroundColor: colors.glass,
+                  },
+                ]}
+              />
+              <Pressable
+                onPress={onRename}
+                disabled={busy}
+                hitSlop={4}
+                style={[styles.actionIcon, { backgroundColor: colors.accentSoft }]}
+              >
+                <Feather name="check" size={14} color={colors.accent} />
+              </Pressable>
+              <Pressable onPress={onCancelEdit} hitSlop={4} style={styles.actionIcon}>
+                <Feather name="x" size={14} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary, flexShrink: 1 }}
+              >
+                {cls}
+              </Text>
+              {isDef && (
+                <View style={[styles.defaultBadge, { backgroundColor: colors.accentSoft }]}>
+                  <Text style={{ fontSize: 9, fontWeight: "700", color: colors.accent, letterSpacing: 0.5 }}>
+                    DEFAULT
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Actions: default star, rename, delete */}
+        {!isEditing && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Pressable
+              onPress={onToggleDefault}
+              hitSlop={6}
+              style={styles.actionIcon}
+            >
+              <Feather
+                name="star"
+                size={14}
+                color={isDef ? colors.accent : colors.textSecondary}
+              />
+            </Pressable>
+            <Pressable
+              onPress={onStartEdit}
+              hitSlop={6}
+              style={styles.actionIcon}
+            >
+              <Feather name="edit-2" size={13} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={onConfirmDelete}
+              hitSlop={6}
+              style={styles.actionIcon}
+            >
+              <Feather name="trash-2" size={13} color={colors.danger} />
+            </Pressable>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -407,17 +618,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 7,
-    paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 6,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
   },
-  reorderCol: {
-    flexDirection: "column",
-    gap: 2,
+  dragHandle: {
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    justifyContent: "center",
     alignItems: "center",
   },
   inlineInput: {
@@ -429,12 +638,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   actionIcon: {
-    padding: 5,
+    padding: 6,
     borderRadius: 6,
   },
   defaultBadge: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 1.5,
     borderRadius: 6,
   },
   addFooter: {

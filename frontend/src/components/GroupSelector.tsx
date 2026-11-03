@@ -1,6 +1,6 @@
 import { useEffect, useState, KeyboardEvent } from "react";
 import clsx from "clsx";
-import { Check, ChevronDown, ChevronUp, Pencil, Plus, SlidersHorizontal, Star, Trash2, X } from "lucide-react";
+import { Check, GripVertical, Pencil, Plus, SlidersHorizontal, Star, Trash2, X } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent } from "./ui/dialog";
@@ -138,24 +138,14 @@ export function ManageClassesDialog({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [dragSourceIdx, setDragSourceIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setCurrentClasses(classes);
     setCurDefault(defaultClass);
   }, [classes, defaultClass, open]);
-
-  async function moveClass(index: number, direction: "up" | "down") {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= currentClasses.length) return;
-    const next = [...currentClasses];
-    const [moved] = next.splice(index, 1);
-    next.splice(targetIndex, 0, moved);
-    setCurrentClasses(next);
-    try {
-      await onSaveOrder(next, curDefault);
-    } catch {}
-  }
 
   async function toggleDefault(name: string) {
     const next = curDefault === name ? "" : name;
@@ -216,7 +206,7 @@ export function ManageClassesDialog({
       <DialogContent title="Manage Classes" className="max-w-md">
         <div className="space-y-4">
           <p className="text-xs text-secondary text-center -mt-2">
-            Rearrange order, edit names, delete classes, or choose a default class for new tasks.
+            Drag to rearrange order · Edit names, delete classes, or choose default.
           </p>
 
           {/* Delete confirmation banner if active */}
@@ -261,28 +251,42 @@ export function ManageClassesDialog({
                 return (
                   <div
                     key={cls}
-                    className="flex items-center gap-1.5 p-2 rounded-xl bg-surface-2/40 hover:bg-surface-2/70 transition-colors group"
+                    draggable={!isEditing}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", String(idx));
+                      setDragSourceIdx(idx);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (dragOverIdx !== idx) setDragOverIdx(idx);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverIdx === idx) setDragOverIdx(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragSourceIdx !== null && dragSourceIdx !== idx) {
+                        const next = [...currentClasses];
+                        const [moved] = next.splice(dragSourceIdx, 1);
+                        next.splice(idx, 0, moved);
+                        setCurrentClasses(next);
+                        void onSaveOrder(next, curDefault);
+                      }
+                      setDragSourceIdx(null);
+                      setDragOverIdx(null);
+                    }}
+                    className={clsx(
+                      "flex items-center gap-2 p-2 rounded-xl bg-surface-2/40 hover:bg-surface-2/70 transition-colors group cursor-grab active:cursor-grabbing",
+                      dragOverIdx === idx && "ring-2 ring-accent bg-accent-soft/20",
+                      dragSourceIdx === idx && "opacity-40"
+                    )}
                   >
-                    {/* Reorder buttons */}
-                    <div className="flex flex-col shrink-0">
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        onClick={() => moveClass(idx, "up")}
-                        title="Move up"
-                        className="p-0.5 text-secondary hover:text-primary disabled:opacity-20 transition-opacity"
-                      >
-                        <ChevronUp size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === currentClasses.length - 1}
-                        onClick={() => moveClass(idx, "down")}
-                        title="Move down"
-                        className="p-0.5 text-secondary hover:text-primary disabled:opacity-20 transition-opacity"
-                      >
-                        <ChevronDown size={12} />
-                      </button>
+                    {/* Drag grip handle */}
+                    <div
+                      className="text-secondary/40 group-hover:text-secondary shrink-0 cursor-grab active:cursor-grabbing p-0.5"
+                      title="Drag to rearrange"
+                    >
+                      <GripVertical size={14} />
                     </div>
 
                     {/* Class name or edit field */}
