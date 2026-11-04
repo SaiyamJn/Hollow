@@ -164,6 +164,17 @@ export function TaskFormModal({
   const [dueDraft, setDueDraft] = useState<Date | null>(null);
   const [untilDraft, setUntilDraft] = useState<Date | null>(null);
 
+  const displayGroups = useMemo(() => {
+    const list = Array.isArray(availableGroups)
+      ? availableGroups.filter((g): g is string => typeof g === "string" && g.trim().length > 0)
+      : [];
+    const cur = (draft?.group ?? "").trim();
+    if (cur && !list.some((g) => String(g || "").toLowerCase() === cur.toLowerCase())) {
+      list.push(cur);
+    }
+    return list;
+  }, [availableGroups, draft?.group]);
+
   useEffect(() => {
     if (!visible) {
       setDueOpen(false);
@@ -177,16 +188,6 @@ export function TaskFormModal({
   if (!draft) return null;
   const current = draft;
   const focus = normalizeFocus(current.focus);
-  const displayGroups = useMemo(() => {
-    const list = Array.isArray(availableGroups)
-      ? availableGroups.filter((g): g is string => typeof g === "string" && g.trim().length > 0)
-      : [];
-    const cur = (current.group ?? "").trim();
-    if (cur && !list.some((g) => String(g || "").toLowerCase() === cur.toLowerCase())) {
-      list.push(cur);
-    }
-    return list;
-  }, [availableGroups, current.group]);
   const { padTop, padBottom, maxCardH } = overlayPads(insets, height);
 
   function openDuePicker() {
