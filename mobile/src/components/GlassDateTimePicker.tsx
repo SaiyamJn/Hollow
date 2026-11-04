@@ -50,7 +50,14 @@ export function formatDueLabel(iso: string | Date | null | undefined) {
   if (!iso) return "No due date";
   const due = typeof iso === "string" ? new Date(iso) : iso;
   if (!due || isNaN(due.getTime())) return "No due date";
-  const date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  let date = "";
+  try {
+    date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  } catch {
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    date = `${DAYS[due.getDay()]}, ${MONTHS[due.getMonth()]} ${due.getDate()}`;
+  }
   if (isDateOnlyDue(due)) return date;
   return `${date} · ${formatClockTime(due)}`;
 }

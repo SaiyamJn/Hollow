@@ -445,32 +445,40 @@ function contentFor(kind: ReminderPrompt["kind"], title: string, taskId: string)
 }
 
 async function scheduleAt(date: Date, kind: ReminderPrompt["kind"], title: string, taskId: string) {
-  if (date.getTime() <= Date.now()) {
-    await scheduleIn(2, kind, title, taskId);
-    return;
+  try {
+    if (date.getTime() <= Date.now()) {
+      await scheduleIn(2, kind, title, taskId);
+      return;
+    }
+    await Notifications.scheduleNotificationAsync({
+      identifier: notificationIdForTask(taskId),
+      content: contentFor(kind, title, taskId),
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date,
+        ...(Platform.OS === "android" ? { channelId: CHANNEL_ID } : {}),
+      },
+    });
+  } catch (err) {
+    console.warn("Failed to schedule notification at date", err);
   }
-  await Notifications.scheduleNotificationAsync({
-    identifier: notificationIdForTask(taskId),
-    content: contentFor(kind, title, taskId),
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date,
-      ...(Platform.OS === "android" ? { channelId: CHANNEL_ID } : {}),
-    },
-  });
 }
 
 async function scheduleIn(seconds: number, kind: ReminderPrompt["kind"], title: string, taskId: string) {
-  await Notifications.scheduleNotificationAsync({
-    identifier: notificationIdForTask(taskId),
-    content: contentFor(kind, title, taskId),
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: Math.max(2, Math.round(seconds)),
-      repeats: false,
-      ...(Platform.OS === "android" ? { channelId: CHANNEL_ID } : {}),
-    },
-  });
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: notificationIdForTask(taskId),
+      content: contentFor(kind, title, taskId),
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(2, Math.round(seconds)),
+        repeats: false,
+        ...(Platform.OS === "android" ? { channelId: CHANNEL_ID } : {}),
+      },
+    });
+  } catch (err) {
+    console.warn("Failed to schedule notification in interval", err);
+  }
 }
 
 export async function dismissTaskNotifications(taskId: string, extraIdentifier?: string) {
@@ -541,90 +549,94 @@ export async function snoozeTaskReminder(taskId: string, title: string, kind: Re
  * - Done tasks → drop any leftover tray / scheduled notifications.
  */
 export async function syncTaskReminders(tasks: Task[] | undefined) {
-  latestTasksCache = tasks ?? null;
-  let enabled = await getNotificationsEnabled();
-  if (!enabled) {
-    const pref = await AsyncStorage.getItem(PREF_KEY);
-    if (pref !== "false") {
-      enabled = await ensureNotificationPermissions();
+  try {
+    latestTasksCache = tasks ?? null;
+    let enabled = await getNotificationsEnabled();
+    if (!enabled) {
+      const pref = await AsyncStorage.getItem(PREF_KEY);
+      if (pref !== "false") {
+        enabled = await ensureNotificationPermissions();
+      }
     }
-  }
-  if (!enabled) return;
-  if (!tasks) return;
+    if (!enabled) return;
+    if (!tasks) return;
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: "Task reminders",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      sound: "default",
-      enableVibrate: true,
-      showBadge: true,
-      lightColor: ACCENT,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    });
-  }
-  await registerTaskCategory();
-
-  await Notifications.cancelAllScheduledNotificationsAsync();
-
-  const now = Date.now();
-  const RECENT_OVERDUE_MS = 6 * 60 * 60 * 1000;
-  const fired = await getFiredOnce();
-  const snoozes = await getSnoozes();
-  const stillNeedsOnce = new Set<string>();
-  const openIds = new Set<string>();
-  // Parents only — nested subtasks inherit the parent's reminder surface and
-  // would otherwise spam the tray on every app open.
-  const all = tasks.filter((t) => !t.parentTaskId);
-
-  for (const task of all) {
-    if (task.done) {
-      await dismissTaskNotifications(task.id);
-      delete snoozes[task.id];
-      continue;
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+        name: "Task reminders",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        sound: "default",
+        enableVibrate: true,
+        showBadge: true,
+        lightColor: ACCENT,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      });
     }
-    openIds.add(task.id);
+    await registerTaskCategory();
 
-    const snoozeUntil = snoozes[task.id];
-    if (snoozeUntil && snoozeUntil > now) {
-      await scheduleAt(new Date(snoozeUntil), "reminder", task.title, task.id);
-      continue;
-    }
-    if (snoozeUntil) delete snoozes[task.id];
+    await Notifications.cancelAllScheduledNotificationsAsync();
 
-    // No due date → no automatic reminder.
-    if (!task.dueAt) continue;
+    const now = Date.now();
+    const RECENT_OVERDUE_MS = 6 * 60 * 60 * 1000;
+    const fired = await getFiredOnce();
+    const snoozes = await getSnoozes();
+    const stillNeedsOnce = new Set<string>();
+    const openIds = new Set<string>();
+    // Parents only — nested subtasks inherit the parent's reminder surface and
+    // would otherwise spam the tray on every app open.
+    const all = tasks.filter((t) => !t.parentTaskId);
 
-    const due = reminderDate(new Date(task.dueAt));
-    if (due.getTime() > now) {
-      await scheduleAt(due, "due", task.title, task.id);
-      continue;
-    }
+    for (const task of all) {
+      if (task.done) {
+        await dismissTaskNotifications(task.id);
+        delete snoozes[task.id];
+        continue;
+      }
+      openIds.add(task.id);
 
-    // Already overdue: only nudge once if it became due recently (or was snoozed).
-    const overdueFor = now - due.getTime();
-    if (overdueFor > RECENT_OVERDUE_MS && !snoozeUntil) {
-      // Stale backlog — remember so we don't suddenly fire later.
-      fired.add(task.id);
+      const snoozeUntil = snoozes[task.id];
+      if (snoozeUntil && snoozeUntil > now) {
+        await scheduleAt(new Date(snoozeUntil), "reminder", task.title, task.id);
+        continue;
+      }
+      if (snoozeUntil) delete snoozes[task.id];
+
+      // No due date → no automatic reminder.
+      if (!task.dueAt) continue;
+
+      const due = reminderDate(new Date(task.dueAt));
+      if (due.getTime() > now) {
+        await scheduleAt(due, "due", task.title, task.id);
+        continue;
+      }
+
+      // Already overdue: only nudge once if it became due recently (or was snoozed).
+      const overdueFor = now - due.getTime();
+      if (overdueFor > RECENT_OVERDUE_MS && !snoozeUntil) {
+        // Stale backlog — remember so we don't suddenly fire later.
+        fired.add(task.id);
+        stillNeedsOnce.add(task.id);
+        continue;
+      }
+
       stillNeedsOnce.add(task.id);
-      continue;
+      if (fired.has(task.id)) continue;
+      await scheduleIn(2, "overdue", task.title, task.id);
+      fired.add(task.id);
     }
 
-    stillNeedsOnce.add(task.id);
-    if (fired.has(task.id)) continue;
-    await scheduleIn(2, "overdue", task.title, task.id);
-    fired.add(task.id);
+    for (const id of [...fired]) {
+      if (!stillNeedsOnce.has(id)) fired.delete(id);
+    }
+    for (const id of Object.keys(snoozes)) {
+      if (!openIds.has(id)) delete snoozes[id];
+    }
+    await setFiredOnce(fired);
+    await setSnoozes(snoozes);
+  } catch (err) {
+    console.warn("Failed to sync task reminders", err);
   }
-
-  for (const id of [...fired]) {
-    if (!stillNeedsOnce.has(id)) fired.delete(id);
-  }
-  for (const id of Object.keys(snoozes)) {
-    if (!openIds.has(id)) delete snoozes[id];
-  }
-  await setFiredOnce(fired);
-  await setSnoozes(snoozes);
 }
 
 export function promptFromNotification(

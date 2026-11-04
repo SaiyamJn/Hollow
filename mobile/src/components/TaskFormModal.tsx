@@ -178,9 +178,11 @@ export function TaskFormModal({
   const current = draft;
   const focus = normalizeFocus(current.focus);
   const displayGroups = useMemo(() => {
-    const list = [...(availableGroups ?? [])];
+    const list = Array.isArray(availableGroups)
+      ? availableGroups.filter((g): g is string => typeof g === "string" && g.trim().length > 0)
+      : [];
     const cur = (current.group ?? "").trim();
-    if (cur && !list.some((g) => g.toLowerCase() === cur.toLowerCase())) {
+    if (cur && !list.some((g) => String(g || "").toLowerCase() === cur.toLowerCase())) {
       list.push(cur);
     }
     return list;
@@ -242,13 +244,13 @@ export function TaskFormModal({
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
         <ModalShade padTop={padTop} padBottom={padBottom} avoidKeyboard>
           <ModalPanel colors={colors} maxHeight={maxCardH}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={[styles.heading, { color: colors.textPrimary }]}>{title}</Text>
               <TextInput
-                autoFocus={autoFocus}
+                autoFocus={Platform.OS === "ios" ? autoFocus : false}
                 value={current.title}
                 onChangeText={(titleText) => onChange({ ...current, title: titleText })}
                 placeholder="What's the plan?"
@@ -313,8 +315,8 @@ export function TaskFormModal({
                   </Pressable>
 
                   {displayGroups.map((g: string) => {
-                    const active = (current.group ?? "").trim().toLowerCase() === g.toLowerCase();
-                    const isDef = defaultGroup && defaultGroup.toLowerCase() === g.toLowerCase();
+                    const active = (current.group ?? "").trim().toLowerCase() === String(g || "").toLowerCase();
+                    const isDef = Boolean(defaultGroup && defaultGroup.trim().toLowerCase() === String(g || "").toLowerCase());
                     return (
                       <Pressable
                         key={g}
@@ -391,7 +393,7 @@ export function TaskFormModal({
                 {customGroupOpen && (
                   <View style={{ marginTop: 8 }}>
                     <TextInput
-                      autoFocus
+                      autoFocus={Platform.OS === "ios"}
                       value={current.group ?? ""}
                       onChangeText={(group) => onChange({ ...current, group })}
                       placeholder="Type class name…"
@@ -487,130 +489,134 @@ export function TaskFormModal({
         </ModalShade>
       </Modal>
 
-      <Modal
-        visible={visible && dueOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setDueOpen(false)}
-      >
-        <ModalShade padTop={padTop} padBottom={padBottom}>
-          <ModalPanel colors={colors} maxHeight={maxCardH}>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              contentContainerStyle={{ paddingBottom: 4 }}
-            >
-              <Text style={[styles.heading, { color: colors.textPrimary }]}>Date & time</Text>
-              <GlassDateTimePicker value={dueDraft} onChange={setDueDraft} />
-              <View style={[styles.actions, { marginTop: 12 }]}>
-                <Pressable onPress={clearDue}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Clear</Text>
-                </Pressable>
-                <View style={{ flexDirection: "row", gap: 20 }}>
-                  <Pressable onPress={() => setDueOpen(false)}>
-                    <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
+      {visible && dueOpen && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDueOpen(false)}
+        >
+          <ModalShade padTop={padTop} padBottom={padBottom}>
+            <ModalPanel colors={colors} maxHeight={maxCardH}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                contentContainerStyle={{ paddingBottom: 4 }}
+              >
+                <Text style={[styles.heading, { color: colors.textPrimary }]}>Date & time</Text>
+                <GlassDateTimePicker value={dueDraft} onChange={setDueDraft} />
+                <View style={[styles.actions, { marginTop: 12 }]}>
+                  <Pressable onPress={clearDue}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Clear</Text>
                   </Pressable>
-                  <Pressable onPress={confirmDue}>
-                    <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: "row", gap: 20 }}>
+                    <Pressable onPress={() => setDueOpen(false)}>
+                      <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
+                    </Pressable>
+                    <Pressable onPress={confirmDue}>
+                      <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-            </ScrollView>
-          </ModalPanel>
-        </ModalShade>
-      </Modal>
+              </ScrollView>
+            </ModalPanel>
+          </ModalShade>
+        </Modal>
+      )}
 
-      <Modal
-        visible={visible && focusOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setFocusOpen(false)}
-      >
-        <ModalShade padTop={padTop} padBottom={padBottom}>
-          <ModalPanel colors={colors}>
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>Focus</Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 12, textAlign: "center" }}>
-              Important × urgent — tap a corner
-            </Text>
-            <FocusCompass
-              value={focus}
-              colors={colors}
-              onChange={(next) => onChange({ ...current, focus: next })}
-            />
-            <Pressable
-              onPress={() => setFocusOpen(false)}
-              style={{ alignSelf: "flex-end", marginTop: 14 }}
-            >
-              <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
-            </Pressable>
-          </ModalPanel>
-        </ModalShade>
-      </Modal>
+      {visible && focusOpen && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFocusOpen(false)}
+        >
+          <ModalShade padTop={padTop} padBottom={padBottom}>
+            <ModalPanel colors={colors}>
+              <Text style={[styles.heading, { color: colors.textPrimary }]}>Focus</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 12, textAlign: "center" }}>
+                Important × urgent — tap a corner
+              </Text>
+              <FocusCompass
+                value={focus}
+                colors={colors}
+                onChange={(next) => onChange({ ...current, focus: next })}
+              />
+              <Pressable
+                onPress={() => setFocusOpen(false)}
+                style={{ alignSelf: "flex-end", marginTop: 14 }}
+              >
+                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+              </Pressable>
+            </ModalPanel>
+          </ModalShade>
+        </Modal>
+      )}
 
-      <Modal
-        visible={visible && repeatOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setRepeatOpen(false)}
-      >
-        <ModalShade padTop={padTop} padBottom={padBottom}>
-          <ModalPanel colors={colors} maxHeight={maxCardH}>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <RepeatPanel
-              due={current.due}
-              value={current}
-              onChange={(next) => onChange({ ...current, ...next })}
-              onPickUntil={openUntilPicker}
-            />
-            <Pressable
-              onPress={() => setRepeatOpen(false)}
-              style={{ alignSelf: "flex-end", marginTop: 14 }}
-            >
-              <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
-            </Pressable>
-            </ScrollView>
-          </ModalPanel>
-        </ModalShade>
-      </Modal>
-
-      <Modal
-        visible={visible && untilOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setUntilOpen(false)}
-      >
-        <ModalShade padTop={padTop} padBottom={padBottom}>
-          <ModalPanel colors={colors} maxHeight={maxCardH}>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <Text style={[styles.heading, { color: colors.textPrimary }]}>Last day</Text>
-              <GlassDateTimePicker value={untilDraft} onChange={setUntilDraft} />
-              <View style={[styles.actions, { marginTop: 12 }]}>
-                <Pressable onPress={() => setUntilOpen(false)}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
-                </Pressable>
+      {visible && repeatOpen && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRepeatOpen(false)}
+        >
+          <ModalShade padTop={padTop} padBottom={padBottom}>
+            <ModalPanel colors={colors} maxHeight={maxCardH}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <RepeatPanel
+                  due={current.due}
+                  value={current}
+                  onChange={(next) => onChange({ ...current, ...next })}
+                  onPickUntil={openUntilPicker}
+                />
                 <Pressable
-                  onPress={() => {
-                    onChange({
-                      ...current,
-                      repeatEnd: "on",
-                      repeatUntil: untilDraft,
-                      repeatCount: null,
-                    });
-                    setUntilOpen(false);
-                  }}
+                  onPress={() => setRepeatOpen(false)}
+                  style={{ alignSelf: "flex-end", marginTop: 14 }}
                 >
                   <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
                 </Pressable>
-              </View>
-            </ScrollView>
-          </ModalPanel>
-        </ModalShade>
-      </Modal>
+              </ScrollView>
+            </ModalPanel>
+          </ModalShade>
+        </Modal>
+      )}
+
+      {visible && untilOpen && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setUntilOpen(false)}
+        >
+          <ModalShade padTop={padTop} padBottom={padBottom}>
+            <ModalPanel colors={colors} maxHeight={maxCardH}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <Text style={[styles.heading, { color: colors.textPrimary }]}>Last day</Text>
+                <GlassDateTimePicker value={untilDraft} onChange={setUntilDraft} />
+                <View style={[styles.actions, { marginTop: 12 }]}>
+                  <Pressable onPress={() => setUntilOpen(false)}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      onChange({
+                        ...current,
+                        repeatEnd: "on",
+                        repeatUntil: untilDraft,
+                        repeatCount: null,
+                      });
+                      setUntilOpen(false);
+                    }}
+                  >
+                    <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            </ModalPanel>
+          </ModalShade>
+        </Modal>
+      )}
     </>
   );
 }

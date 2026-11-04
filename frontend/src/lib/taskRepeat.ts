@@ -61,10 +61,11 @@ export function formatRepeatLabel(
       ? ruleOrInput
       : { rule: ruleOrInput as TaskRepeatRule | null | undefined, days, interval, end, until, count };
 
-  if (!input.rule) return "Does not repeat";
+  if (!input.rule || (input.rule as string) === "none") return "Does not repeat";
 
   const step = clampInterval(input.interval ?? 1);
-  const unit = UNIT_OPTIONS.find((u) => u.value === input.rule)!;
+  const unit = UNIT_OPTIONS.find((u) => u.value === input.rule);
+  if (!unit) return "Does not repeat";
   const unitWord = step === 1 ? unit.singular : unit.plural;
   let core = step === 1 && input.rule === "daily" ? "Every day" : `Every ${step} ${unitWord}`;
 
@@ -80,7 +81,11 @@ export function formatRepeatLabel(
   if (e === "on" && input.until) {
     const dt = typeof input.until === "string" ? new Date(input.until) : input.until;
     if (!Number.isNaN(dt.getTime())) {
-      core += ` · until ${dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      try {
+        core += ` · until ${dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      } catch {
+        core += ` · until ${dt.getMonth() + 1}/${dt.getDate()}`;
+      }
     }
   } else if (e === "after" && input.count) {
     core += ` · ${input.count}×`;

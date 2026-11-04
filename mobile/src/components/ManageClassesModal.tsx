@@ -433,23 +433,25 @@ function ClassRowItem({
   busy: boolean;
   colors: ReturnType<typeof useTheme>["colors"];
 }) {
+  const propsRef = useRef({ idx, onStartDrag, onMoveDrag, onEndDrag });
+  propsRef.current = { idx, onStartDrag, onMoveDrag, onEndDrag };
+
   const dragHandlers = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
-        onStartDrag(idx);
+        propsRef.current.onStartDrag(propsRef.current.idx);
       },
       onPanResponderMove: (_, g) => {
-        onMoveDrag(g.dy);
+        propsRef.current.onMoveDrag(g.dy);
       },
       onPanResponderRelease: () => {
-        onEndDrag();
+        propsRef.current.onEndDrag();
       },
       onPanResponderTerminate: () => {
-        onEndDrag();
+        propsRef.current.onEndDrag();
       },
     })
   ).current;

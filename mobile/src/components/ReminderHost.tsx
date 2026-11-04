@@ -63,13 +63,13 @@ export function ReminderHost() {
   useEffect(() => {
     if (status === "signedIn") {
       void ensureNotificationPermissions().then((enabled) => {
-        if (enabled && tasks) void syncTaskReminders(tasks);
+        if (enabled && tasks) void syncTaskReminders(tasks).catch(() => {});
       });
     }
   }, [status]);
 
   useEffect(() => {
-    if (status === "signedIn" && tasks) void syncTaskReminders(tasks);
+    if (status === "signedIn" && tasks) void syncTaskReminders(tasks).catch(() => {});
   }, [status, tasks]);
 
   useEffect(() => subscribeReminderPrompt(setPrompt), []);

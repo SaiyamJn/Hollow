@@ -816,56 +816,58 @@ export default function TasksScreen() {
         }}
       />
 
-      <Modal
-        visible={reclassTask !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setReclassTask(null)}
-      >
-        <Pressable style={styles.reclassBackdrop} onPress={() => setReclassTask(null)}>
-          <Pressable
-            style={[styles.reclassSheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }}>
-              Move focus
-            </Text>
-            {!!reclassTask && (
-              <Text
-                style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}
-                numberOfLines={2}
-              >
-                {reclassTask.title}
+      {reclassTask !== null && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setReclassTask(null)}
+        >
+          <Pressable style={styles.reclassBackdrop} onPress={() => setReclassTask(null)}>
+            <Pressable
+              style={[styles.reclassSheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }}>
+                Move focus
               </Text>
-            )}
-            {FOCUS_MATRIX.map((id) => (
+              {!!reclassTask && (
+                <Text
+                  style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center", marginTop: 4, marginBottom: 12 }}
+                  numberOfLines={2}
+                >
+                  {reclassTask.title}
+                </Text>
+              )}
+              {FOCUS_MATRIX.map((id) => (
+                <Pressable
+                  key={id}
+                  onPress={() => applyReclass(id)}
+                  style={[styles.reclassRow, { borderColor: colors.border }]}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600" }}>
+                    {FOCUS_META[id].label}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                    {FOCUS_META[id].hint}
+                  </Text>
+                </Pressable>
+              ))}
               <Pressable
-                key={id}
-                onPress={() => applyReclass(id)}
+                onPress={() => applyReclass("none")}
                 style={[styles.reclassRow, { borderColor: colors.border }]}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600" }}>
-                  {FOCUS_META[id].label}
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {FOCUS_META[id].hint}
+                <Text style={{ color: colors.textSecondary, fontSize: 15, fontWeight: "600" }}>Clear focus</Text>
+              </Pressable>
+              <Pressable onPress={() => setReclassTask(null)} style={{ paddingVertical: 14 }}>
+                <Text style={{ color: colors.accent, fontSize: 15, fontWeight: "700", textAlign: "center" }}>
+                  Cancel
                 </Text>
               </Pressable>
-            ))}
-            <Pressable
-              onPress={() => applyReclass("none")}
-              style={[styles.reclassRow, { borderColor: colors.border }]}
-            >
-              <Text style={{ color: colors.textSecondary, fontSize: 15, fontWeight: "600" }}>Clear focus</Text>
-            </Pressable>
-            <Pressable onPress={() => setReclassTask(null)} style={{ paddingVertical: 14 }}>
-              <Text style={{ color: colors.accent, fontSize: 15, fontWeight: "700", textAlign: "center" }}>
-                Cancel
-              </Text>
             </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      )}
       <ManageClassesModal
         visible={manageClassesOpen}
         classes={availableGroups}
