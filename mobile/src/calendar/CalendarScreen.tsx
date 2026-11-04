@@ -766,10 +766,11 @@ export default function CalendarScreen() {
         onChange={setDraft}
         onSubmit={() => {
           if (!draft?.title.trim() || create.isPending) return;
+          const assignedGroup = (draft.group?.trim() || (selectedGroup !== "All" ? selectedGroup : defaultClass) || "").trim();
           create.mutate({
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
-            group: draft.group?.trim() || undefined,
+            group: assignedGroup || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
             focus: draft.focus ?? "none",
             ...repeatPayload(draft),

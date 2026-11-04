@@ -47,7 +47,7 @@ function isDeferredRepeat(task: Task, endOfToday: Date) {
   return new Date(task.dueAt) >= endOfToday;
 }
 
-function groupTasks(tasks: Task[], showCompleted: boolean) {
+function groupTasks(tasks: Task[], collapsedSections: Set<GroupName>) {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(startOfToday);
@@ -74,12 +74,29 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
     }
   }
 
-  const sections: { title: GroupName; data: Task[]; completedCount?: number }[] = [];
-  if (starred.length) sections.push({ title: "Starred", data: sortByFocusPriority(starred) });
+  const sections: { title: GroupName; data: Task[]; totalCount: number; isCollapsed: boolean }[] = [];
+  if (starred.length) {
+    const isCollapsed = collapsedSections.has("Starred");
+    sections.push({
+      title: "Starred",
+      data: isCollapsed ? [] : sortByFocusPriority(starred),
+      totalCount: starred.length,
+      isCollapsed,
+    });
+  }
   for (const name of ["Overdue", "Today", "Upcoming", "No date"] as const) {
-    if (groups[name].length) sections.push({ title: name, data: sortByFocusPriority(groups[name]) });
+    if (groups[name].length) {
+      const isCollapsed = collapsedSections.has(name);
+      sections.push({
+        title: name,
+        data: isCollapsed ? [] : sortByFocusPriority(groups[name]),
+        totalCount: groups[name].length,
+        isCollapsed,
+      });
+    }
   }
   if (completed.length) {
+    const isCollapsed = collapsedSections.has("Completed");
     const sortedCompleted = [...completed].sort((a, b) => {
       const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
       const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
@@ -87,8 +104,9 @@ function groupTasks(tasks: Task[], showCompleted: boolean) {
     });
     sections.push({
       title: "Completed",
-      data: showCompleted ? sortedCompleted : [],
-      completedCount: completed.length,
+      data: isCollapsed ? [] : sortedCompleted,
+      totalCount: completed.length,
+      isCollapsed,
     });
   }
   return sections;
@@ -105,7 +123,7 @@ export default function TasksScreen() {
   const [editing, setEditing] = useState<EditDraft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({});
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<GroupName>>(new Set(["Completed"]));
   const [layout, setLayout] = useState<TasksLayout>("list");
   const [reclassTask, setReclassTask] = useState<Task | null>(null);
   const [confirmDeleteEdit, setConfirmDeleteEdit] = useState(false);
@@ -113,6 +131,15 @@ export default function TasksScreen() {
   const quickAddRef = useRef<TextInput>(null);
   const keyboardInset = useKeyboardBottomInset();
   const { isNarrow, screenPad, listBottomClearance } = useLayout();
+
+  const toggleSection = (name: GroupName) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: fetchTasks });
   const { data: classesData } = useQuery({ queryKey: ["task-classes"], queryFn: fetchTaskClasses });
@@ -171,10 +198,12 @@ export default function TasksScreen() {
   const create = useMutation({
     mutationFn: createTask,
     onSuccess: () => {
-      animateListChange();
       invalidate();
       setDraft(null);
       setQuickAdd("");
+    },
+    onError: (err) => {
+      console.warn("Failed to create task", err);
     },
   });
   const update = useMutation({
@@ -193,8 +222,6 @@ export default function TasksScreen() {
       };
     }) => updateTask(id, patch),
     onMutate: async ({ id, patch }) => {
-      if (patch.done !== undefined) animateTaskComplete();
-      else animateListChange();
       if (patch.done) void dismissTaskNotifications(id);
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const prev = queryClient.getQueryData<Task[]>(["tasks"]);
@@ -241,9 +268,11 @@ export default function TasksScreen() {
       };
     }) => updateTask(id, patch),
     onSuccess: () => {
-      animateListChange();
       invalidate();
       setEditing(null);
+    },
+    onError: (err) => {
+      console.warn("Failed to save task edit", err);
     },
   });
   const remove = useMutation({
@@ -251,7 +280,6 @@ export default function TasksScreen() {
       void dismissTaskNotifications(id);
       return deleteTask(id);
     },
-    onMutate: () => animateListChange(),
     onSuccess: invalidate,
   });
 
@@ -305,7 +333,7 @@ export default function TasksScreen() {
         ? colors.accent
         : colors.textSecondary;
 
-  const sections = groupTasks(filteredTasks, showCompleted);
+  const sections = groupTasks(filteredTasks, collapsedSections);
   const endOfTodayForCount = (() => {
     const s = new Date();
     s.setHours(0, 0, 0, 0);
@@ -493,32 +521,30 @@ export default function TasksScreen() {
           </View>
         }
         renderSectionHeader={layout !== "list" ? () => null : ({ section }) => {
-          if (section.title === "Completed") {
-            const count = section.completedCount ?? section.data.length;
-            return (
-              <Pressable
-                onPress={() => {
-                  animateListChange();
-                  setShowCompleted((v) => !v);
-                }}
-                style={styles.completedHeader}
-                hitSlop={6}
-              >
-                <Feather
-                  name={showCompleted ? "chevron-down" : "chevron-right"}
-                  size={15}
-                  color={colors.textSecondary}
-                />
-                <Text style={[styles.groupHeader, { color: colors.textSecondary, marginTop: 0, marginBottom: 0 }]}>
-                  COMPLETED ({count})
-                </Text>
-              </Pressable>
-            );
-          }
+          const color = groupColor(section.title);
           return (
-            <Text style={[styles.groupHeader, { color: groupColor(section.title) }]}>
-              {section.title.toUpperCase()}
-            </Text>
+            <Pressable
+              onPress={() => {
+                void Haptics.selectionAsync();
+                toggleSection(section.title);
+              }}
+              style={styles.sectionHeaderBtn}
+              hitSlop={6}
+            >
+              <View style={[styles.sectionDot, { backgroundColor: color }]} />
+              <Text style={[styles.groupHeader, { color, marginTop: 0, marginBottom: 0 }]}>
+                {section.title.toUpperCase()}
+              </Text>
+              <Text style={[styles.sectionCountBadge, { color: colors.textSecondary }]}>
+                {section.totalCount}
+              </Text>
+              <View style={{ flex: 1 }} />
+              <Feather
+                name={section.isCollapsed ? "chevron-right" : "chevron-down"}
+                size={14}
+                color={colors.textSecondary}
+              />
+            </Pressable>
           );
         }}
         renderItem={({ item: task }) => {
@@ -532,7 +558,6 @@ export default function TasksScreen() {
                   style={{ flexShrink: 0 }}
                   onPress={() =>
                     setExpanded((prev) => {
-                      animateListChange();
                       const next = new Set(prev);
                       next.has(task.id) ? next.delete(task.id) : next.add(task.id);
                       return next;
@@ -582,7 +607,6 @@ export default function TasksScreen() {
                       <Pressable
                         onPress={() =>
                           setExpanded((prev) => {
-                            animateListChange();
                             const next = new Set(prev);
                             next.has(task.id) ? next.delete(task.id) : next.add(task.id);
                             return next;
@@ -740,10 +764,11 @@ export default function TasksScreen() {
         onChange={setDraft}
         onSubmit={() => {
           if (!draft?.title.trim() || create.isPending) return;
+          const assignedGroup = (draft.group?.trim() || (selectedGroup !== "All" ? selectedGroup : defaultClass) || "").trim();
           create.mutate({
             title: draft.title.trim(),
             description: draft.description.trim() || undefined,
-            group: draft.group?.trim() || undefined,
+            group: assignedGroup || undefined,
             dueAt: draft.due ? draft.due.toISOString() : undefined,
             focus: draft.focus ?? "none",
             ...repeatPayload(draft),
@@ -897,12 +922,28 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   quickAdd: { paddingVertical: 10, fontSize: 14 },
+  sectionHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 14,
+    marginBottom: 6,
+    paddingVertical: 4,
+  },
+  sectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  sectionCountBadge: {
+    fontSize: 11,
+    fontWeight: "600",
+    opacity: 0.65,
+  },
   groupHeader: {
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 8,
     textAlign: "left",
   },
   completedHeader: {

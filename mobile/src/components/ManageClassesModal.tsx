@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   KeyboardAvoidingView,
-  LayoutAnimation,
   Modal,
   PanResponder,
   Platform,
@@ -12,7 +11,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -23,11 +21,7 @@ import { useTheme } from "../contexts/theme";
 import { useLayout } from "../lib/layout";
 import { GlassCard } from "./GlassCard";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const ROW_STEP = 52;
+const ROW_STEP = 54;
 
 export type ManageClassesModalProps = {
   visible: boolean;
@@ -71,6 +65,8 @@ export function ManageClassesModal({
   const hoverIndexRef = useRef<number | null>(null);
   const currentClassesRef = useRef<string[]>(currentClasses);
   currentClassesRef.current = currentClasses;
+  const curDefaultRef = useRef<string>(curDefault);
+  curDefaultRef.current = curDefault;
 
   useEffect(() => {
     setCurrentClasses(classes);
@@ -83,6 +79,17 @@ export function ManageClassesModal({
     hoverIndexRef.current = null;
   }, [classes, defaultClass, visible]);
 
+  function moveClass(fromIdx: number, toIdx: number) {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+    if (fromIdx >= currentClasses.length || toIdx >= currentClasses.length) return;
+    const next = [...currentClasses];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setCurrentClasses(next);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void onSaveOrder(next, curDefault);
+  }
+
   function startDrag(idx: number) {
     if (editingIndex !== null || currentClasses.length <= 1) return;
     draggingIndexRef.current = idx;
@@ -92,7 +99,7 @@ export function ManageClassesModal({
     dragY.setValue(0);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Animated.spring(dragScale, {
-      toValue: 1.04,
+      toValue: 1.03,
       useNativeDriver: true,
       friction: 7,
       tension: 130,
@@ -110,9 +117,6 @@ export function ManageClassesModal({
       hoverIndexRef.current = targetIdx;
       setHoverIndex(targetIdx);
       void Haptics.selectionAsync();
-      try {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      } catch {}
     }
   }
 
@@ -131,7 +135,7 @@ export function ManageClassesModal({
       const [moved] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, moved);
       setCurrentClasses(next);
-      void onSaveOrder(next, curDefault);
+      void onSaveOrder(next, curDefaultRef.current);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
@@ -145,6 +149,7 @@ export function ManageClassesModal({
   async function toggleDefault(name: string) {
     const next = curDefault.toLowerCase() === name.toLowerCase() ? "" : name;
     setCurDefault(next);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
       await onSaveOrder(currentClasses, next);
     } catch {}
@@ -158,10 +163,14 @@ export function ManageClassesModal({
       return;
     }
     const next = [...currentClasses, trimmed];
+    // If no default exists yet, automatically set first added class as default
+    const nextDef = curDefault ? curDefault : trimmed;
     setCurrentClasses(next);
+    setCurDefault(nextDef);
     setNewClassName("");
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
-      await onSaveOrder(next, curDefault);
+      await onSaveOrder(next, nextDef);
     } catch {}
   }
 
@@ -178,6 +187,7 @@ export function ManageClassesModal({
       setCurrentClasses(next);
       if (curDefault === oldName) setCurDefault(trimmed);
       setEditingIndex(null);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setBusy(false);
     }
@@ -191,6 +201,7 @@ export function ManageClassesModal({
       setCurrentClasses(next);
       if (curDefault === name) setCurDefault("");
       setConfirmDelete(null);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setBusy(false);
     }
@@ -200,7 +211,7 @@ export function ManageClassesModal({
   const topInset = Math.max(insets.top, Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0, 28);
   const padTop = topInset + 16;
   const padBottom = Math.max(insets.bottom, 16) + 16;
-  const maxCardH = Math.max(260, height - padTop - padBottom);
+  const maxCardH = Math.max(280, height - padTop - padBottom);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -222,10 +233,10 @@ export function ManageClassesModal({
         >
           {/* Header */}
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>Manage Classes</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Hold & drag to rearrange · Set default, rename, or delete
+                Hold handle to drag or use ↑↓ · Tap ★ to set default for new tasks
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
@@ -299,6 +310,7 @@ export function ManageClassesModal({
                     key={cls}
                     cls={cls}
                     idx={idx}
+                    total={currentClasses.length}
                     isDef={isDef}
                     isEditing={isEditing}
                     isDragging={isDragging}
@@ -308,6 +320,8 @@ export function ManageClassesModal({
                     onStartDrag={startDrag}
                     onMoveDrag={onDragMove}
                     onEndDrag={endDrag}
+                    onMoveUp={() => moveClass(idx, idx - 1)}
+                    onMoveDown={() => moveClass(idx, idx + 1)}
                     onToggleDefault={() => toggleDefault(cls)}
                     onStartEdit={() => {
                       setEditingIndex(idx);
@@ -333,6 +347,8 @@ export function ManageClassesModal({
               onChangeText={setNewClassName}
               placeholder="Add new class…"
               placeholderTextColor={colors.textSecondary}
+              onSubmitEditing={handleAdd}
+              returnKeyType="done"
               style={[
                 styles.addInput,
                 { color: colors.textPrimary, borderColor: colors.glassBorder, backgroundColor: colors.glass },
@@ -371,6 +387,7 @@ export function ManageClassesModal({
 function ClassRowItem({
   cls,
   idx,
+  total,
   isDef,
   isEditing,
   isDragging,
@@ -380,6 +397,8 @@ function ClassRowItem({
   onStartDrag,
   onMoveDrag,
   onEndDrag,
+  onMoveUp,
+  onMoveDown,
   onToggleDefault,
   onStartEdit,
   onConfirmDelete,
@@ -392,6 +411,7 @@ function ClassRowItem({
 }: {
   cls: string;
   idx: number;
+  total: number;
   isDef: boolean;
   isEditing: boolean;
   isDragging: boolean;
@@ -401,6 +421,8 @@ function ClassRowItem({
   onStartDrag: (idx: number) => void;
   onMoveDrag: (dy: number) => void;
   onEndDrag: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onToggleDefault: () => void;
   onStartEdit: () => void;
   onConfirmDelete: () => void;
@@ -411,56 +433,29 @@ function ClassRowItem({
   busy: boolean;
   colors: ReturnType<typeof useTheme>["colors"];
 }) {
-  const gripResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !isEditing,
-        onStartShouldSetPanResponderCapture: () => !isEditing,
-        onMoveShouldSetPanResponder: () => !isEditing,
-        onMoveShouldSetPanResponderCapture: () => !isEditing,
-        onPanResponderGrant: () => {
-          onStartDrag(idx);
-        },
-        onPanResponderMove: (_, g) => {
-          onMoveDrag(g.dy);
-        },
-        onPanResponderRelease: () => {
-          onEndDrag();
-        },
-        onPanResponderTerminate: () => {
-          onEndDrag();
-        },
-      }),
-    [idx, isEditing, onStartDrag, onMoveDrag, onEndDrag]
-  );
-
-  const rowResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => {
-          if (isEditing) return false;
-          return Math.abs(g.dy) > 10;
-        },
-        onPanResponderGrant: () => {
-          onStartDrag(idx);
-        },
-        onPanResponderMove: (_, g) => {
-          onMoveDrag(g.dy);
-        },
-        onPanResponderRelease: () => {
-          onEndDrag();
-        },
-        onPanResponderTerminate: () => {
-          onEndDrag();
-        },
-      }),
-    [idx, isEditing, onStartDrag, onMoveDrag, onEndDrag]
-  );
+  const dragHandlers = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: () => {
+        onStartDrag(idx);
+      },
+      onPanResponderMove: (_, g) => {
+        onMoveDrag(g.dy);
+      },
+      onPanResponderRelease: () => {
+        onEndDrag();
+      },
+      onPanResponderTerminate: () => {
+        onEndDrag();
+      },
+    })
+  ).current;
 
   return (
     <Animated.View
-      {...(isEditing ? {} : rowResponder.panHandlers)}
       style={[
         styles.row,
         {
@@ -468,7 +463,7 @@ function ClassRowItem({
           borderColor: isDragging
             ? colors.accent
             : isDef
-              ? `${colors.accent}40`
+              ? `${colors.accent}55`
               : colors.glassBorder,
           zIndex: isDragging ? 999 : 1,
           elevation: isDragging ? 8 : 0,
@@ -482,19 +477,42 @@ function ClassRowItem({
         },
       ]}
     >
-      <Pressable
-        onLongPress={() => onStartDrag(idx)}
-        delayLongPress={220}
-        style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-      >
+      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingVertical: 4 }}>
         {/* Drag handle */}
         {!isEditing && (
-          <View {...gripResponder.panHandlers} style={styles.dragHandle} hitSlop={6}>
+          <View
+            {...dragHandlers.panHandlers}
+            style={styles.dragHandle}
+            hitSlop={8}
+            accessibilityLabel={`Drag to rearrange ${cls}`}
+          >
             <Feather
               name="menu"
-              size={15}
+              size={16}
               color={isDragging ? colors.accent : colors.textSecondary}
             />
+          </View>
+        )}
+
+        {/* Quick up/down reorder buttons */}
+        {!isEditing && total > 1 && (
+          <View style={{ flexDirection: "column", gap: 1, marginRight: 6 }}>
+            <Pressable
+              onPress={onMoveUp}
+              disabled={idx === 0}
+              hitSlop={4}
+              style={{ opacity: idx === 0 ? 0.2 : 0.8, padding: 1 }}
+            >
+              <Feather name="chevron-up" size={13} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={onMoveDown}
+              disabled={idx === total - 1}
+              hitSlop={4}
+              style={{ opacity: idx === total - 1 ? 0.2 : 0.8, padding: 1 }}
+            >
+              <Feather name="chevron-down" size={13} color={colors.textSecondary} />
+            </Pressable>
           </View>
         )}
 
@@ -506,6 +524,8 @@ function ClassRowItem({
                 autoFocus
                 value={editingValue}
                 onChangeText={setEditingValue}
+                onSubmitEditing={onRename}
+                returnKeyType="done"
                 style={[
                   styles.inlineInput,
                   {
@@ -548,11 +568,12 @@ function ClassRowItem({
 
         {/* Actions: default star, rename, delete */}
         {!isEditing && (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 8 }}>
             <Pressable
               onPress={onToggleDefault}
               hitSlop={6}
-              style={styles.actionIcon}
+              style={[styles.actionIcon, isDef && { backgroundColor: colors.accentSoft }]}
+              accessibilityLabel={isDef ? "Default class" : "Set as default class"}
             >
               <Feather
                 name="star"
@@ -564,6 +585,7 @@ function ClassRowItem({
               onPress={onStartEdit}
               hitSlop={6}
               style={styles.actionIcon}
+              accessibilityLabel="Rename class"
             >
               <Feather name="edit-2" size={13} color={colors.textSecondary} />
             </Pressable>
@@ -571,12 +593,13 @@ function ClassRowItem({
               onPress={onConfirmDelete}
               hitSlop={6}
               style={styles.actionIcon}
+              accessibilityLabel="Delete class"
             >
               <Feather name="trash-2" size={13} color={colors.danger} />
             </Pressable>
           </View>
         )}
-      </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -602,6 +625,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 11,
     marginTop: 2,
+    lineHeight: 15,
   },
   closeBtn: {
     padding: 4,
@@ -625,7 +649,7 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     paddingHorizontal: 10,
-    paddingVertical: 12,
+    paddingVertical: 10,
     justifyContent: "center",
     alignItems: "center",
   },

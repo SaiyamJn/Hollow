@@ -355,6 +355,14 @@ router.post("/", async (req: AuthedRequest, res) => {
     }
   }
 
+  let taskGroup = (group ?? "").trim();
+  if (!taskGroup && !parentTaskId) {
+    const prefs = await getUserPreferences(req.userId!);
+    if (typeof prefs.defaultTaskGroup === "string" && prefs.defaultTaskGroup.trim()) {
+      taskGroup = prefs.defaultTaskGroup.trim();
+    }
+  }
+
   const due = dueAt ? new Date(dueAt) : null;
   const rule = due && repeatRule ? repeatRule : null;
   const days = normalizeDays(rule, repeatDays);
@@ -370,7 +378,7 @@ router.post("/", async (req: AuthedRequest, res) => {
     data: {
       title: sealAtRest(title),
       description: sealAtRest(description?.trim() ?? ""),
-      group: (group ?? "").trim(),
+      group: taskGroup,
       ownerId: req.userId!,
       dueAt: due,
       repeatRule: rule,

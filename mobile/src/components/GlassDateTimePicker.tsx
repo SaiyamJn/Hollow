@@ -49,6 +49,7 @@ function isDateOnlyDue(due: Date) {
 export function formatDueLabel(iso: string | Date | null | undefined) {
   if (!iso) return "No due date";
   const due = typeof iso === "string" ? new Date(iso) : iso;
+  if (!due || isNaN(due.getTime())) return "No due date";
   const date = due.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   if (isDateOnlyDue(due)) return date;
   return `${date} · ${formatClockTime(due)}`;
