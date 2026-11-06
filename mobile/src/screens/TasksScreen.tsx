@@ -365,7 +365,7 @@ export default function TasksScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ marginBottom: 10 }}>
-            {/* Minimal top bar: segmented layout switcher + recycle bin */}
+            {/* Minimal top bar: segmented layout switcher + manage classes + recycle bin */}
             <View style={styles.topControlRow}>
               <View style={[styles.segmentedPill, { backgroundColor: colors.surface1, borderColor: colors.glassBorder }]}>
                 {LAYOUTS.map((l) => {
@@ -394,18 +394,34 @@ export default function TasksScreen() {
                 })}
               </View>
 
-              <Pressable
-                onPress={() => navigation.navigate("RecycleBin", { tab: "tasks" })}
-                style={[
-                  styles.compactBinBtn,
-                  { backgroundColor: colors.surface1, borderColor: colors.glassBorder },
-                ]}
-              >
-                <Feather name="trash-2" size={13} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: "500" }}>
-                  Recycle bin
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Pressable
+                  onPress={() => setManageClassesOpen(true)}
+                  style={[
+                    styles.compactBinBtn,
+                    { backgroundColor: colors.surface1, borderColor: colors.glassBorder },
+                  ]}
+                  accessibilityLabel="Manage classes"
+                >
+                  <Feather name="sliders" size={13} color={colors.textSecondary} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: "500" }}>
+                    Classes
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => navigation.navigate("RecycleBin", { tab: "tasks" })}
+                  style={[
+                    styles.compactBinBtn,
+                    { backgroundColor: colors.surface1, borderColor: colors.glassBorder },
+                  ]}
+                >
+                  <Feather name="trash-2" size={13} color={colors.textSecondary} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: "500" }}>
+                    Recycle bin
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
             {/* Horizontal classes chips row with long-press reorder support */}
@@ -454,23 +470,6 @@ export default function TasksScreen() {
                   </Pressable>
                 );
               })}
-              <Pressable
-                onPress={() => setManageClassesOpen(true)}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 999,
-                  backgroundColor: colors.surface2,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <Feather name="sliders" size={12} color={colors.textSecondary} />
-                <Text style={{ fontSize: 12, fontWeight: "500", color: colors.textSecondary }}>
-                  Classes
-                </Text>
-              </Pressable>
             </ScrollView>
             <GlassCard
               style={{ alignSelf: "stretch", width: "100%" }}

@@ -407,23 +407,6 @@ export default function CalendarScreen() {
                 </Pressable>
               );
             })}
-            <Pressable
-              onPress={() => setManageClassesOpen(true)}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 999,
-                backgroundColor: colors.surface2,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              <Feather name="sliders" size={12} color={colors.textSecondary} />
-              <Text style={{ fontSize: 12, fontWeight: "500", color: colors.textSecondary }}>
-                Classes
-              </Text>
-            </Pressable>
           </ScrollView>
         </View>
       )}

@@ -15,7 +15,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { deletePage, fetchNotebooks, fetchPage, lockSection, renamePage, removeSectionLock, resolveMediaUrl, savePageContent, unlockSection } from "../lib/api";
-import { contentToText, extractPageSegments, isRichContent } from "../lib/content";
+import { contentToText, extractPageSegments, isRichContent, textToBlockNoteJson } from "../lib/content";
 import { rememberSection } from "../lib/navMemory";
 import { PAGE_TEMPLATES } from "../lib/templates";
 import { loadPagePosition, savePagePosition } from "../lib/pagePosition";
@@ -87,6 +87,31 @@ function VaultSeal({ color, background }: { color: string; background: string })
     </View>
   );
 }
+
+interface NotebookCommand {
+  id: string;
+  label: string;
+  desc: string;
+  icon: keyof typeof Feather.glyphMap;
+  prefix: string;
+  suffix?: string;
+}
+
+const NOTEBOOK_COMMANDS: NotebookCommand[] = [
+  { id: "h1", label: "Heading 1", desc: "Large section heading", icon: "type", prefix: "# " },
+  { id: "h2", label: "Heading 2", desc: "Medium section heading", icon: "type", prefix: "## " },
+  { id: "h3", label: "Heading 3", desc: "Small section heading", icon: "type", prefix: "### " },
+  { id: "todo", label: "To-do checklist", desc: "Track tasks with checkmarks", icon: "check-square", prefix: "- [ ] " },
+  { id: "bullet", label: "Bullet list", desc: "Create an unordered list", icon: "list", prefix: "- " },
+  { id: "number", label: "Numbered list", desc: "Create an ordered list", icon: "hash", prefix: "1. " },
+  { id: "quote", label: "Quote", desc: "Capture a callout or quote", icon: "message-square", prefix: "> " },
+  { id: "code", label: "Code block", desc: "Capture code snippet", icon: "code", prefix: "```\n", suffix: "\n```" },
+  { id: "divider", label: "Divider", desc: "Visual horizontal line", icon: "minus", prefix: "\n---\n" },
+  { id: "bold", label: "Bold text", desc: "Emphasize with **bold**", icon: "bold", prefix: "**", suffix: "**" },
+  { id: "italic", label: "Italic text", desc: "Emphasize with *italic*", icon: "italic", prefix: "*", suffix: "*" },
+  { id: "link", label: "Wiki link", desc: "Link to another notebook page", icon: "link-2", prefix: "[[" },
+  { id: "date", label: "Today's date", desc: "Insert current date", icon: "calendar", prefix: `${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} ` },
+];
 
 export default function PageEditorScreen(props: any) {
   const { navigation } = props;
@@ -250,6 +275,94 @@ function PageEditorInner({ route, navigation }: any) {
     return () => clearTimeout(t);
   }, [positionReady, pageId]);
 
+  const [pageTitle, setPageTitle] = useState(titleParam ?? "");
+  const [slashMenuManual, setSlashMenuManual] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (page?.title && !pageTitle) {
+      setPageTitle(page.title);
+    }
+  }, [page?.title]);
+
+  function onTitleChange(next: string) {
+    setPageTitle(next);
+    navigation.setParams({ title: next });
+    if (titleTimer.current) clearTimeout(titleTimer.current);
+    titleTimer.current = setTimeout(async () => {
+      if (next.trim()) {
+        try {
+          await renamePage(pageId, next.trim());
+          void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+          void queryClient.invalidateQueries({ queryKey: ["page", pageId] });
+        } catch {}
+      }
+    }, 800);
+  }
+
+  function insertFormatting(prefix: string, suffix = "") {
+    if (text == null) return;
+    const sel = selectionRef.current ?? { start: text.length, end: text.length };
+    const before = text.slice(0, sel.start);
+    const selected = text.slice(sel.start, sel.end);
+    const after = text.slice(sel.end);
+
+    let next = "";
+    if (selected) {
+      next = `${before}${prefix}${selected}${suffix}${after}`;
+    } else {
+      if (prefix.endsWith(" ") && !suffix) {
+        const lastNewline = before.lastIndexOf("\n");
+        const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
+        const linePrefix = text.slice(0, lineStart);
+        const lineContent = text.slice(lineStart);
+        next = `${linePrefix}${prefix}${lineContent}`;
+      } else {
+        next = `${before}${prefix}${suffix}${after}`;
+      }
+    }
+    onChangeText(next);
+  }
+
+  const slashMatch = (() => {
+    if (text == null) return null;
+    const sel = selectionRef.current?.start ?? text.length;
+    const textUpToCursor = text.slice(0, sel);
+    const match = textUpToCursor.match(/(?:^|\n)\/([a-zA-Z0-9_-]*)$/);
+    if (!match) return null;
+    return {
+      query: match[1].toLowerCase(),
+      replaceStart: textUpToCursor.length - match[0].length + (match[0].startsWith("\n") ? 1 : 0),
+      replaceEnd: textUpToCursor.length,
+    };
+  })();
+
+  const isSlashActive = slashMatch !== null || slashMenuManual;
+  const filteredCommands = useMemo(() => {
+    if (!slashMatch?.query) return NOTEBOOK_COMMANDS;
+    const q = slashMatch.query;
+    return NOTEBOOK_COMMANDS.filter(
+      (c) =>
+        c.label.toLowerCase().includes(q) ||
+        c.id.includes(q) ||
+        c.desc.toLowerCase().includes(q)
+    );
+  }, [slashMatch?.query]);
+
+  function executeCommand(cmd: NotebookCommand) {
+    if (text == null) return;
+    if (slashMatch) {
+      const before = text.slice(0, slashMatch.replaceStart);
+      const after = text.slice(slashMatch.replaceEnd);
+      const next = `${before}${cmd.prefix}${cmd.suffix ?? ""}${after}`;
+      onChangeText(next);
+    } else {
+      insertFormatting(cmd.prefix, cmd.suffix);
+    }
+    setSlashMenuManual(false);
+  }
+
   const saveNow = useCallback(async () => {
     if (pendingText.current === null) return;
     const body = pendingText.current;
@@ -262,12 +375,12 @@ function PageEditorInner({ route, navigation }: any) {
         const parsed = JSON.parse(page.content);
         if (Array.isArray(parsed)) {
           const mediaBlocks = parsed.filter((b) => b.type === "image" || b.type === "annotation");
-          const paragraphs = body.split("\n").map((line) => ({
-            type: "paragraph",
-            content: line ? [{ type: "text", text: line, styles: {} }] : [],
-          }));
-          payload = JSON.stringify([...paragraphs, ...mediaBlocks]);
+          payload = textToBlockNoteJson(body, mediaBlocks);
+        } else {
+          payload = textToBlockNoteJson(body);
         }
+      } else {
+        payload = textToBlockNoteJson(body);
       }
     } catch {
       payload = body;
@@ -487,12 +600,7 @@ function PageEditorInner({ route, navigation }: any) {
   }, [page?.content]);
 
   return (
-    <KeyboardSafe style={{ flex: 1, backgroundColor: colors.surface0 }}>
-      {wasRich && !focus && (
-        <Text style={[styles.notice, { color: colors.textSecondary, borderBottomColor: colors.border }]}>
-          Editing as plain text — rich formatting from the web is flattened on save.
-        </Text>
-      )}
+    <KeyboardSafe disableAndroidPadding style={{ flex: 1, backgroundColor: colors.surface0 }}>
       {showTemplates && !focus && (
         <ScrollView
           horizontal
@@ -519,12 +627,7 @@ function PageEditorInner({ route, navigation }: any) {
           </Pressable>
         </ScrollView>
       )}
-      <View
-        style={{
-          flex: 1,
-          paddingBottom: Math.max(stackBottomClearance(false), insets.bottom, 12),
-        }}
-      >
+      <View style={{ flex: 1 }}>
         <ScrollView
           ref={editorScrollRef}
           style={{ flex: 1 }}
@@ -548,6 +651,19 @@ function PageEditorInner({ route, navigation }: any) {
             }, 250);
           }}
         >
+          {/* Editable Page Title */}
+          {!focus && (
+            <View style={styles.titleWrap}>
+              <TextInput
+                value={pageTitle}
+                onChangeText={onTitleChange}
+                placeholder="Page title"
+                placeholderTextColor={colors.textSecondary}
+                style={[styles.titleInput, { color: colors.textPrimary }]}
+              />
+            </View>
+          )}
+
           {mediaSegments.map((seg) => {
             if (seg.type === "image") {
               const uri = resolveMediaUrl(seg.url);
@@ -604,31 +720,118 @@ function PageEditorInner({ route, navigation }: any) {
                 if (pageId) void savePagePosition(pageId, { selection: next.start, scrollOffset: scrollOffsetRef.current });
               }, 250);
             }}
-            placeholder="Write freely…  Type [[ to link a page"
+            placeholder="Type / for commands, or write freely…"
             placeholderTextColor={colors.textSecondary}
           />
         </ScrollView>
+
+        {/* Wiki Link Autocomplete */}
+        {wikiSuggestions.length > 0 && (
+          <GlassCard style={styles.wikiMenu} contentStyle={{ paddingVertical: 6, maxHeight: 220 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {wikiSuggestions.map((p) => (
+                <Pressable key={p.id} style={styles.wikiItem} onPress={() => insertWikiLink(p.title)}>
+                  <Feather name="link" size={13} color={colors.accent} />
+                  <Text style={{ color: colors.textPrimary, fontSize: 13, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                    {p.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </GlassCard>
+        )}
+
+        {/* Slash Command Suggestions / Picker */}
+        {isSlashActive && (
+          <GlassCard style={styles.slashMenu} contentStyle={{ paddingVertical: 6, maxHeight: 260 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingTop: 6, paddingBottom: 4 }}>
+              <Text style={[styles.slashMenuHeader, { color: colors.textSecondary, paddingHorizontal: 0, paddingVertical: 0 }]}>
+                COMMANDS & BLOCKS
+              </Text>
+              {slashMenuManual && (
+                <Pressable onPress={() => setSlashMenuManual(false)} hitSlop={6}>
+                  <Feather name="x" size={14} color={colors.textSecondary} />
+                </Pressable>
+              )}
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {filteredCommands.map((cmd) => (
+                <Pressable
+                  key={cmd.id}
+                  style={styles.slashMenuItem}
+                  onPress={() => executeCommand(cmd)}
+                >
+                  <View style={[styles.slashIconBox, { backgroundColor: colors.surface2 }]}>
+                    <Feather name={cmd.icon} size={14} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: "600" }}>
+                      {cmd.label}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                      {cmd.desc}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </GlassCard>
+        )}
+
+        {/* Bottom Quick-Formatting & Command Toolbar */}
+        {!focus && (
+          <View style={[styles.formatBar, { backgroundColor: colors.surface1, borderColor: colors.glassBorder }]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: 4, paddingHorizontal: 12, alignItems: "center" }}
+            >
+              <Pressable style={styles.formatBtn} onPress={() => setSlashMenuManual((v) => !v)} hitSlop={6}>
+                <Text style={[styles.formatBtnSlash, { color: colors.accent }]}>/</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.accent, marginLeft: 2 }}>Commands</Text>
+              </Pressable>
+              <View style={[styles.formatDivider, { backgroundColor: colors.glassBorder }]} />
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("# ")} hitSlop={6}>
+                <Text style={[styles.formatBtnText, { color: colors.textPrimary }]}>H1</Text>
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("## ")} hitSlop={6}>
+                <Text style={[styles.formatBtnText, { color: colors.textPrimary }]}>H2</Text>
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("### ")} hitSlop={6}>
+                <Text style={[styles.formatBtnText, { color: colors.textPrimary }]}>H3</Text>
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("**", "**")} hitSlop={6}>
+                <Feather name="bold" size={14} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("*", "*")} hitSlop={6}>
+                <Feather name="italic" size={14} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("- [ ] ")} hitSlop={6}>
+                <Feather name="check-square" size={14} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("- ")} hitSlop={6}>
+                <Feather name="list" size={14} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("> ")} hitSlop={6}>
+                <Feather name="message-square" size={14} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("`", "`")} hitSlop={6}>
+                <Feather name="code" size={14} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.formatBtn} onPress={() => insertFormatting("[[")} hitSlop={6}>
+                <Feather name="link-2" size={14} color={colors.textSecondary} />
+              </Pressable>
+            </ScrollView>
+          </View>
+        )}
       </View>
       {focus && (
         <View pointerEvents="none" style={[styles.focusTitle, { paddingTop: 12 }]}>
           <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>
-            {page?.title ?? "Page"}
+            {pageTitle || page?.title || "Page"}
           </Text>
         </View>
-      )}
-      {wikiSuggestions.length > 0 && (
-        <GlassCard style={styles.wikiMenu} contentStyle={{ paddingVertical: 6, maxHeight: 220 }}>
-          <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-          {wikiSuggestions.map((p) => (
-            <Pressable key={p.id} style={styles.wikiItem} onPress={() => insertWikiLink(p.title)}>
-              <Feather name="link" size={13} color={colors.accent} />
-              <Text style={{ color: colors.textPrimary, fontSize: 13, flex: 1, minWidth: 0 }} numberOfLines={1}>
-                {p.title}
-              </Text>
-            </Pressable>
-          ))}
-          </ScrollView>
-        </GlassCard>
       )}
       {focus && (
         <Pressable onPress={() => setFocus(false)} style={styles.exitFocusWrap}>
@@ -640,7 +843,7 @@ function PageEditorInner({ route, navigation }: any) {
       <ConfirmModal
         visible={confirmDelete}
         title="Move to recycle bin?"
-        message={`Move “${page?.title ?? "this page"}” to the recycle bin? You can restore it within 7 days.`}
+        message={`Move “${pageTitle || page?.title || "this page"}” to the recycle bin? You can restore it within 7 days.`}
         confirmLabel="Move"
         onClose={() => setConfirmDelete(false)}
         onConfirm={async () => {
@@ -657,11 +860,12 @@ function PageEditorInner({ route, navigation }: any) {
         title="Rename page"
         placeholder="Title"
         submitLabel="Save"
-        initialValue={page?.title ?? ""}
+        initialValue={pageTitle || page?.title || ""}
         onClose={() => setPrompt(null)}
         onSubmit={async (value) => {
           try {
             await renamePage(pageId, value);
+            setPageTitle(value);
             navigation.setParams({ title: value });
             void queryClient.invalidateQueries({ queryKey: ["notebooks"] });
             void queryClient.invalidateQueries({ queryKey: ["page", pageId] });
@@ -720,7 +924,7 @@ function PageEditorInner({ route, navigation }: any) {
         >
           <GlassCard style={styles.actionModalCard}>
             <Text style={[styles.actionModalTitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {page?.title || "Page options"}
+              {pageTitle || page?.title || "Page options"}
             </Text>
 
             <Pressable
@@ -733,6 +937,19 @@ function PageEditorInner({ route, navigation }: any) {
               <Feather name="share-2" size={18} color={colors.accent} />
               <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
                 Share / Export page
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionModalItem}
+              onPress={() => {
+                setActionsMenuVisible(false);
+                setTemplatesOpen(true);
+              }}
+            >
+              <Feather name="layout" size={18} color={colors.textSecondary} />
+              <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
+                Apply template
               </Text>
             </Pressable>
 
@@ -794,6 +1011,44 @@ function PageEditorInner({ route, navigation }: any) {
           </GlassCard>
         </Pressable>
       </Modal>
+
+      {/* Templates Modal */}
+      <Modal
+        visible={templatesOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTemplatesOpen(false)}
+      >
+        <Pressable
+          style={styles.actionModalBackdrop}
+          onPress={() => setTemplatesOpen(false)}
+        >
+          <GlassCard style={styles.actionModalCard}>
+            <Text style={[styles.actionModalTitle, { color: colors.textSecondary }]}>
+              Choose a template
+            </Text>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {PAGE_TEMPLATES.map((t) => (
+                <Pressable
+                  key={t.id}
+                  style={styles.actionModalItem}
+                  onPress={() => {
+                    onChangeText((text ? `${text}\n\n` : "") + t.text);
+                    setTemplatesOpen(false);
+                  }}
+                >
+                  <Feather name="file-text" size={18} color={colors.accent} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.actionModalItemText, { color: colors.textPrimary }]}>
+                      {t.name}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </GlassCard>
+        </Pressable>
+      </Modal>
     </KeyboardSafe>
   );
 }
@@ -801,7 +1056,18 @@ function PageEditorInner({ route, navigation }: any) {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   notice: { fontSize: 11, paddingHorizontal: 20, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  editor: { padding: 20, fontSize: 15, lineHeight: 22 },
+  titleWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 6,
+  },
+  titleInput: {
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+    padding: 0,
+  },
+  editor: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24, fontSize: 15, lineHeight: 22 },
   focusEditor: { paddingTop: 64, fontSize: 16, lineHeight: 26, paddingHorizontal: 24 },
   focusTitle: {
     position: "absolute",
@@ -819,11 +1085,66 @@ const styles = StyleSheet.create({
   exitFocus: {
     padding: 11,
   },
+  formatBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 6,
+  },
+  formatBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  formatBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  formatBtnSlash: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  formatDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 18,
+    marginHorizontal: 3,
+  },
+  slashMenu: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 54,
+    borderRadius: 16,
+    zIndex: 100,
+  },
+  slashMenuHeader: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  slashMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  slashIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   wikiMenu: {
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 24,
+    bottom: 54,
   },
   wikiItem: {
     flexDirection: "row",

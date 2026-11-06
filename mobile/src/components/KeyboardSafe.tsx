@@ -17,6 +17,8 @@ interface KeyboardSafeProps {
   /** When true, wrap children in a ScrollView that can move above the keyboard. */
   scroll?: boolean;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  /** Disable manual Android padding when the window already resizes via soft input */
+  disableAndroidPadding?: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export function KeyboardSafe({
   style,
   scroll = false,
   contentContainerStyle,
+  disableAndroidPadding = false,
 }: KeyboardSafeProps) {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardBottomInset();
@@ -43,7 +46,10 @@ export function KeyboardSafe({
       >
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={[contentContainerStyle, { paddingBottom: bottomPad }]}
+          contentContainerStyle={[
+            contentContainerStyle,
+            { paddingBottom: !disableAndroidPadding && Platform.OS === "android" ? bottomPad : insets.bottom + 16 },
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           showsVerticalScrollIndicator={false}
@@ -66,7 +72,7 @@ export function KeyboardSafe({
       <View
         style={[
           styles.flex,
-          Platform.OS === "android" && keyboardHeight > 0 && { paddingBottom: keyboardHeight },
+          !disableAndroidPadding && Platform.OS === "android" && keyboardHeight > 0 && { paddingBottom: keyboardHeight },
         ]}
       >
         {children}

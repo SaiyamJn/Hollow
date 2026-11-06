@@ -49,7 +49,27 @@ function blockLines(blocks: BlockJson[], depth: number): string[] {
   for (const block of blocks) {
     if (!block || typeof block !== "object") continue;
     const indent = "  ".repeat(depth);
-    lines.push(indent + inlineText(block.content));
+    const text = inlineText(block.content);
+    let line = text;
+
+    if (block.type === "heading") {
+      const level = block.props?.level ?? 1;
+      const prefix = "#".repeat(Math.min(3, Math.max(1, level))) + " ";
+      line = `${prefix}${text}`;
+    } else if (block.type === "bulletListItem") {
+      line = `- ${text}`;
+    } else if (block.type === "numberedListItem") {
+      line = `1. ${text}`;
+    } else if (block.type === "checkListItem") {
+      const checked = Boolean(block.props?.checked);
+      line = `${checked ? "- [x]" : "- [ ]"} ${text}`;
+    } else if (block.type === "blockquote") {
+      line = `> ${text}`;
+    } else if (block.type === "codeBlock") {
+      line = `\`\`\`\n${text}\n\`\`\``;
+    }
+
+    lines.push(indent + line);
     if (Array.isArray(block.children) && block.children.length) lines.push(...blockLines(block.children, depth + 1));
   }
   return lines;
@@ -74,6 +94,98 @@ export function isRichContent(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Converts markdown-formatted text into BlockNote-compatible JSON blocks,
+ * preserving headings, checklists, bullet lists, numbered lists, and quotes.
+ */
+export function textToBlockNoteJson(text: string, existingMediaBlocks: any[] = []): string {
+  const lines = text.split("\n");
+  const blocks: any[] = [];
+  let inCode = false;
+  const codeBuffer: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    if (trimmed.startsWith("```")) {
+      if (inCode) {
+        blocks.push({
+          type: "codeBlock",
+          content: [{ type: "text", text: codeBuffer.join("\n"), styles: {} }],
+        });
+        codeBuffer.length = 0;
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+
+    if (inCode) {
+      codeBuffer.push(rawLine);
+      continue;
+    }
+
+    if (rawLine.startsWith("### ")) {
+      blocks.push({
+        type: "heading",
+        props: { level: 3 },
+        content: [{ type: "text", text: rawLine.slice(4), styles: {} }],
+      });
+    } else if (rawLine.startsWith("## ")) {
+      blocks.push({
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: rawLine.slice(3), styles: {} }],
+      });
+    } else if (rawLine.startsWith("# ")) {
+      blocks.push({
+        type: "heading",
+        props: { level: 1 },
+        content: [{ type: "text", text: rawLine.slice(2), styles: {} }],
+      });
+    } else if (rawLine.startsWith("- [ ] ") || rawLine.startsWith("- [x] ") || rawLine.startsWith("- [X] ")) {
+      const checked = rawLine.startsWith("- [x] ") || rawLine.startsWith("- [X] ");
+      blocks.push({
+        type: "checkListItem",
+        props: { checked },
+        content: [{ type: "text", text: rawLine.slice(6), styles: {} }],
+      });
+    } else if (rawLine.startsWith("- ") || rawLine.startsWith("* ")) {
+      blocks.push({
+        type: "bulletListItem",
+        content: [{ type: "text", text: rawLine.slice(2), styles: {} }],
+      });
+    } else if (/^\d+\.\s/.test(rawLine)) {
+      const match = rawLine.match(/^(\d+\.\s)(.*)$/);
+      blocks.push({
+        type: "numberedListItem",
+        content: [{ type: "text", text: match ? match[2] : rawLine, styles: {} }],
+      });
+    } else if (rawLine.startsWith("> ")) {
+      blocks.push({
+        type: "blockquote",
+        content: [{ type: "text", text: rawLine.slice(2), styles: {} }],
+      });
+    } else {
+      blocks.push({
+        type: "paragraph",
+        content: rawLine ? [{ type: "text", text: rawLine, styles: {} }] : [],
+      });
+    }
+  }
+
+  if (inCode && codeBuffer.length) {
+    blocks.push({
+      type: "codeBlock",
+      content: [{ type: "text", text: codeBuffer.join("\n"), styles: {} }],
+    });
+  }
+
+  return JSON.stringify([...blocks, ...existingMediaBlocks]);
 }
 
 /**
