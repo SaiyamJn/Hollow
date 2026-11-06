@@ -651,37 +651,39 @@ export default function HomeScreen({ navigation }: any) {
       ]}
     />
 
-    <TaskFormModal
-      visible={taskDraft !== null}
-      title="New task"
-      availableGroups={availableGroups}
-      defaultGroup={defaultClass}
-      submitLabel={taskBusy ? "Adding…" : "Add task"}
-      draft={taskDraft}
-      busy={taskBusy}
-      autoFocus
-      onClose={() => setTaskDraft(null)}
-      onChange={setTaskDraft}
-      onSubmit={async () => {
-        if (!taskDraft?.title.trim() || taskBusy) return;
-        setTaskBusy(true);
-        try {
-          await createTask({
-            title: taskDraft.title.trim(),
-            description: taskDraft.description.trim() || undefined,
-            group: taskDraft.group?.trim() || undefined,
-            dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
-            focus: taskDraft.focus ?? "none",
-            ...repeatPayload(taskDraft),
-          });
-          queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          queryClient.invalidateQueries({ queryKey: ["task-classes"] });
-          setTaskDraft(null);
-        } finally {
-          setTaskBusy(false);
-        }
-      }}
-    />
+    {taskDraft !== null && (
+      <TaskFormModal
+        visible={true}
+        title="New task"
+        availableGroups={availableGroups}
+        defaultGroup={defaultClass}
+        submitLabel={taskBusy ? "Adding…" : "Add task"}
+        draft={taskDraft}
+        busy={taskBusy}
+        autoFocus
+        onClose={() => setTaskDraft(null)}
+        onChange={setTaskDraft}
+        onSubmit={async () => {
+          if (!taskDraft?.title.trim() || taskBusy) return;
+          setTaskBusy(true);
+          try {
+            await createTask({
+              title: taskDraft.title.trim(),
+              description: taskDraft.description.trim() || undefined,
+              group: taskDraft.group?.trim() || undefined,
+              dueAt: taskDraft.due ? taskDraft.due.toISOString() : undefined,
+              focus: taskDraft.focus ?? "none",
+              ...repeatPayload(taskDraft),
+            });
+            queryClient.invalidateQueries({ queryKey: ["tasks"] });
+            queryClient.invalidateQueries({ queryKey: ["task-classes"] });
+            setTaskDraft(null);
+          } finally {
+            setTaskBusy(false);
+          }
+        }}
+      />
+    )}
 
     <PromptModal
       visible={prompt === "notebook"}

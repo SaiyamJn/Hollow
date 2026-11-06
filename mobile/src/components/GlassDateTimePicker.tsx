@@ -59,7 +59,11 @@ export function formatDueLabel(iso: string | Date | null | undefined) {
     date = `${DAYS[due.getDay()]}, ${MONTHS[due.getMonth()]} ${due.getDate()}`;
   }
   if (isDateOnlyDue(due)) return date;
-  return `${date} · ${formatClockTime(due)}`;
+  try {
+    return `${date} · ${formatClockTime(due)}`;
+  } catch {
+    return date;
+  }
 }
 
 /** Finite Apple-style snap wheel — smooth, not infinite. */

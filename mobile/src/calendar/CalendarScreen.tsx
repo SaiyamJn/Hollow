@@ -753,56 +753,60 @@ export default function CalendarScreen() {
         </Pressable>
       </Modal>
 
-      <TaskFormModal
-        visible={draft !== null}
-        title="New task"
-        availableGroups={availableGroups}
-        defaultGroup={defaultClass}
-        submitLabel={create.isPending ? "Adding…" : "Add task"}
-        draft={draft}
-        busy={create.isPending}
-        autoFocus
-        onClose={() => setDraft(null)}
-        onChange={setDraft}
-        onSubmit={() => {
-          if (!draft?.title.trim() || create.isPending) return;
-          const assignedGroup = (draft.group?.trim() || (selectedGroup !== "All" ? selectedGroup : defaultClass) || "").trim();
-          create.mutate({
-            title: draft.title.trim(),
-            description: draft.description.trim() || undefined,
-            group: assignedGroup || undefined,
-            dueAt: draft.due ? draft.due.toISOString() : undefined,
-            focus: draft.focus ?? "none",
-            ...repeatPayload(draft),
-          });
-        }}
-      />
+      {draft !== null && (
+        <TaskFormModal
+          visible={true}
+          title="New task"
+          availableGroups={availableGroups}
+          defaultGroup={defaultClass}
+          submitLabel={create.isPending ? "Adding…" : "Add task"}
+          draft={draft}
+          busy={create.isPending}
+          autoFocus
+          onClose={() => setDraft(null)}
+          onChange={setDraft}
+          onSubmit={() => {
+            if (!draft?.title.trim() || create.isPending) return;
+            const assignedGroup = (draft.group?.trim() || (selectedGroup !== "All" ? selectedGroup : defaultClass) || "").trim();
+            create.mutate({
+              title: draft.title.trim(),
+              description: draft.description.trim() || undefined,
+              group: assignedGroup || undefined,
+              dueAt: draft.due ? draft.due.toISOString() : undefined,
+              focus: draft.focus ?? "none",
+              ...repeatPayload(draft),
+            });
+          }}
+        />
+      )}
 
-      <TaskFormModal
-        visible={editing !== null}
-        title="Edit task"
-        availableGroups={availableGroups}
-        defaultGroup={defaultClass}
-        submitLabel={update.isPending ? "Saving…" : "Save"}
-        draft={editing}
-        busy={update.isPending}
-        onClose={() => setEditing(null)}
-        onChange={(next) => next && setEditing({ ...editing!, ...next })}
-        onSubmit={() => {
-          if (!editing?.title.trim() || update.isPending) return;
-          update.mutate({
-            id: editing.id,
-            patch: {
-              title: editing.title.trim(),
-              description: editing.description.trim(),
-              group: editing.group?.trim() || "",
-              dueAt: editing.due ? editing.due.toISOString() : null,
-              focus: editing.focus ?? "none",
-              ...repeatPayload(editing),
-            },
-          });
-        }}
-      />
+      {editing !== null && (
+        <TaskFormModal
+          visible={true}
+          title="Edit task"
+          availableGroups={availableGroups}
+          defaultGroup={defaultClass}
+          submitLabel={update.isPending ? "Saving…" : "Save"}
+          draft={editing}
+          busy={update.isPending}
+          onClose={() => setEditing(null)}
+          onChange={(next) => next && setEditing({ ...editing!, ...next })}
+          onSubmit={() => {
+            if (!editing?.title.trim() || update.isPending) return;
+            update.mutate({
+              id: editing.id,
+              patch: {
+                title: editing.title.trim(),
+                description: editing.description.trim(),
+                group: editing.group?.trim() || "",
+                dueAt: editing.due ? editing.due.toISOString() : null,
+                focus: editing.focus ?? "none",
+                ...repeatPayload(editing),
+              },
+            });
+          }}
+        />
+      )}
 
       <ManageClassesModal
         visible={manageClassesOpen}

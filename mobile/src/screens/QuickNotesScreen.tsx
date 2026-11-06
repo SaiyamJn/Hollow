@@ -109,7 +109,6 @@ export default function QuickNotesScreen({ navigation }: any) {
 
   useEffect(() => {
     const unsub = navigation?.addListener?.("blur", () => {
-      setShowArchived(false);
       clearSelection();
     });
     return unsub;

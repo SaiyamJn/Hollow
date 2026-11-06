@@ -31,8 +31,7 @@ export function ReminderHost() {
     queryKey: ["tasks"],
     queryFn: fetchTasks,
     enabled: status === "signedIn",
-    staleTime: 5_000,
-    refetchInterval: 5_000,
+    staleTime: 30_000,
   });
 
   // Real-time task synchronization across Web and Mobile

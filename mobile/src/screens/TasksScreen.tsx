@@ -98,8 +98,8 @@ function groupTasks(tasks: Task[], collapsedSections: Set<GroupName>) {
   if (completed.length) {
     const isCollapsed = collapsedSections.has("Completed");
     const sortedCompleted = [...completed].sort((a, b) => {
-      const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
-      const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
+      const timeA = (a.completedAt ? new Date(a.completedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0)) || 0;
+      const timeB = (b.completedAt ? new Date(b.completedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0)) || 0;
       return timeB - timeA;
     });
     sections.push({
@@ -350,7 +350,8 @@ export default function TasksScreen() {
     <KeyboardSafe style={{ backgroundColor: colors.surface0 }}>
       <SectionList
         sections={layout === "list" ? sections : []}
-        keyExtractor={(t) => t.id}
+        keyExtractor={(t, index) => (t && t.id ? t.id : `task-${index}`)}
+        extraData={{ expanded, subtaskDrafts, collapsedSections, selectedGroup }}
         contentContainerStyle={{
           padding: screenPad,
           paddingBottom: listBottomClearance(true) + keyboardInset,
@@ -548,7 +549,7 @@ export default function TasksScreen() {
           );
         }}
         renderItem={({ item: task }) => {
-          if (layout !== "list") return null;
+          if (layout !== "list" || !task) return null;
           const isOpen = expanded.has(task.id);
           const subtasks = sortByFocusPriority(task.subtasks ?? []);
           return (
@@ -751,57 +752,61 @@ export default function TasksScreen() {
         ]}
       />
 
-      <TaskFormModal
-        visible={draft !== null}
-        title="New task"
-        availableGroups={availableGroups}
-        defaultGroup={defaultClass}
-        submitLabel={create.isPending ? "Adding…" : "Add task"}
-        draft={draft}
-        busy={create.isPending}
-        autoFocus
-        onClose={() => setDraft(null)}
-        onChange={setDraft}
-        onSubmit={() => {
-          if (!draft?.title.trim() || create.isPending) return;
-          const assignedGroup = (draft.group?.trim() || (selectedGroup !== "All" ? selectedGroup : defaultClass) || "").trim();
-          create.mutate({
-            title: draft.title.trim(),
-            description: draft.description.trim() || undefined,
-            group: assignedGroup || undefined,
-            dueAt: draft.due ? draft.due.toISOString() : undefined,
-            focus: draft.focus ?? "none",
-            ...repeatPayload(draft),
-          });
-        }}
-      />
+      {draft !== null && (
+        <TaskFormModal
+          visible={true}
+          title="New task"
+          availableGroups={availableGroups}
+          defaultGroup={defaultClass}
+          submitLabel={create.isPending ? "Adding…" : "Add task"}
+          draft={draft}
+          busy={create.isPending}
+          autoFocus
+          onClose={() => setDraft(null)}
+          onChange={setDraft}
+          onSubmit={() => {
+            if (!draft?.title.trim() || create.isPending) return;
+            const assignedGroup = (draft.group?.trim() || (selectedGroup !== "All" ? selectedGroup : defaultClass) || "").trim();
+            create.mutate({
+              title: draft.title.trim(),
+              description: draft.description.trim() || undefined,
+              group: assignedGroup || undefined,
+              dueAt: draft.due ? draft.due.toISOString() : undefined,
+              focus: draft.focus ?? "none",
+              ...repeatPayload(draft),
+            });
+          }}
+        />
+      )}
 
-      <TaskFormModal
-        visible={editing !== null}
-        title="Edit task"
-        availableGroups={availableGroups}
-        defaultGroup={defaultClass}
-        submitLabel={saveEdit.isPending ? "Saving…" : "Save"}
-        draft={editing}
-        busy={saveEdit.isPending}
-        onClose={() => setEditing(null)}
-        onChange={(next) => next && setEditing({ ...editing!, ...next })}
-        onSubmit={() => {
-          if (!editing?.title.trim() || saveEdit.isPending) return;
-          saveEdit.mutate({
-            id: editing.id,
-            patch: {
-              title: editing.title.trim(),
-              description: editing.description.trim(),
-              group: editing.group?.trim() || "",
-              dueAt: editing.due ? editing.due.toISOString() : null,
-              focus: editing.focus ?? "none",
-              ...repeatPayload(editing),
-            },
-          });
-        }}
-        onDelete={() => setConfirmDeleteEdit(true)}
-      />
+      {editing !== null && (
+        <TaskFormModal
+          visible={true}
+          title="Edit task"
+          availableGroups={availableGroups}
+          defaultGroup={defaultClass}
+          submitLabel={saveEdit.isPending ? "Saving…" : "Save"}
+          draft={editing}
+          busy={saveEdit.isPending}
+          onClose={() => setEditing(null)}
+          onChange={(next) => next && setEditing({ ...editing!, ...next })}
+          onSubmit={() => {
+            if (!editing?.title.trim() || saveEdit.isPending) return;
+            saveEdit.mutate({
+              id: editing.id,
+              patch: {
+                title: editing.title.trim(),
+                description: editing.description.trim(),
+                group: editing.group?.trim() || "",
+                dueAt: editing.due ? editing.due.toISOString() : null,
+                focus: editing.focus ?? "none",
+                ...repeatPayload(editing),
+              },
+            });
+          }}
+          onDelete={() => setConfirmDeleteEdit(true)}
+        />
+      )}
 
       <ConfirmModal
         visible={confirmDeleteEdit}
